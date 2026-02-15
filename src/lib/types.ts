@@ -43,8 +43,18 @@ export interface Resource {
 export interface Berth extends Resource {
   type: "Berth";
   dockId: string; // Required for berths
-  width: number;
-  length: number;
+  berthNumber: number; // The berth number within the dock
+  width?: number;
+  length?: number;
+  price2025?: number;
+  price2026?: number;
+  occupantFirstName?: string;
+  occupantLastName?: string;
+  occupantPhone?: string;
+  occupantEmail?: string;
+  occupantAddress?: string;
+  occupantPostalAddress?: string;
+  comment?: string;
 }
 
 export type SeaHutSize = "Large" | "Small";
