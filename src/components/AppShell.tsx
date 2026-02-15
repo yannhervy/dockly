@@ -39,7 +39,7 @@ interface NavItem {
 
 const NAV_ITEMS: NavItem[] = [
   { label: "Harbor Directory", path: "/directory", icon: <PublicIcon /> },
-  { label: "Land Storage", path: "/land-storage", icon: <ConstructionIcon /> },
+  { label: "Land Storage", path: "/land-storage", icon: <ConstructionIcon />, roles: ["Superadmin", "Dock Manager"] },
   { label: "My Pages", path: "/dashboard", icon: <DashboardIcon /> },
   {
     label: "Dock Manager",

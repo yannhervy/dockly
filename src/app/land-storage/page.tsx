@@ -45,7 +45,7 @@ import ToggleButtonGroup from "@mui/material/ToggleButtonGroup";
 
 export default function LandStoragePage() {
   return (
-    <ProtectedRoute>
+    <ProtectedRoute allowedRoles={["Superadmin", "Dock Manager"]}>
       <LandStorageContent />
     </ProtectedRoute>
   );
