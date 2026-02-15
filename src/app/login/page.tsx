@@ -21,25 +21,30 @@ import EmailIcon from "@mui/icons-material/Email";
 import LockIcon from "@mui/icons-material/Lock";
 
 export default function LoginPage() {
-  const { login, loginWithGoogle, resetPassword } = useAuth();
+  const { login, register, loginWithGoogle, resetPassword } = useAuth();
   const router = useRouter();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [isRegister, setIsRegister] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const handleEmailLogin = async (e: React.FormEvent) => {
+  const handleEmailSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
     setLoading(true);
     try {
-      await login(email, password);
+      if (isRegister) {
+        await register(email, password);
+      } else {
+        await login(email, password);
+      }
       router.push("/");
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Login failed";
+      const msg = err instanceof Error ? err.message : isRegister ? "Registration failed" : "Login failed";
       setError(msg);
     } finally {
       setLoading(false);
@@ -134,7 +139,7 @@ export default function LoginPage() {
           )}
 
           {/* Email / Password form */}
-          <Box component="form" onSubmit={handleEmailLogin}>
+          <Box component="form" onSubmit={handleEmailSubmit}>
             <TextField
               fullWidth
               label="Email"
@@ -199,7 +204,21 @@ export default function LoginPage() {
               disabled={loading}
               sx={{ mb: 2, py: 1.2 }}
             >
-              Sign In
+              {isRegister ? "Create Account" : "Sign In"}
+            </Button>
+          </Box>
+
+          {/* Toggle sign-in / register */}
+          <Box sx={{ textAlign: "center", mb: 1 }}>
+            <Typography variant="body2" color="text.secondary" component="span">
+              {isRegister ? "Already have an account? " : "Don't have an account? "}
+            </Typography>
+            <Button
+              size="small"
+              onClick={() => { setIsRegister(!isRegister); setError(""); setSuccess(""); }}
+              sx={{ textTransform: "none", fontWeight: 600 }}
+            >
+              {isRegister ? "Sign In" : "Create Account"}
             </Button>
           </Box>
 

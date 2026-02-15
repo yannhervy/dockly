@@ -10,6 +10,7 @@ import React, {
 import {
   onAuthStateChanged,
   signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
   signInWithPopup,
   GoogleAuthProvider,
   signOut,
@@ -27,6 +28,7 @@ interface AuthContextValue {
   loading: boolean;
   needsSetup: boolean; // True when authenticated but no Firestore profile
   login: (email: string, password: string) => Promise<void>;
+  register: (email: string, password: string) => Promise<void>;
   loginWithGoogle: () => Promise<void>;
   logout: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
@@ -73,6 +75,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await signInWithEmailAndPassword(auth, email, password);
   };
 
+  const register = async (email: string, password: string) => {
+    await createUserWithEmailAndPassword(auth, email, password);
+  };
+
   const loginWithGoogle = async () => {
     const provider = new GoogleAuthProvider();
     await signInWithPopup(auth, provider);
@@ -102,6 +108,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       loading,
       needsSetup,
       login,
+      register,
       loginWithGoogle,
       logout,
       resetPassword,
