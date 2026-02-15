@@ -154,6 +154,21 @@ function UsersTab() {
     }
   };
 
+  const handleRoleChange = async (userId: string, newRole: string) => {
+    try {
+      await updateDoc(doc(db, "users", userId), { role: newRole });
+      setUsers((prev) =>
+        prev.map((u) =>
+          u.id === userId ? { ...u, role: newRole as User["role"] } : u
+        )
+      );
+      setSuccessMsg(`Role updated to ${newRole}`);
+      setTimeout(() => setSuccessMsg(""), 3000);
+    } catch (err) {
+      console.error("Error updating role:", err);
+    }
+  };
+
   return (
     <Box>
       {successMsg && (
@@ -198,17 +213,27 @@ function UsersTab() {
                   <TableCell sx={{ fontWeight: 600 }}>{u.name}</TableCell>
                   <TableCell>{u.email}</TableCell>
                   <TableCell>
-                    <Chip
-                      label={u.role}
+                    <Select
+                      value={u.role}
                       size="small"
-                      color={
-                        u.role === "Superadmin"
-                          ? "error"
-                          : u.role === "Dock Manager"
-                          ? "warning"
-                          : "default"
+                      onChange={(e: SelectChangeEvent) =>
+                        handleRoleChange(u.id, e.target.value)
                       }
-                    />
+                      sx={{
+                        minWidth: 140,
+                        '.MuiSelect-select': { py: 0.5 },
+                        bgcolor:
+                          u.role === 'Superadmin'
+                            ? 'rgba(244, 67, 54, 0.08)'
+                            : u.role === 'Dock Manager'
+                            ? 'rgba(255, 183, 77, 0.08)'
+                            : 'transparent',
+                      }}
+                    >
+                      <MenuItem value="Tenant">Tenant</MenuItem>
+                      <MenuItem value="Dock Manager">Dock Manager</MenuItem>
+                      <MenuItem value="Superadmin">Superadmin</MenuItem>
+                    </Select>
                   </TableCell>
                   <TableCell>{u.phone || "—"}</TableCell>
                   <TableCell>
