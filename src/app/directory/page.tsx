@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useState, useMemo, useRef } from "react";
 import {
   collection,
   getDocs,
@@ -10,6 +10,7 @@ import {
   updateDoc,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
+import { uploadBoatImage } from "@/lib/storage";
 import { useAuth } from "@/context/AuthContext";
 import { Dock, Berth } from "@/lib/types";
 import Box from "@mui/material/Box";
@@ -34,6 +35,8 @@ import DialogContent from "@mui/material/DialogContent";
 import DialogActions from "@mui/material/DialogActions";
 import Alert from "@mui/material/Alert";
 import InputAdornment from "@mui/material/InputAdornment";
+import Avatar from "@mui/material/Avatar";
+import CircularProgress from "@mui/material/CircularProgress";
 import FormControlLabel from "@mui/material/FormControlLabel";
 import Switch from "@mui/material/Switch";
 import Tooltip from "@mui/material/Tooltip";
@@ -43,6 +46,7 @@ import SearchIcon from "@mui/icons-material/Search";
 import EditIcon from "@mui/icons-material/Edit";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import LockIcon from "@mui/icons-material/Lock";
+import PhotoCameraIcon from "@mui/icons-material/PhotoCamera";
 
 export default function DirectoryPage() {
   const { firebaseUser, isSuperadmin, isDockManager } = useAuth();
@@ -55,6 +59,9 @@ export default function DirectoryPage() {
   const [loadingBerths, setLoadingBerths] = useState(false);
   const [search, setSearch] = useState("");
   const [userHasResources, setUserHasResources] = useState(false);
+  const [uploadingId, setUploadingId] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploadTargetId, setUploadTargetId] = useState<string | null>(null);
 
   // Edit dialog state (admin/manager only)
   const [editBerth, setEditBerth] = useState<Berth | null>(null);
@@ -298,6 +305,38 @@ export default function DirectoryPage() {
     }
   };
 
+  // Image upload handler
+  const handleUploadClick = (berthId: string) => {
+    setUploadTargetId(berthId);
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !uploadTargetId) return;
+
+    setUploadingId(uploadTargetId);
+    try {
+      const url = await uploadBoatImage(file, uploadTargetId);
+      await updateDoc(doc(db, "resources", uploadTargetId), {
+        boatImageUrl: url,
+      });
+      setBerths((prev) =>
+        prev.map((b) =>
+          b.id === uploadTargetId ? { ...b, boatImageUrl: url } : b
+        )
+      );
+      setSuccessMsg("Image uploaded!");
+      setTimeout(() => setSuccessMsg(""), 3000);
+    } catch (err) {
+      console.error("Error uploading image:", err);
+    } finally {
+      setUploadingId(null);
+      setUploadTargetId(null);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
   // ─── Dock list view ─────────────────────────────────────
   if (!selectedDock) {
     return (
@@ -516,6 +555,7 @@ export default function DirectoryPage() {
                 )}
                 {isManager && <TableCell>Price 2026</TableCell>}
                 {isManager && <TableCell>Comment</TableCell>}
+                <TableCell>Image</TableCell>
                 {isManager && <TableCell align="right">Actions</TableCell>}
               </TableRow>
             </TableHead>
@@ -614,6 +654,33 @@ export default function DirectoryPage() {
                         </Button>
                       </TableCell>
                     )}
+                    <TableCell>
+                      <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                        {b.boatImageUrl ? (
+                          <Avatar
+                            src={b.boatImageUrl}
+                            variant="rounded"
+                            sx={{ width: 40, height: 40 }}
+                          />
+                        ) : null}
+                        {isManager && (
+                          <Button
+                            size="small"
+                            startIcon={
+                              uploadingId === b.id ? (
+                                <CircularProgress size={14} />
+                              ) : (
+                                <PhotoCameraIcon />
+                              )
+                            }
+                            onClick={() => handleUploadClick(b.id)}
+                            disabled={uploadingId === b.id}
+                          >
+                            {b.boatImageUrl ? "Change" : "Upload"}
+                          </Button>
+                        )}
+                      </Box>
+                    </TableCell>
                   </TableRow>
                 );
               })}
@@ -781,6 +848,15 @@ export default function DirectoryPage() {
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Hidden file input for image uploads */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        style={{ display: "none" }}
+        onChange={handleFileChange}
+      />
     </Box>
   );
 }
