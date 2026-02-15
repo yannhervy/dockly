@@ -37,7 +37,7 @@ export default function LoginPage() {
     setLoading(true);
     try {
       await login(email, password);
-      router.push("/dashboard");
+      router.push("/");
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Login failed";
       setError(msg);
@@ -51,7 +51,7 @@ export default function LoginPage() {
     setLoading(true);
     try {
       await loginWithGoogle();
-      router.push("/dashboard");
+      router.push("/");
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Google login failed";
       setError(msg);

@@ -26,6 +26,8 @@ import AdminPanelSettingsIcon from "@mui/icons-material/AdminPanelSettings";
 import LogoutIcon from "@mui/icons-material/Logout";
 import AnchorIcon from "@mui/icons-material/Anchor";
 
+import ConstructionIcon from "@mui/icons-material/Construction";
+
 const DRAWER_WIDTH = 260;
 
 interface NavItem {
@@ -37,6 +39,7 @@ interface NavItem {
 
 const NAV_ITEMS: NavItem[] = [
   { label: "Harbor Directory", path: "/directory", icon: <PublicIcon /> },
+  { label: "Land Storage", path: "/land-storage", icon: <ConstructionIcon /> },
   { label: "My Pages", path: "/dashboard", icon: <DashboardIcon /> },
   {
     label: "Dock Manager",
@@ -58,8 +61,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  // Don't show the shell on the login page
-  if (pathname === "/login") {
+  // Don't show the shell on the login or setup pages
+  if (pathname === "/login" || pathname === "/setup") {
     return <>{children}</>;
   }
 
@@ -75,14 +78,15 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
   const drawerContent = (
     <Box sx={{ display: "flex", flexDirection: "column", height: "100%" }}>
-      {/* Logo header */}
+      {/* Logo header — matches AppBar height (64px) */}
       <Box
         sx={{
           display: "flex",
           alignItems: "center",
           gap: 1.5,
           px: 2.5,
-          py: 2.5,
+          height: 64,
+          minHeight: 64,
         }}
       >
         <AnchorIcon sx={{ fontSize: 32, color: "primary.main" }} />
@@ -130,7 +134,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       <Divider />
 
       {/* User info footer */}
-      {profile && (
+      {firebaseUser && (
         <Box sx={{ p: 2 }}>
           <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, mb: 1 }}>
             <Avatar
@@ -143,7 +147,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                 fontWeight: 700,
               }}
             >
-              {profile.name?.charAt(0)?.toUpperCase() || "U"}
+              {(profile?.name || firebaseUser.displayName || firebaseUser.email || "U").charAt(0).toUpperCase()}
             </Avatar>
             <Box sx={{ minWidth: 0 }}>
               <Typography
@@ -151,18 +155,20 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                 sx={{ fontWeight: 600 }}
                 noWrap
               >
-                {profile.name}
+                {profile?.name || firebaseUser.displayName || firebaseUser.email}
               </Typography>
-              <Chip
-                label={profile.role}
-                size="small"
-                sx={{
-                  height: 20,
-                  fontSize: 11,
-                  bgcolor: "rgba(79, 195, 247, 0.15)",
-                  color: "primary.light",
-                }}
-              />
+              {profile?.role && (
+                <Chip
+                  label={profile.role}
+                  size="small"
+                  sx={{
+                    height: 20,
+                    fontSize: 11,
+                    bgcolor: "rgba(79, 195, 247, 0.15)",
+                    color: "primary.light",
+                  }}
+                />
+              )}
             </Box>
           </Box>
           <ListItemButton
@@ -193,7 +199,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           ml: { md: `${DRAWER_WIDTH}px` },
         }}
       >
-        <Toolbar>
+        <Toolbar sx={{ px: 3 }}>
           <IconButton
             color="inherit"
             edge="start"
@@ -246,9 +252,11 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         component="main"
         sx={{
           flexGrow: 1,
-          width: { md: `calc(100% - ${DRAWER_WIDTH}px)` },
+          width: { xs: "100%", md: `calc(100% - ${DRAWER_WIDTH}px)` },
+          ml: { xs: 0, md: `${DRAWER_WIDTH}px` },
           mt: "64px",
-          p: 3,
+          px: 3,
+          py: 3,
         }}
       >
         {children}

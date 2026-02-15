@@ -34,14 +34,15 @@ export interface Resource {
   status: ResourceStatus;
   paymentStatus: PaymentStatus;
   markingCode: string; // Unique marking code, e.g. V-104
-  occupantId: string; // FK to User
-  boatImageUrl: string; // Firebase Storage URL
-  dockId: string; // FK to Dock
+  occupantId?: string; // FK to User (optional, not all occupants are registered)
+  boatImageUrl?: string; // Firebase Storage URL
+  dockId?: string; // FK to Dock (only required for Berths)
 }
 
 // ─── Resource subtypes ────────────────────────────────────
 export interface Berth extends Resource {
   type: "Berth";
+  dockId: string; // Required for berths
   width: number;
   length: number;
 }
@@ -57,7 +58,24 @@ export interface Box extends Resource {
   type: "Box";
 }
 
-export type LandStorageSeason = "Winter" | "Summer";
+export type LandStorageSeason = "Winter" | "Summer" | "Year-round";
+
+// ─── Land Storage ─────────────────────────────────────────
+// Uses pre-generated 4-digit codes. Occupants may or may not
+// be registered users in the system.
+export interface LandStorageEntry {
+  id: string;
+  code: string; // 4-digit non-sequential code
+  status: ResourceStatus;
+  firstName: string;
+  lastName: string;
+  phone: string;
+  comment: string;
+  occupantId?: string; // FK to User (if the occupant is registered)
+  paymentStatus: PaymentStatus;
+  season?: LandStorageSeason;
+  updatedAt?: Timestamp;
+}
 
 export interface LandStorage extends Resource {
   type: "LandStorage";

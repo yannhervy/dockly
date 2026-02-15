@@ -25,6 +25,7 @@ interface AuthContextValue {
   firebaseUser: FirebaseUser | null;
   profile: User | null;
   loading: boolean;
+  needsSetup: boolean; // True when authenticated but no Firestore profile
   login: (email: string, password: string) => Promise<void>;
   loginWithGoogle: () => Promise<void>;
   logout: () => Promise<void>;
@@ -91,11 +92,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const isDockManager = profile?.role === "Dock Manager";
   const isTenant = profile?.role === "Tenant";
 
+  // True when user is authenticated but has no Firestore profile yet
+  const needsSetup = !loading && !!firebaseUser && !profile;
+
   const value = useMemo<AuthContextValue>(
     () => ({
       firebaseUser,
       profile,
       loading,
+      needsSetup,
       login,
       loginWithGoogle,
       logout,
@@ -106,7 +111,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       hasRole,
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [firebaseUser, profile, loading]
+    [firebaseUser, profile, loading, needsSetup]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

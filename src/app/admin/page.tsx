@@ -580,7 +580,7 @@ function ResourcesTab() {
                   <TableCell>
                     <Chip label={r.type} size="small" variant="outlined" />
                   </TableCell>
-                  <TableCell>{getDockName(r.dockId)}</TableCell>
+                  <TableCell>{getDockName(r.dockId || "")}</TableCell>
                   <TableCell>
                     <Chip
                       label={r.status}

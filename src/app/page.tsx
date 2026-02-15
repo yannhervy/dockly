@@ -9,18 +9,20 @@ import Typography from "@mui/material/Typography";
 import AnchorIcon from "@mui/icons-material/Anchor";
 
 export default function HomePage() {
-  const { firebaseUser, loading } = useAuth();
+  const { firebaseUser, loading, needsSetup } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
     if (!loading) {
-      if (firebaseUser) {
-        router.replace("/dashboard");
-      } else {
+      if (!firebaseUser) {
         router.replace("/login");
+      } else if (needsSetup) {
+        router.replace("/setup");
+      } else {
+        router.replace("/dashboard");
       }
     }
-  }, [loading, firebaseUser, router]);
+  }, [loading, firebaseUser, needsSetup, router]);
 
   return (
     <Box

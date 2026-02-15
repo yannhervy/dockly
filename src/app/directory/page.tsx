@@ -68,7 +68,7 @@ export default function DirectoryPage() {
         // Fetch occupant profiles
         const occupantIds = items
           .filter((r) => r.occupantId)
-          .map((r) => r.occupantId);
+          .map((r) => r.occupantId as string);
         const uniqueIds = [...new Set(occupantIds)];
 
         const occupantMap: Record<string, User> = {};
@@ -269,7 +269,7 @@ export default function DirectoryPage() {
                       )}
                       <Typography variant="body2">
                         {resource.status === "Occupied"
-                          ? getOccupantDisplayName(resource.occupantId)
+                          ? getOccupantDisplayName(resource.occupantId || "")
                           : "Available"}
                       </Typography>
                     </Box>

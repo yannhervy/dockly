@@ -102,7 +102,7 @@ function ManagerContent() {
 
         // Fetch occupant info
         const uniqueIds = [
-          ...new Set(items.filter((r) => r.occupantId).map((r) => r.occupantId)),
+          ...new Set(items.filter((r) => r.occupantId).map((r) => r.occupantId as string)),
         ];
         const oMap: Record<string, User> = {};
         for (const uid of uniqueIds) {
