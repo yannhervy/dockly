@@ -55,6 +55,7 @@ export interface Berth extends Resource {
   occupantAddress?: string;
   occupantPostalAddress?: string;
   comment?: string;
+  secret?: boolean; // When true, only superadmin can see occupant info
 }
 
 export type SeaHutSize = "Large" | "Small";

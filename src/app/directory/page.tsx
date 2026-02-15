@@ -34,14 +34,18 @@ import DialogContent from "@mui/material/DialogContent";
 import DialogActions from "@mui/material/DialogActions";
 import Alert from "@mui/material/Alert";
 import InputAdornment from "@mui/material/InputAdornment";
+import FormControlLabel from "@mui/material/FormControlLabel";
+import Switch from "@mui/material/Switch";
+import Tooltip from "@mui/material/Tooltip";
 import DirectionsBoatIcon from "@mui/icons-material/DirectionsBoat";
 import AnchorIcon from "@mui/icons-material/Anchor";
 import SearchIcon from "@mui/icons-material/Search";
 import EditIcon from "@mui/icons-material/Edit";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
+import LockIcon from "@mui/icons-material/Lock";
 
 export default function DirectoryPage() {
-  const { isSuperadmin, isDockManager } = useAuth();
+  const { firebaseUser, isSuperadmin, isDockManager } = useAuth();
   const isManager = isSuperadmin || isDockManager;
 
   const [docks, setDocks] = useState<Dock[]>([]);
@@ -50,6 +54,7 @@ export default function DirectoryPage() {
   const [loadingDocks, setLoadingDocks] = useState(true);
   const [loadingBerths, setLoadingBerths] = useState(false);
   const [search, setSearch] = useState("");
+  const [userHasResources, setUserHasResources] = useState(false);
 
   // Edit dialog state (admin/manager only)
   const [editBerth, setEditBerth] = useState<Berth | null>(null);
@@ -62,6 +67,7 @@ export default function DirectoryPage() {
     occupantPostalAddress: "",
     comment: "",
     price2026: "",
+    secret: false,
   });
   const [saving, setSaving] = useState(false);
   const [successMsg, setSuccessMsg] = useState("");
@@ -83,6 +89,62 @@ export default function DirectoryPage() {
     }
     fetchDocks();
   }, []);
+
+  // Check if current user has any resources linked to them
+  useEffect(() => {
+    if (!firebaseUser || isSuperadmin || isDockManager) return;
+
+    async function checkUserResources() {
+      try {
+        // Check if any berth has this user's uid as occupantId
+        const q = query(
+          collection(db, "resources"),
+          where("occupantId", "==", firebaseUser!.uid)
+        );
+        const snap = await getDocs(q);
+        if (snap.size > 0) {
+          setUserHasResources(true);
+          return;
+        }
+
+        // Also check land storage
+        const lsQ = query(
+          collection(db, "landStorage"),
+          where("occupantId", "==", firebaseUser!.uid)
+        );
+        const lsSnap = await getDocs(lsQ);
+        if (lsSnap.size > 0) {
+          setUserHasResources(true);
+        }
+      } catch {
+        // Silently fail — default to no resources (most restrictive)
+      }
+    }
+    checkUserResources();
+  }, [firebaseUser, isSuperadmin, isDockManager]);
+
+  // Privacy helper: can the current user see personal info for this berth?
+  const canSeePersonalInfo = (berth: Berth): boolean => {
+    // Superadmin sees everything
+    if (isSuperadmin) return true;
+    // Secret berths — only superadmin
+    if (berth.secret) return false;
+    // Dock Manager sees non-secret berths
+    if (isDockManager) return true;
+    // Tenant with resources can see names (not contact details)
+    // Tenant without resources sees nothing
+    return false;
+  };
+
+  // Can the current user see names (but not full contact info)?
+  const canSeeNames = (berth: Berth): boolean => {
+    if (isSuperadmin) return true;
+    if (berth.secret) return false;
+    if (isDockManager) return true;
+    // Tenant with own resources can see names
+    if (userHasResources) return true;
+    return false;
+  };
 
   // Fetch berths for selected dock
   useEffect(() => {
@@ -118,10 +180,11 @@ export default function DirectoryPage() {
       (b) =>
         String(b.berthNumber || "").includes(term) ||
         (b.markingCode || "").toLowerCase().includes(term) ||
-        (b.occupantFirstName || "").toLowerCase().includes(term) ||
-        (b.occupantLastName || "").toLowerCase().includes(term)
+        (canSeeNames(b) &&
+          ((b.occupantFirstName || "").toLowerCase().includes(term) ||
+            (b.occupantLastName || "").toLowerCase().includes(term)))
     );
-  }, [berths, search]);
+  }, [berths, search, isSuperadmin, isDockManager, userHasResources]);
 
   // Stats
   const totalBerths = berths.length;
@@ -140,6 +203,7 @@ export default function DirectoryPage() {
       occupantPostalAddress: berth.occupantPostalAddress || "",
       comment: berth.comment || "",
       price2026: String(berth.price2026 || ""),
+      secret: berth.secret || false,
     });
   };
 
@@ -158,6 +222,7 @@ export default function DirectoryPage() {
         occupantPostalAddress: editForm.occupantPostalAddress,
         comment: editForm.comment,
         price2026: editForm.price2026 ? parseInt(editForm.price2026) : null,
+        secret: editForm.secret,
         status: isOccupied ? "Occupied" : "Available",
       });
       setBerths((prev) =>
@@ -165,10 +230,17 @@ export default function DirectoryPage() {
           b.id === editBerth.id
             ? {
                 ...b,
-                ...editForm,
+                occupantFirstName: editForm.occupantFirstName,
+                occupantLastName: editForm.occupantLastName,
+                occupantPhone: editForm.occupantPhone,
+                occupantEmail: editForm.occupantEmail,
+                occupantAddress: editForm.occupantAddress,
+                occupantPostalAddress: editForm.occupantPostalAddress,
+                comment: editForm.comment,
                 price2026: editForm.price2026
                   ? parseInt(editForm.price2026)
                   : undefined,
+                secret: editForm.secret,
                 status: isOccupied ? "Occupied" : "Available",
               }
             : b
@@ -418,9 +490,11 @@ export default function DirectoryPage() {
 
       {/* Berths table */}
       {loadingBerths ? (
-        <Box sx={{ display: "flex", justifyContent: "center", py: 4 }}>
-          <Skeleton variant="rectangular" height={300} sx={{ width: "100%", borderRadius: 2 }} />
-        </Box>
+        <Skeleton
+          variant="rectangular"
+          height={300}
+          sx={{ width: "100%", borderRadius: 2 }}
+        />
       ) : filtered.length === 0 ? (
         <Box sx={{ textAlign: "center", py: 6, color: "text.secondary" }}>
           <DirectionsBoatIcon sx={{ fontSize: 64, mb: 2, opacity: 0.3 }} />
@@ -437,15 +511,19 @@ export default function DirectoryPage() {
                 <TableCell>Berth</TableCell>
                 <TableCell>Status</TableCell>
                 <TableCell>Occupant</TableCell>
-                {isManager && <TableCell>Phone</TableCell>}
+                {canSeePersonalInfo(berths[0] || {}) && (
+                  <TableCell>Phone</TableCell>
+                )}
                 {isManager && <TableCell>Price 2026</TableCell>}
-                <TableCell>Comment</TableCell>
+                {isManager && <TableCell>Comment</TableCell>}
                 {isManager && <TableCell align="right">Actions</TableCell>}
               </TableRow>
             </TableHead>
             <TableBody>
               {filtered.map((b) => {
                 const isAvailable = b.status === "Available";
+                const showNames = canSeeNames(b);
+                const showContact = canSeePersonalInfo(b);
                 const displayName =
                   b.occupantFirstName || b.occupantLastName
                     ? `${b.occupantFirstName || ""} ${b.occupantLastName || ""}`.trim()
@@ -462,7 +540,23 @@ export default function DirectoryPage() {
                     }}
                   >
                     <TableCell sx={{ fontWeight: 700, fontSize: "1rem" }}>
-                      {b.markingCode || b.berthNumber}
+                      <Box
+                        sx={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 0.5,
+                        }}
+                      >
+                        {b.markingCode || b.berthNumber}
+                        {b.secret && isSuperadmin && (
+                          <Tooltip title="Secret — only visible to Superadmin">
+                            <LockIcon
+                              fontSize="small"
+                              sx={{ color: "warning.main", ml: 0.5 }}
+                            />
+                          </Tooltip>
+                        )}
+                      </Box>
                     </TableCell>
                     <TableCell>
                       <Chip
@@ -473,17 +567,22 @@ export default function DirectoryPage() {
                       />
                     </TableCell>
                     <TableCell>
-                      {isManager
-                        ? displayName || "—"
-                        : isAvailable
+                      {isAvailable
                         ? "—"
-                        : displayName
-                        ? displayName
+                        : showNames
+                        ? displayName || "Occupied"
+                        : b.secret && !isSuperadmin
+                        ? "🔒 Hidden"
                         : "Occupied"}
                     </TableCell>
-                    {isManager && (
+                    {/* Phone column — only for users who can see personal info */}
+                    {canSeePersonalInfo(berths[0] || {}) && (
                       <TableCell sx={{ color: "text.secondary" }}>
-                        {b.occupantPhone || "—"}
+                        {showContact
+                          ? b.occupantPhone || "—"
+                          : b.secret
+                          ? "🔒"
+                          : "—"}
                       </TableCell>
                     )}
                     {isManager && (
@@ -491,17 +590,19 @@ export default function DirectoryPage() {
                         {b.price2026 ? `${b.price2026} kr` : "—"}
                       </TableCell>
                     )}
-                    <TableCell
-                      sx={{
-                        color: "text.secondary",
-                        maxWidth: 200,
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      {b.comment || "—"}
-                    </TableCell>
+                    {isManager && (
+                      <TableCell
+                        sx={{
+                          color: "text.secondary",
+                          maxWidth: 200,
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {b.comment || "—"}
+                      </TableCell>
+                    )}
                     {isManager && (
                       <TableCell align="right">
                         <Button
@@ -539,7 +640,10 @@ export default function DirectoryPage() {
                 label="First Name"
                 value={editForm.occupantFirstName}
                 onChange={(e) =>
-                  setEditForm({ ...editForm, occupantFirstName: e.target.value })
+                  setEditForm({
+                    ...editForm,
+                    occupantFirstName: e.target.value,
+                  })
                 }
               />
             </Grid>
@@ -549,7 +653,10 @@ export default function DirectoryPage() {
                 label="Last Name"
                 value={editForm.occupantLastName}
                 onChange={(e) =>
-                  setEditForm({ ...editForm, occupantLastName: e.target.value })
+                  setEditForm({
+                    ...editForm,
+                    occupantLastName: e.target.value,
+                  })
                 }
               />
             </Grid>
@@ -607,6 +714,38 @@ export default function DirectoryPage() {
                 }
               />
             </Grid>
+            <Grid size={{ xs: 6 }}>
+              <Box
+                sx={{
+                  display: "flex",
+                  alignItems: "center",
+                  height: "100%",
+                }}
+              >
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={editForm.secret}
+                      onChange={(e) =>
+                        setEditForm({ ...editForm, secret: e.target.checked })
+                      }
+                    />
+                  }
+                  label={
+                    <Box
+                      sx={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 0.5,
+                      }}
+                    >
+                      <LockIcon fontSize="small" />
+                      Secret
+                    </Box>
+                  }
+                />
+              </Box>
+            </Grid>
             <Grid size={{ xs: 12 }}>
               <TextField
                 fullWidth
@@ -633,7 +772,11 @@ export default function DirectoryPage() {
             </Button>
           )}
           <Button onClick={() => setEditBerth(null)}>Cancel</Button>
-          <Button variant="contained" onClick={handleEditSave} disabled={saving}>
+          <Button
+            variant="contained"
+            onClick={handleEditSave}
+            disabled={saving}
+          >
             {saving ? "Saving..." : "Save"}
           </Button>
         </DialogActions>
