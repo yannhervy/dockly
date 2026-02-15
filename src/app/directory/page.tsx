@@ -1,43 +1,80 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
-import { collection, getDocs, query, where } from "firebase/firestore";
+import React, { useEffect, useState, useMemo } from "react";
+import {
+  collection,
+  getDocs,
+  query,
+  where,
+  doc,
+  updateDoc,
+} from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { Dock, Resource, User } from "@/lib/types";
+import { useAuth } from "@/context/AuthContext";
+import { Dock, Berth } from "@/lib/types";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 import Card from "@mui/material/Card";
 import CardContent from "@mui/material/CardContent";
-import CardMedia from "@mui/material/CardMedia";
 import Grid from "@mui/material/Grid";
-import FormControl from "@mui/material/FormControl";
-import InputLabel from "@mui/material/InputLabel";
-import Select, { SelectChangeEvent } from "@mui/material/Select";
-import MenuItem from "@mui/material/MenuItem";
 import Chip from "@mui/material/Chip";
 import Skeleton from "@mui/material/Skeleton";
+import Table from "@mui/material/Table";
+import TableBody from "@mui/material/TableBody";
+import TableCell from "@mui/material/TableCell";
+import TableContainer from "@mui/material/TableContainer";
+import TableHead from "@mui/material/TableHead";
+import TableRow from "@mui/material/TableRow";
+import Paper from "@mui/material/Paper";
+import TextField from "@mui/material/TextField";
+import Button from "@mui/material/Button";
+import Dialog from "@mui/material/Dialog";
+import DialogTitle from "@mui/material/DialogTitle";
+import DialogContent from "@mui/material/DialogContent";
+import DialogActions from "@mui/material/DialogActions";
+import Alert from "@mui/material/Alert";
+import InputAdornment from "@mui/material/InputAdornment";
 import DirectionsBoatIcon from "@mui/icons-material/DirectionsBoat";
-import VisibilityOffIcon from "@mui/icons-material/VisibilityOff";
 import AnchorIcon from "@mui/icons-material/Anchor";
+import SearchIcon from "@mui/icons-material/Search";
+import EditIcon from "@mui/icons-material/Edit";
+import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 
 export default function DirectoryPage() {
+  const { isSuperadmin, isDockManager } = useAuth();
+  const isManager = isSuperadmin || isDockManager;
+
   const [docks, setDocks] = useState<Dock[]>([]);
-  const [selectedDockId, setSelectedDockId] = useState("");
-  const [resources, setResources] = useState<Resource[]>([]);
-  const [occupants, setOccupants] = useState<Record<string, User>>({});
+  const [selectedDock, setSelectedDock] = useState<Dock | null>(null);
+  const [berths, setBerths] = useState<Berth[]>([]);
   const [loadingDocks, setLoadingDocks] = useState(true);
-  const [loadingResources, setLoadingResources] = useState(false);
+  const [loadingBerths, setLoadingBerths] = useState(false);
+  const [search, setSearch] = useState("");
+
+  // Edit dialog state (admin/manager only)
+  const [editBerth, setEditBerth] = useState<Berth | null>(null);
+  const [editForm, setEditForm] = useState({
+    occupantFirstName: "",
+    occupantLastName: "",
+    occupantPhone: "",
+    occupantEmail: "",
+    occupantAddress: "",
+    occupantPostalAddress: "",
+    comment: "",
+    price2026: "",
+  });
+  const [saving, setSaving] = useState(false);
+  const [successMsg, setSuccessMsg] = useState("");
 
   // Fetch all docks
   useEffect(() => {
     async function fetchDocks() {
       try {
         const snap = await getDocs(collection(db, "docks"));
-        const items = snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Dock);
+        const items = snap.docs.map(
+          (d) => ({ id: d.id, ...d.data() }) as Dock
+        );
         setDocks(items);
-        if (items.length > 0) {
-          setSelectedDockId(items[0].id);
-        }
       } catch (err) {
         console.error("Error fetching docks:", err);
       } finally {
@@ -49,237 +86,558 @@ export default function DirectoryPage() {
 
   // Fetch berths for selected dock
   useEffect(() => {
-    if (!selectedDockId) return;
+    if (!selectedDock) return;
 
-    async function fetchResources() {
-      setLoadingResources(true);
+    async function fetchBerths() {
+      setLoadingBerths(true);
       try {
         const q = query(
           collection(db, "resources"),
-          where("dockId", "==", selectedDockId),
+          where("dockId", "==", selectedDock!.id),
           where("type", "==", "Berth")
         );
         const snap = await getDocs(q);
-        const items = snap.docs.map(
-          (d) => ({ id: d.id, ...d.data() }) as Resource
-        );
-        setResources(items);
-
-        // Fetch occupant profiles
-        const occupantIds = items
-          .filter((r) => r.occupantId)
-          .map((r) => r.occupantId as string);
-        const uniqueIds = [...new Set(occupantIds)];
-
-        const occupantMap: Record<string, User> = {};
-        for (const uid of uniqueIds) {
-          try {
-            const { doc: docRef, getDoc } = await import("firebase/firestore");
-            const userSnap = await getDoc(docRef(db, "users", uid));
-            if (userSnap.exists()) {
-              occupantMap[uid] = { id: userSnap.id, ...userSnap.data() } as User;
-            }
-          } catch {
-            // Skip users that can't be fetched
-          }
-        }
-        setOccupants(occupantMap);
+        const items = snap.docs
+          .map((d) => ({ id: d.id, ...d.data() }) as Berth)
+          .sort((a, b) => (a.berthNumber || 0) - (b.berthNumber || 0));
+        setBerths(items);
       } catch (err) {
-        console.error("Error fetching resources:", err);
+        console.error("Error fetching berths:", err);
       } finally {
-        setLoadingResources(false);
+        setLoadingBerths(false);
       }
     }
-    fetchResources();
-  }, [selectedDockId]);
+    fetchBerths();
+  }, [selectedDock]);
 
-  const handleDockChange = (event: SelectChangeEvent) => {
-    setSelectedDockId(event.target.value);
+  // Filtered berths
+  const filtered = useMemo(() => {
+    if (!search.trim()) return berths;
+    const term = search.toLowerCase();
+    return berths.filter(
+      (b) =>
+        String(b.berthNumber || "").includes(term) ||
+        (b.markingCode || "").toLowerCase().includes(term) ||
+        (b.occupantFirstName || "").toLowerCase().includes(term) ||
+        (b.occupantLastName || "").toLowerCase().includes(term)
+    );
+  }, [berths, search]);
+
+  // Stats
+  const totalBerths = berths.length;
+  const occupiedBerths = berths.filter((b) => b.status === "Occupied").length;
+  const availableBerths = berths.filter((b) => b.status === "Available").length;
+
+  // Open edit dialog
+  const openEdit = (berth: Berth) => {
+    setEditBerth(berth);
+    setEditForm({
+      occupantFirstName: berth.occupantFirstName || "",
+      occupantLastName: berth.occupantLastName || "",
+      occupantPhone: berth.occupantPhone || "",
+      occupantEmail: berth.occupantEmail || "",
+      occupantAddress: berth.occupantAddress || "",
+      occupantPostalAddress: berth.occupantPostalAddress || "",
+      comment: berth.comment || "",
+      price2026: String(berth.price2026 || ""),
+    });
   };
 
-  const getOccupantDisplayName = (occupantId: string): string => {
-    if (!occupantId) return "—";
-    const user = occupants[occupantId];
-    if (!user) return "—";
-    return user.isPublic ? user.name : "Dold medlem";
+  // Save edit
+  const handleEditSave = async () => {
+    if (!editBerth) return;
+    setSaving(true);
+    try {
+      const isOccupied = editForm.occupantFirstName.trim().length > 0;
+      await updateDoc(doc(db, "resources", editBerth.id), {
+        occupantFirstName: editForm.occupantFirstName,
+        occupantLastName: editForm.occupantLastName,
+        occupantPhone: editForm.occupantPhone,
+        occupantEmail: editForm.occupantEmail,
+        occupantAddress: editForm.occupantAddress,
+        occupantPostalAddress: editForm.occupantPostalAddress,
+        comment: editForm.comment,
+        price2026: editForm.price2026 ? parseInt(editForm.price2026) : null,
+        status: isOccupied ? "Occupied" : "Available",
+      });
+      setBerths((prev) =>
+        prev.map((b) =>
+          b.id === editBerth.id
+            ? {
+                ...b,
+                ...editForm,
+                price2026: editForm.price2026
+                  ? parseInt(editForm.price2026)
+                  : undefined,
+                status: isOccupied ? "Occupied" : "Available",
+              }
+            : b
+        )
+      );
+      setEditBerth(null);
+      setSuccessMsg("Berth updated!");
+      setTimeout(() => setSuccessMsg(""), 3000);
+    } catch (err) {
+      console.error("Error saving berth:", err);
+    } finally {
+      setSaving(false);
+    }
   };
 
-  return (
-    <Box>
-      {/* Page header */}
-      <Box sx={{ mb: 4 }}>
-        <Typography
-          variant="h4"
-          sx={{
-            mb: 1,
-            display: "flex",
-            alignItems: "center",
-            gap: 1.5,
-          }}
-        >
-          <AnchorIcon sx={{ color: "primary.main" }} />
-          Harbor Directory
-        </Typography>
-        <Typography variant="body1" color="text.secondary">
-          Browse berths and see who is moored at each dock.
-        </Typography>
-      </Box>
+  // Release berth
+  const handleRelease = async () => {
+    if (!editBerth) return;
+    setSaving(true);
+    try {
+      await updateDoc(doc(db, "resources", editBerth.id), {
+        occupantFirstName: "",
+        occupantLastName: "",
+        occupantPhone: "",
+        occupantEmail: "",
+        occupantAddress: "",
+        occupantPostalAddress: "",
+        status: "Available",
+        paymentStatus: "Unpaid",
+      });
+      setBerths((prev) =>
+        prev.map((b) =>
+          b.id === editBerth.id
+            ? {
+                ...b,
+                occupantFirstName: "",
+                occupantLastName: "",
+                occupantPhone: "",
+                occupantEmail: "",
+                occupantAddress: "",
+                occupantPostalAddress: "",
+                status: "Available",
+                paymentStatus: "Unpaid",
+              }
+            : b
+        )
+      );
+      setEditBerth(null);
+      setSuccessMsg("Berth released!");
+      setTimeout(() => setSuccessMsg(""), 3000);
+    } catch (err) {
+      console.error("Error releasing berth:", err);
+    } finally {
+      setSaving(false);
+    }
+  };
 
-      {/* Dock selector */}
-      <FormControl fullWidth sx={{ mb: 4, maxWidth: 400 }}>
-        <InputLabel>Select Dock</InputLabel>
-        <Select
-          value={selectedDockId}
-          label="Select Dock"
-          onChange={handleDockChange}
-          disabled={loadingDocks}
-        >
-          {docks.map((dock) => (
-            <MenuItem key={dock.id} value={dock.id}>
-              {dock.name}
-              <Chip
-                label={dock.type}
-                size="small"
-                sx={{
-                  ml: 1,
-                  height: 20,
-                  fontSize: 11,
-                  bgcolor:
-                    dock.type === "Association"
-                      ? "rgba(102, 187, 106, 0.15)"
-                      : "rgba(255, 183, 77, 0.15)",
-                  color:
-                    dock.type === "Association"
-                      ? "success.main"
-                      : "secondary.main",
-                }}
-              />
-            </MenuItem>
-          ))}
-        </Select>
-      </FormControl>
-
-      {/* Berths grid */}
-      {loadingResources ? (
-        <Grid container spacing={3}>
-          {[1, 2, 3, 4, 5, 6].map((i) => (
-            <Grid size={{ xs: 12, sm: 6, md: 4 }} key={i}>
-              <Skeleton
-                variant="rectangular"
-                height={280}
-                sx={{ borderRadius: 3 }}
-              />
-            </Grid>
-          ))}
-        </Grid>
-      ) : resources.length === 0 ? (
-        <Box
-          sx={{
-            textAlign: "center",
-            py: 8,
-            color: "text.secondary",
-          }}
-        >
-          <DirectionsBoatIcon sx={{ fontSize: 64, mb: 2, opacity: 0.3 }} />
-          <Typography variant="h6">No berths found</Typography>
-          <Typography variant="body2">
-            {selectedDockId
-              ? "This dock has no berths registered yet."
-              : "Select a dock to view its berths."}
+  // ─── Dock list view ─────────────────────────────────────
+  if (!selectedDock) {
+    return (
+      <Box>
+        <Box sx={{ mb: 4 }}>
+          <Typography
+            variant="h4"
+            sx={{ mb: 1, display: "flex", alignItems: "center", gap: 1.5 }}
+          >
+            <AnchorIcon sx={{ color: "primary.main" }} />
+            Harbor Directory
+          </Typography>
+          <Typography variant="body1" color="text.secondary">
+            Select a dock to view its berths and availability.
           </Typography>
         </Box>
-      ) : (
-        <Grid container spacing={3}>
-          {resources.map((resource) => {
-            const occupant = resource.occupantId
-              ? occupants[resource.occupantId]
-              : null;
-            const isPrivate = occupant && !occupant.isPublic;
 
-            return (
-              <Grid size={{ xs: 12, sm: 6, md: 4 }} key={resource.id}>
+        {loadingDocks ? (
+          <Grid container spacing={3}>
+            {[1, 2, 3].map((i) => (
+              <Grid size={{ xs: 12, sm: 6, md: 4 }} key={i}>
+                <Skeleton
+                  variant="rectangular"
+                  height={160}
+                  sx={{ borderRadius: 3 }}
+                />
+              </Grid>
+            ))}
+          </Grid>
+        ) : docks.length === 0 ? (
+          <Box sx={{ textAlign: "center", py: 8, color: "text.secondary" }}>
+            <AnchorIcon sx={{ fontSize: 64, mb: 2, opacity: 0.3 }} />
+            <Typography variant="h6">No docks registered yet</Typography>
+          </Box>
+        ) : (
+          <Grid container spacing={3}>
+            {docks.map((dock) => (
+              <Grid size={{ xs: 12, sm: 6, md: 4 }} key={dock.id}>
                 <Card
                   sx={{
-                    height: "100%",
+                    cursor: "pointer",
                     transition: "transform 0.2s, box-shadow 0.2s",
                     "&:hover": {
                       transform: "translateY(-4px)",
                       boxShadow: "0 8px 32px rgba(79, 195, 247, 0.15)",
                     },
                   }}
+                  onClick={() => setSelectedDock(dock)}
                 >
-                  {/* Boat image */}
-                  {resource.boatImageUrl ? (
-                    <CardMedia
-                      component="img"
-                      height="180"
-                      image={resource.boatImageUrl}
-                      alt={`Boat at ${resource.markingCode}`}
-                      sx={{ objectFit: "cover" }}
+                  <CardContent sx={{ py: 3 }}>
+                    <Box
+                      sx={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 1.5,
+                        mb: 1.5,
+                      }}
+                    >
+                      <AnchorIcon
+                        sx={{ fontSize: 32, color: "primary.main" }}
+                      />
+                      <Typography variant="h5" sx={{ fontWeight: 700 }}>
+                        {dock.name}
+                      </Typography>
+                    </Box>
+                    <Chip
+                      label={dock.type}
+                      size="small"
+                      color={
+                        dock.type === "Association" ? "success" : "warning"
+                      }
                     />
-                  ) : (
-                    <Box
-                      sx={{
-                        height: 180,
-                        display: "flex",
-                        justifyContent: "center",
-                        alignItems: "center",
-                        bgcolor: "rgba(79, 195, 247, 0.05)",
-                      }}
+                    <Typography
+                      variant="body2"
+                      color="text.secondary"
+                      sx={{ mt: 1.5 }}
                     >
-                      <DirectionsBoatIcon
-                        sx={{ fontSize: 64, color: "text.secondary", opacity: 0.3 }}
-                      />
-                    </Box>
-                  )}
-                  <CardContent>
-                    {/* Marking code */}
-                    <Box
-                      sx={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        alignItems: "center",
-                        mb: 1,
-                      }}
-                    >
-                      <Typography variant="h6" sx={{ fontWeight: 700 }}>
-                        {resource.markingCode}
-                      </Typography>
-                      <Chip
-                        label={resource.status}
-                        size="small"
-                        color={
-                          resource.status === "Available" ? "success" : "warning"
-                        }
-                        sx={{ fontWeight: 600 }}
-                      />
-                    </Box>
-
-                    {/* Occupant name */}
-                    <Box
-                      sx={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 1,
-                        color: isPrivate ? "text.secondary" : "text.primary",
-                      }}
-                    >
-                      {isPrivate && (
-                        <VisibilityOffIcon fontSize="small" sx={{ opacity: 0.6 }} />
-                      )}
-                      <Typography variant="body2">
-                        {resource.status === "Occupied"
-                          ? getOccupantDisplayName(resource.occupantId || "")
-                          : "Available"}
-                      </Typography>
-                    </Box>
+                      Click to view berths →
+                    </Typography>
                   </CardContent>
                 </Card>
               </Grid>
-            );
-          })}
-        </Grid>
+            ))}
+          </Grid>
+        )}
+      </Box>
+    );
+  }
+
+  // ─── Berth list view for selected dock ──────────────────
+  return (
+    <Box>
+      {successMsg && (
+        <Alert severity="success" sx={{ mb: 2 }}>
+          {successMsg}
+        </Alert>
       )}
+
+      {/* Header with back button */}
+      <Box sx={{ mb: 3 }}>
+        <Button
+          startIcon={<ArrowBackIcon />}
+          onClick={() => {
+            setSelectedDock(null);
+            setBerths([]);
+            setSearch("");
+          }}
+          sx={{ mb: 1, textTransform: "none" }}
+        >
+          All Docks
+        </Button>
+        <Typography
+          variant="h4"
+          sx={{ display: "flex", alignItems: "center", gap: 1.5 }}
+        >
+          <AnchorIcon sx={{ color: "primary.main" }} />
+          {selectedDock.name}
+        </Typography>
+        <Typography variant="body1" color="text.secondary">
+          {selectedDock.type} dock — {totalBerths} berths
+        </Typography>
+      </Box>
+
+      {/* Stats cards */}
+      <Grid container spacing={2} sx={{ mb: 3 }}>
+        <Grid size={{ xs: 4 }}>
+          <Card>
+            <CardContent sx={{ textAlign: "center", py: 2 }}>
+              <Typography
+                variant="h4"
+                sx={{ fontWeight: 700, color: "primary.main" }}
+              >
+                {totalBerths}
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                Total
+              </Typography>
+            </CardContent>
+          </Card>
+        </Grid>
+        <Grid size={{ xs: 4 }}>
+          <Card>
+            <CardContent sx={{ textAlign: "center", py: 2 }}>
+              <Typography
+                variant="h4"
+                sx={{ fontWeight: 700, color: "warning.main" }}
+              >
+                {occupiedBerths}
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                Occupied
+              </Typography>
+            </CardContent>
+          </Card>
+        </Grid>
+        <Grid size={{ xs: 4 }}>
+          <Card>
+            <CardContent sx={{ textAlign: "center", py: 2 }}>
+              <Typography
+                variant="h4"
+                sx={{ fontWeight: 700, color: "success.main" }}
+              >
+                {availableBerths}
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                Available
+              </Typography>
+            </CardContent>
+          </Card>
+        </Grid>
+      </Grid>
+
+      {/* Search */}
+      <TextField
+        fullWidth
+        placeholder="Search by berth number or name..."
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        sx={{ mb: 3 }}
+        slotProps={{
+          input: {
+            startAdornment: (
+              <InputAdornment position="start">
+                <SearchIcon />
+              </InputAdornment>
+            ),
+          },
+        }}
+      />
+
+      {/* Berths table */}
+      {loadingBerths ? (
+        <Box sx={{ display: "flex", justifyContent: "center", py: 4 }}>
+          <Skeleton variant="rectangular" height={300} sx={{ width: "100%", borderRadius: 2 }} />
+        </Box>
+      ) : filtered.length === 0 ? (
+        <Box sx={{ textAlign: "center", py: 6, color: "text.secondary" }}>
+          <DirectionsBoatIcon sx={{ fontSize: 64, mb: 2, opacity: 0.3 }} />
+          <Typography variant="h6">No berths found</Typography>
+        </Box>
+      ) : (
+        <TableContainer
+          component={Paper}
+          sx={{ bgcolor: "background.paper", backgroundImage: "none" }}
+        >
+          <Table>
+            <TableHead>
+              <TableRow>
+                <TableCell>Berth</TableCell>
+                <TableCell>Status</TableCell>
+                <TableCell>Occupant</TableCell>
+                {isManager && <TableCell>Phone</TableCell>}
+                {isManager && <TableCell>Price 2026</TableCell>}
+                <TableCell>Comment</TableCell>
+                {isManager && <TableCell align="right">Actions</TableCell>}
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {filtered.map((b) => {
+                const isAvailable = b.status === "Available";
+                const displayName =
+                  b.occupantFirstName || b.occupantLastName
+                    ? `${b.occupantFirstName || ""} ${b.occupantLastName || ""}`.trim()
+                    : "";
+
+                return (
+                  <TableRow
+                    key={b.id}
+                    hover
+                    sx={{
+                      bgcolor: isAvailable
+                        ? "rgba(102, 187, 106, 0.04)"
+                        : "transparent",
+                    }}
+                  >
+                    <TableCell sx={{ fontWeight: 700, fontSize: "1rem" }}>
+                      {b.markingCode || b.berthNumber}
+                    </TableCell>
+                    <TableCell>
+                      <Chip
+                        label={b.status}
+                        size="small"
+                        color={isAvailable ? "success" : "warning"}
+                        sx={{ fontWeight: 600 }}
+                      />
+                    </TableCell>
+                    <TableCell>
+                      {isManager
+                        ? displayName || "—"
+                        : isAvailable
+                        ? "—"
+                        : displayName
+                        ? displayName
+                        : "Occupied"}
+                    </TableCell>
+                    {isManager && (
+                      <TableCell sx={{ color: "text.secondary" }}>
+                        {b.occupantPhone || "—"}
+                      </TableCell>
+                    )}
+                    {isManager && (
+                      <TableCell>
+                        {b.price2026 ? `${b.price2026} kr` : "—"}
+                      </TableCell>
+                    )}
+                    <TableCell
+                      sx={{
+                        color: "text.secondary",
+                        maxWidth: 200,
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {b.comment || "—"}
+                    </TableCell>
+                    {isManager && (
+                      <TableCell align="right">
+                        <Button
+                          size="small"
+                          startIcon={<EditIcon />}
+                          onClick={() => openEdit(b)}
+                        >
+                          Edit
+                        </Button>
+                      </TableCell>
+                    )}
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      )}
+
+      {/* Edit dialog (admin/manager only) */}
+      <Dialog
+        open={!!editBerth}
+        onClose={() => setEditBerth(null)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>
+          Edit Berth: {editBerth?.markingCode || editBerth?.berthNumber}
+        </DialogTitle>
+        <DialogContent>
+          <Grid container spacing={2} sx={{ mt: 0.5 }}>
+            <Grid size={{ xs: 6 }}>
+              <TextField
+                fullWidth
+                label="First Name"
+                value={editForm.occupantFirstName}
+                onChange={(e) =>
+                  setEditForm({ ...editForm, occupantFirstName: e.target.value })
+                }
+              />
+            </Grid>
+            <Grid size={{ xs: 6 }}>
+              <TextField
+                fullWidth
+                label="Last Name"
+                value={editForm.occupantLastName}
+                onChange={(e) =>
+                  setEditForm({ ...editForm, occupantLastName: e.target.value })
+                }
+              />
+            </Grid>
+            <Grid size={{ xs: 6 }}>
+              <TextField
+                fullWidth
+                label="Phone"
+                value={editForm.occupantPhone}
+                onChange={(e) =>
+                  setEditForm({ ...editForm, occupantPhone: e.target.value })
+                }
+              />
+            </Grid>
+            <Grid size={{ xs: 6 }}>
+              <TextField
+                fullWidth
+                label="Email"
+                value={editForm.occupantEmail}
+                onChange={(e) =>
+                  setEditForm({ ...editForm, occupantEmail: e.target.value })
+                }
+              />
+            </Grid>
+            <Grid size={{ xs: 6 }}>
+              <TextField
+                fullWidth
+                label="Address"
+                value={editForm.occupantAddress}
+                onChange={(e) =>
+                  setEditForm({ ...editForm, occupantAddress: e.target.value })
+                }
+              />
+            </Grid>
+            <Grid size={{ xs: 6 }}>
+              <TextField
+                fullWidth
+                label="Postal Address"
+                value={editForm.occupantPostalAddress}
+                onChange={(e) =>
+                  setEditForm({
+                    ...editForm,
+                    occupantPostalAddress: e.target.value,
+                  })
+                }
+              />
+            </Grid>
+            <Grid size={{ xs: 6 }}>
+              <TextField
+                fullWidth
+                label="Price 2026 (kr)"
+                type="number"
+                value={editForm.price2026}
+                onChange={(e) =>
+                  setEditForm({ ...editForm, price2026: e.target.value })
+                }
+              />
+            </Grid>
+            <Grid size={{ xs: 12 }}>
+              <TextField
+                fullWidth
+                label="Comment"
+                multiline
+                rows={2}
+                value={editForm.comment}
+                onChange={(e) =>
+                  setEditForm({ ...editForm, comment: e.target.value })
+                }
+              />
+            </Grid>
+          </Grid>
+        </DialogContent>
+        <DialogActions>
+          {editBerth?.status === "Occupied" && (
+            <Button
+              color="error"
+              onClick={handleRelease}
+              disabled={saving}
+              sx={{ mr: "auto" }}
+            >
+              Release Berth
+            </Button>
+          )}
+          <Button onClick={() => setEditBerth(null)}>Cancel</Button>
+          <Button variant="contained" onClick={handleEditSave} disabled={saving}>
+            {saving ? "Saving..." : "Save"}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }
