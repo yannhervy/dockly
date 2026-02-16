@@ -3,15 +3,15 @@ import { getFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 import { getAuth } from "firebase/auth";
 
-// Firebase configuration for Stegerholmens Hamn
+// Firebase configuration — values loaded from environment variables
 const firebaseConfig = {
-  apiKey: "AIzaSyCGGMhp8H7pVuYeEM12DXMMAqptsTWTjOI",
-  authDomain: "stegerholmenshamn.firebaseapp.com",
-  projectId: "stegerholmenshamn",
-  storageBucket: "stegerholmenshamn.firebasestorage.app",
-  messagingSenderId: "885107364018",
-  appId: "1:885107364018:web:ec26d4b61d610e5344b9ab",
-  measurementId: "G-RK69QMQ05P",
+  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
+  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
+  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
+  measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID,
 };
 
 // Initialize Firebase (prevent re-initialization in dev with HMR)
