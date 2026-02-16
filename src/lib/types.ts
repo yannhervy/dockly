@@ -120,7 +120,7 @@ export interface LandStorage extends Resource {
 export type AnyResource = Berth | SeaHut | Box | LandStorage;
 
 // ─── Marketplace ──────────────────────────────────────────
-export type ListingCategory = "Sale" | "Service" | "SubletOffer" | "SubletWanted";
+export type ListingCategory = "Sale" | "WantedToBuy" | "Service" | "SubletOffer" | "SubletWanted";
 export type ListingStatus = "Active" | "Sold" | "Closed";
 
 export interface MarketplaceListing {

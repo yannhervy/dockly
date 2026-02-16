@@ -52,18 +52,22 @@ import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
 import AnchorIcon from "@mui/icons-material/Anchor";
 import SearchIcon from "@mui/icons-material/Search";
+import ShoppingCartIcon from "@mui/icons-material/ShoppingCart";
+import WarningAmberIcon from "@mui/icons-material/WarningAmber";
 import type { ListingCategory } from "@/lib/types";
 
 // Category helpers
 const CATEGORY_LABELS: Record<ListingCategory, string> = {
   Sale: "Till salu",
+  WantedToBuy: "Köpes",
   Service: "Tjänst",
-  SubletOffer: "Andrahandsplats erbjudes",
-  SubletWanted: "Andrahandsplats sökes",
+  SubletOffer: "2-handuthyrning erbjudes",
+  SubletWanted: "2-handuthyrning önskas",
 };
 
 const CATEGORY_ICONS: Record<ListingCategory, React.ReactNode> = {
   Sale: <SellIcon />,
+  WantedToBuy: <ShoppingCartIcon />,
   Service: <BuildIcon />,
   SubletOffer: <AnchorIcon />,
   SubletWanted: <SearchIcon />,
@@ -71,6 +75,7 @@ const CATEGORY_ICONS: Record<ListingCategory, React.ReactNode> = {
 
 const CATEGORY_COLORS: Record<ListingCategory, "primary" | "warning" | "success" | "info"> = {
   Sale: "primary",
+  WantedToBuy: "info",
   Service: "warning",
   SubletOffer: "success",
   SubletWanted: "info",
@@ -182,7 +187,7 @@ export default function MarketplacePage() {
     }
   }
 
-  const categoryByTab: (ListingCategory | null)[] = [null, "Sale", "Service", "SubletOffer", "SubletWanted"];
+  const categoryByTab: (ListingCategory | null)[] = [null, "Sale", "WantedToBuy", "Service", "SubletOffer", "SubletWanted"];
   const activeCategory = categoryByTab[tab] ?? null;
   const filteredListings = activeCategory
     ? listings.filter((l) => l.category === activeCategory)
@@ -363,9 +368,10 @@ export default function MarketplacePage() {
       >
         <Tab label="Alla" />
         <Tab icon={<SellIcon />} iconPosition="start" label="Till salu" />
+        <Tab icon={<ShoppingCartIcon />} iconPosition="start" label="Köpes" />
         <Tab icon={<BuildIcon />} iconPosition="start" label="Tjänster" />
-        <Tab icon={<AnchorIcon />} iconPosition="start" label="Erbjuds" />
-        <Tab icon={<SearchIcon />} iconPosition="start" label="Sökes" />
+        <Tab icon={<AnchorIcon />} iconPosition="start" label="2-handuthyrning erbjudes" />
+        <Tab icon={<SearchIcon />} iconPosition="start" label="2-handuthyrning önskas" />
       </Tabs>
 
       {loading ? (
@@ -605,11 +611,18 @@ export default function MarketplacePage() {
               }
             >
               <MenuItem value="Sale">Till salu</MenuItem>
+              <MenuItem value="WantedToBuy">Köpes</MenuItem>
               <MenuItem value="Service">Tjänst</MenuItem>
-              <MenuItem value="SubletOffer">Andrahandsplats erbjudes</MenuItem>
-              <MenuItem value="SubletWanted">Andrahandsplats sökes</MenuItem>
+              <MenuItem value="SubletOffer">2-handuthyrning erbjudes</MenuItem>
+              <MenuItem value="SubletWanted">2-handuthyrning önskas</MenuItem>
             </Select>
           </FormControl>
+
+          {form.category === "SubletOffer" && (
+            <Alert severity="warning" icon={<WarningAmberIcon />} sx={{ mb: 2 }}>
+              <strong>Observera:</strong> Kontakta bryggansvarig för din brygga innan du hyr ut i andra hand. Uthyrning utöver ordinarie pris är ej tillåtet.
+            </Alert>
+          )}
 
           <TextField
             fullWidth
