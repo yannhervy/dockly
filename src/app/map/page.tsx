@@ -152,6 +152,19 @@ function DockPolygons({ docks }: { docks: Dock[] }) {
         zIndex: 0,
       });
 
+      // Compute visual rotation angle from projected polygon corners
+      // corners[0]=front-left, corners[1]=front-right, corners[2]=back-right, corners[3]=back-left
+      const frontMid = { lat: (corners[0].lat + corners[1].lat) / 2, lng: (corners[0].lng + corners[1].lng) / 2 };
+      const backMid = { lat: (corners[2].lat + corners[3].lat) / 2, lng: (corners[2].lng + corners[3].lng) / 2 };
+      // Screen coords: x=east(right), y=south(down, inverted from lat)
+      const cosLat = Math.cos((dock.lat! * Math.PI) / 180);
+      const screenDx = (backMid.lng - frontMid.lng) * cosLat;
+      const screenDy = -(backMid.lat - frontMid.lat);
+      let visualAngleDeg = Math.atan2(screenDy, screenDx) * (180 / Math.PI);
+      // Ensure text is readable (not upside down)
+      if (visualAngleDeg > 90) visualAngleDeg -= 180;
+      else if (visualAngleDeg < -90) visualAngleDeg += 180;
+
       // Rotated label with dock name
       const labelEl = document.createElement("div");
       labelEl.textContent = dock.name;
@@ -165,7 +178,7 @@ function DockPolygons({ docks }: { docks: Dock[] }) {
         white-space: nowrap;
         pointer-events: none;
         text-shadow: 0 1px 3px rgba(0,0,0,0.9);
-        transform: rotate(${-h}deg);
+        transform: rotate(${visualAngleDeg}deg);
         letter-spacing: 1px;
       `;
       const labelMarker = new google.maps.marker.AdvancedMarkerElement({

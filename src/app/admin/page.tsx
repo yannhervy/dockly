@@ -59,6 +59,7 @@ import AnchorIcon from "@mui/icons-material/Anchor";
 import SailingIcon from "@mui/icons-material/Sailing";
 import ReplyIcon from "@mui/icons-material/Reply";
 import VisibilityIcon from "@mui/icons-material/Visibility";
+import PublicIcon from "@mui/icons-material/Public";
 
 export default function AdminPage() {
   return (
@@ -1316,6 +1317,14 @@ function ResourcesTab() {
                 <TableRow key={r.id} hover>
                   <TableCell sx={{ fontWeight: 600 }}>
                     {r.markingCode}
+                    {r.lat && r.lng && (
+                      <PublicIcon sx={{ fontSize: 14, ml: 0.5, mb: -0.3, color: "success.main", opacity: 0.8 }} titleAccess={`${r.lat?.toFixed(5)}, ${r.lng?.toFixed(5)}`} />
+                    )}
+                    {r.heading != null && r.heading !== 0 && (
+                      <Typography component="span" variant="caption" sx={{ ml: 0.5, color: "text.secondary" }}>
+                        {r.heading}°
+                      </Typography>
+                    )}
                   </TableCell>
                   <TableCell>
                     <Chip label={r.type} size="small" variant="outlined" />
