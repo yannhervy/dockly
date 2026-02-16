@@ -28,7 +28,7 @@ export default function DocksPage() {
           getDocs(collection(db, "docks")),
           getDocs(collection(db, "users")),
         ]);
-        setDocks(dSnap.docs.map((d) => ({ id: d.id, ...d.data() }) as Dock));
+        setDocks(dSnap.docs.map((d) => ({ id: d.id, ...d.data() }) as Dock).sort((a, b) => a.name.localeCompare(b.name)));
         setUsers(uSnap.docs.map((d) => ({ id: d.id, ...d.data() }) as User));
       } catch (err) {
         console.error("Error fetching docks:", err);
@@ -81,6 +81,18 @@ export default function DocksPage() {
                     },
                   }}
                 >
+                  {dock.imageUrl && (
+                    <Box
+                      component="img"
+                      src={dock.imageUrl}
+                      alt={dock.name}
+                      sx={{
+                        width: "100%",
+                        height: 160,
+                        objectFit: "cover",
+                      }}
+                    />
+                  )}
                   <CardContent sx={{ p: 3 }}>
                     <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1.5 }}>
                       <AnchorIcon sx={{ color: "primary.main" }} />

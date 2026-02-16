@@ -1,9 +1,9 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { db } from "@/lib/firebase";
 import { useAuth } from "@/context/AuthContext";
-import { User, Dock, Resource, BerthInterest, InterestReply } from "@/lib/types";
+import { User, Dock, Resource, BerthInterest, InterestReply, Berth } from "@/lib/types";
 import {
   collection,
   getDocs,
@@ -17,6 +17,9 @@ import {
   Timestamp,
 } from "firebase/firestore";
 import ProtectedRoute from "@/components/ProtectedRoute";
+import { uploadDockImage } from "@/lib/storage";
+import { computeRectCorners, HARBOR_CENTER } from "@/lib/mapUtils";
+import { APIProvider, Map as GMap, useMap, useMapsLibrary } from "@vis.gl/react-google-maps";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 import Card from "@mui/material/Card";
@@ -43,6 +46,7 @@ import Select, { SelectChangeEvent } from "@mui/material/Select";
 import MenuItem from "@mui/material/MenuItem";
 import IconButton from "@mui/material/IconButton";
 import Alert from "@mui/material/Alert";
+import Autocomplete from "@mui/material/Autocomplete";
 import CircularProgress from "@mui/material/CircularProgress";
 import Grid from "@mui/material/Grid";
 import AdminPanelSettingsIcon from "@mui/icons-material/AdminPanelSettings";
@@ -325,15 +329,19 @@ function UsersTab() {
 function DocksTab() {
   const [docks, setDocks] = useState<Dock[]>([]);
   const [users, setUsers] = useState<User[]>([]);
+  const [berths, setBerths] = useState<Berth[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [managerDialogDock, setManagerDialogDock] = useState<Dock | null>(null);
   const [selectedManagerIds, setSelectedManagerIds] = useState<string[]>([]);
   const [successMsg, setSuccessMsg] = useState("");
+  const [editDock, setEditDock] = useState<Dock | null>(null);
   const [form, setForm] = useState({
     name: "",
     type: "Association" as Dock["type"],
   });
+  const dockFileInputRef = useRef<HTMLInputElement>(null);
+  const [uploadingDockId, setUploadingDockId] = useState<string | null>(null);
 
   useEffect(() => {
     fetchData();
@@ -342,12 +350,18 @@ function DocksTab() {
   async function fetchData() {
     setLoading(true);
     try {
-      const [dSnap, uSnap] = await Promise.all([
+      const [dSnap, uSnap, rSnap] = await Promise.all([
         getDocs(collection(db, "docks")),
         getDocs(collection(db, "users")),
+        getDocs(collection(db, "resources")),
       ]);
-      setDocks(dSnap.docs.map((d) => ({ id: d.id, ...d.data() }) as Dock));
+      setDocks(dSnap.docs.map((d) => ({ id: d.id, ...d.data() }) as Dock).sort((a, b) => a.name.localeCompare(b.name)));
       setUsers(uSnap.docs.map((d) => ({ id: d.id, ...d.data() }) as User));
+      setBerths(
+        rSnap.docs
+          .map((d) => ({ id: d.id, ...d.data() }) as Resource)
+          .filter((r) => r.type === "Berth") as Berth[]
+      );
     } catch (err) {
       console.error("Error fetching data:", err);
     } finally {
@@ -438,6 +452,60 @@ function DocksTab() {
     }
   };
 
+  // Dock image upload
+  const handleDockImageClick = (dockId: string) => {
+    setUploadingDockId(dockId);
+    dockFileInputRef.current?.click();
+  };
+
+  const handleDockImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !uploadingDockId) return;
+    try {
+      const url = await uploadDockImage(file, uploadingDockId);
+      await updateDoc(doc(db, "docks", uploadingDockId), { imageUrl: url });
+      setDocks((prev) =>
+        prev.map((d) => (d.id === uploadingDockId ? { ...d, imageUrl: url } : d))
+      );
+      setSuccessMsg("Dock image updated!");
+      setTimeout(() => setSuccessMsg(""), 3000);
+    } catch (err) {
+      console.error("Error uploading dock image:", err);
+    } finally {
+      setUploadingDockId(null);
+      if (dockFileInputRef.current) dockFileInputRef.current.value = "";
+    }
+  };
+
+  const handleRemoveDockImage = async (dockId: string) => {
+    try {
+      await updateDoc(doc(db, "docks", dockId), { imageUrl: "" });
+      setDocks((prev) =>
+        prev.map((d) => (d.id === dockId ? { ...d, imageUrl: "" } : d))
+      );
+      setSuccessMsg("Dock image removed.");
+      setTimeout(() => setSuccessMsg(""), 3000);
+    } catch (err) {
+      console.error("Error removing dock image:", err);
+    }
+  };
+
+  const handleSaveDock = async () => {
+    if (!editDock) return;
+    try {
+      const { id, ...data } = editDock;
+      await updateDoc(doc(db, "docks", id), data as Record<string, unknown>);
+      setDocks((prev) =>
+        prev.map((d) => (d.id === id ? editDock : d)).sort((a, b) => a.name.localeCompare(b.name))
+      );
+      setEditDock(null);
+      setSuccessMsg("Dock updated!");
+      setTimeout(() => setSuccessMsg(""), 3000);
+    } catch (err) {
+      console.error("Error saving dock:", err);
+    }
+  };
+
   return (
     <Box>
       {successMsg && (
@@ -447,6 +515,13 @@ function DocksTab() {
       )}
 
       <Box sx={{ display: "flex", justifyContent: "flex-end", mb: 2 }}>
+        <input
+          type="file"
+          accept="image/*"
+          hidden
+          ref={dockFileInputRef}
+          onChange={handleDockImageChange}
+        />
         <Button
           variant="contained"
           startIcon={<AddIcon />}
@@ -470,6 +545,18 @@ function DocksTab() {
                   "&:hover": { transform: "translateY(-2px)" },
                 }}
               >
+                {dock.imageUrl && (
+                  <Box
+                    component="img"
+                    src={dock.imageUrl}
+                    alt={dock.name}
+                    sx={{
+                      width: "100%",
+                      height: 140,
+                      objectFit: "cover",
+                    }}
+                  />
+                )}
                 <CardContent>
                   <Box
                     sx={{
@@ -491,6 +578,14 @@ function DocksTab() {
                         }
                       />
                     </Box>
+                    <IconButton
+                      size="small"
+                      color="primary"
+                      onClick={() => setEditDock(dock)}
+                      sx={{ mr: 0.5 }}
+                    >
+                      <EditIcon fontSize="small" />
+                    </IconButton>
                     <IconButton
                       size="small"
                       color="error"
@@ -536,6 +631,27 @@ function DocksTab() {
                   >
                     Assign Managers
                   </Button>
+                  <Box sx={{ display: "flex", gap: 1, mt: 1 }}>
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      onClick={() => handleDockImageClick(dock.id)}
+                      sx={{ textTransform: "none" }}
+                    >
+                      {dock.imageUrl ? "Change Image" : "Upload Image"}
+                    </Button>
+                    {dock.imageUrl && (
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        color="error"
+                        onClick={() => handleRemoveDockImage(dock.id)}
+                        sx={{ textTransform: "none" }}
+                      >
+                        Remove Image
+                      </Button>
+                    )}
+                  </Box>
                 </CardContent>
               </Card>
             </Grid>
@@ -627,17 +743,387 @@ function DocksTab() {
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Edit Dock Dialog */}
+      {editDock && (
+        <Dialog open={!!editDock} onClose={() => setEditDock(null)} maxWidth="md" fullWidth>
+          <DialogTitle>Edit Dock — {editDock.name}</DialogTitle>
+          <DialogContent>
+            <Grid container spacing={2} sx={{ mt: 0.5 }}>
+              <Grid size={{ xs: 6, md: 4 }}>
+                <TextField
+                  fullWidth label="Name" value={editDock.name}
+                  onChange={(e) => setEditDock({ ...editDock, name: e.target.value })}
+                />
+              </Grid>
+              <Grid size={{ xs: 6, md: 2 }}>
+                <TextField
+                  fullWidth label="Prefix" value={editDock.prefix ?? ""}
+                  onChange={(e) => setEditDock({ ...editDock, prefix: e.target.value || undefined })}
+                  helperText="e.g. A, B, C"
+                />
+              </Grid>
+              <Grid size={{ xs: 6, md: 3 }}>
+                <FormControl fullWidth>
+                  <InputLabel>Type</InputLabel>
+                  <Select
+                    value={editDock.type}
+                    label="Type"
+                    onChange={(e: SelectChangeEvent) =>
+                      setEditDock({ ...editDock, type: e.target.value as Dock["type"] })
+                    }
+                  >
+                    <MenuItem value="Association">Association</MenuItem>
+                    <MenuItem value="Private">Private</MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
+              <Grid size={{ xs: 6, md: 3 }}>
+                <TextField
+                  fullWidth label="Association Name" value={editDock.associationName ?? ""}
+                  onChange={(e) => setEditDock({ ...editDock, associationName: e.target.value || undefined })}
+                  helperText="Groups docks by association"
+                />
+              </Grid>
+
+              <Grid size={{ xs: 6, md: 3 }}>
+                <TextField
+                  fullWidth label="Width (m)" type="number"
+                  value={editDock.maxWidth ?? ""}
+                  onChange={(e) => setEditDock({ ...editDock, maxWidth: e.target.value ? Number(e.target.value) : undefined })}
+                  slotProps={{ htmlInput: { step: 0.5 } }}
+                />
+              </Grid>
+              <Grid size={{ xs: 6, md: 3 }}>
+                <TextField
+                  fullWidth label="Length (m)" type="number"
+                  value={editDock.maxLength ?? ""}
+                  onChange={(e) => setEditDock({ ...editDock, maxLength: e.target.value ? Number(e.target.value) : undefined })}
+                  slotProps={{ htmlInput: { step: 0.5 } }}
+                />
+              </Grid>
+              <Grid size={{ xs: 6, md: 3 }}>
+                <TextField
+                  fullWidth label="Heading (°)" type="number"
+                  value={editDock.heading ?? ""}
+                  onChange={(e) => setEditDock({ ...editDock, heading: e.target.value ? Number(e.target.value) : undefined })}
+                  slotProps={{ htmlInput: { step: 1, min: 0, max: 360 } }}
+                  helperText="0=North, 90=East"
+                />
+              </Grid>
+
+              <Grid size={12}>
+                <Typography variant="subtitle2" sx={{ mt: 1, mb: 0.5, fontWeight: 700 }}>
+                  Position — click on the map to place the dock
+                </Typography>
+                <Box sx={{ height: 350, border: '1px solid rgba(79,195,247,0.15)', borderRadius: 1, overflow: 'hidden', mb: 1 }}>
+                  <APIProvider apiKey={process.env.NEXT_PUBLIC_GOOGLE_MAPS_KEY || ""}>
+                    <GMap
+                      defaultCenter={editDock.lat && editDock.lng ? { lat: editDock.lat, lng: editDock.lng } : HARBOR_CENTER}
+                      defaultZoom={19}
+                      mapId="edit-dock-map"
+                      mapTypeId="satellite"
+                      style={{ width: '100%', height: '100%' }}
+                      gestureHandling="greedy"
+                      disableDefaultUI
+                      zoomControl
+                      onClick={(e) => {
+                        const ll = e.detail?.latLng;
+                        if (ll) setEditDock({ ...editDock, lat: ll.lat, lng: ll.lng, maxWidth: editDock.maxWidth || 3, maxLength: editDock.maxLength || 20 });
+                      }}
+                    >
+                      <DockMapOverlay
+                        editDock={editDock}
+                        allDocks={docks}
+                        allBerths={berths}
+                        onMoveDock={(lat, lng) => setEditDock((prev) => prev ? { ...prev, lat, lng } : prev)}
+                      />
+                    </GMap>
+                  </APIProvider>
+                </Box>
+                <Box sx={{ display: 'flex', gap: 2 }}>
+                  <TextField
+                    label="Latitude" type="number" size="small"
+                    value={editDock.lat ?? ""}
+                    onChange={(e) => setEditDock({ ...editDock, lat: e.target.value ? Number(e.target.value) : undefined })}
+                    slotProps={{ htmlInput: { step: 0.000001 } }}
+                    sx={{ flex: 1 }}
+                  />
+                  <TextField
+                    label="Longitude" type="number" size="small"
+                    value={editDock.lng ?? ""}
+                    onChange={(e) => setEditDock({ ...editDock, lng: e.target.value ? Number(e.target.value) : undefined })}
+                    slotProps={{ htmlInput: { step: 0.000001 } }}
+                    sx={{ flex: 1 }}
+                  />
+                </Box>
+              </Grid>
+            </Grid>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setEditDock(null)}>Cancel</Button>
+            <Button variant="contained" onClick={handleSaveDock}>Save</Button>
+          </DialogActions>
+        </Dialog>
+      )}
     </Box>
   );
+}
+
+// ─── Dock Map Overlay (draws docks + berths for context in dock edit dialog) ──
+function DockMapOverlay({ editDock, allDocks, allBerths, onMoveDock }: {
+  editDock: Dock;
+  allDocks: Dock[];
+  allBerths: Berth[];
+  onMoveDock: (lat: number, lng: number) => void;
+}) {
+  const map = useMap();
+  const coreLib = useMapsLibrary("core");
+  const markerLib = useMapsLibrary("marker");
+
+  useEffect(() => {
+    if (!map || !coreLib || !markerLib) return;
+
+    const cleanups: (() => void)[] = [];
+
+    const getCenterFromPath = (polygon: google.maps.Polygon) => {
+      const path = polygon.getPath();
+      let sumLat = 0, sumLng = 0;
+      const len = path.getLength();
+      for (let i = 0; i < len; i++) {
+        const pt = path.getAt(i);
+        sumLat += pt.lat();
+        sumLng += pt.lng();
+      }
+      return { lat: sumLat / len, lng: sumLng / len };
+    };
+
+    // Draw OTHER docks (static grey)
+    allDocks.forEach((d) => {
+      if (!d.lat || !d.lng || d.id === editDock.id) return;
+      const corners = computeRectCorners(d.lat, d.lng, d.maxWidth || 3, d.maxLength || 20, d.heading || 0);
+      const polygon = new google.maps.Polygon({
+        paths: corners,
+        strokeColor: "#90A4AE",
+        strokeOpacity: 0.8,
+        strokeWeight: 1,
+        fillColor: "#78909C",
+        fillOpacity: 0.2,
+        map,
+        zIndex: 1,
+      });
+      const labelMarker = new google.maps.marker.AdvancedMarkerElement({
+        position: { lat: d.lat, lng: d.lng },
+        map,
+        content: createLabelElement(d.name, false),
+        zIndex: 2,
+      });
+      cleanups.push(() => { polygon.setMap(null); labelMarker.map = null; });
+    });
+
+    // Draw CURRENT dock (draggable, orange)
+    if (editDock.lat && editDock.lng) {
+      const corners = computeRectCorners(editDock.lat, editDock.lng, editDock.maxWidth || 3, editDock.maxLength || 20, editDock.heading || 0);
+      const polygon = new google.maps.Polygon({
+        paths: corners,
+        strokeColor: "#FF9800",
+        strokeOpacity: 1,
+        strokeWeight: 2,
+        fillColor: "#FF9800",
+        fillOpacity: 0.35,
+        map,
+        zIndex: 10,
+        draggable: true,
+        geodesic: false,
+      });
+      const labelMarker = new google.maps.marker.AdvancedMarkerElement({
+        position: { lat: editDock.lat, lng: editDock.lng },
+        map,
+        content: createLabelElement(editDock.name, true),
+        zIndex: 11,
+      });
+      polygon.addListener("dragend", () => {
+        const center = getCenterFromPath(polygon);
+        onMoveDock(center.lat, center.lng);
+      });
+      cleanups.push(() => { polygon.setMap(null); labelMarker.map = null; });
+    }
+
+    // Draw all berths (static, context only)
+    allBerths.forEach((b) => {
+      if (!b.lat || !b.lng) return;
+      const corners = computeRectCorners(b.lat, b.lng, b.maxWidth || 2, b.maxLength || 5, b.heading || 0);
+      const polygon = new google.maps.Polygon({
+        paths: corners,
+        strokeColor: "#4FC3F7",
+        strokeOpacity: 0.5,
+        strokeWeight: 1,
+        fillColor: "#4FC3F7",
+        fillOpacity: 0.2,
+        map,
+        zIndex: 0,
+      });
+      const labelMarker = new google.maps.marker.AdvancedMarkerElement({
+        position: { lat: b.lat, lng: b.lng },
+        map,
+        content: createLabelElement(b.markingCode, false),
+        zIndex: 1,
+      });
+      cleanups.push(() => { polygon.setMap(null); labelMarker.map = null; });
+    });
+
+    return () => { cleanups.forEach((fn) => fn()); };
+  }, [map, coreLib, markerLib, editDock, allDocks, allBerths, onMoveDock]);
+
+  return null;
+}
+
+// ─── Edit Berth Polygon (draws ALL placed berths as draggable + current berth highlighted) ──
+function EditBerthPolygon({ lat, lng, width, length, heading, label, onMove, onMoveOther, allBerths, currentId }: {
+  lat?: number; lng?: number; width: number; length: number; heading: number;
+  label: string;
+  onMove?: (lat: number, lng: number) => void;
+  onMoveOther?: (id: string, lat: number, lng: number) => void;
+  allBerths: Berth[];
+  currentId: string;
+}) {
+  const map = useMap();
+  const coreLib = useMapsLibrary("core");
+  const markerLib = useMapsLibrary("marker");
+
+  useEffect(() => {
+    if (!map || !coreLib || !markerLib) return;
+
+    const cleanups: (() => void)[] = [];
+
+    // Helper: compute center from polygon path
+    const getCenterFromPath = (polygon: google.maps.Polygon) => {
+      const path = polygon.getPath();
+      let sumLat = 0, sumLng = 0;
+      const len = path.getLength();
+      for (let i = 0; i < len; i++) {
+        const pt = path.getAt(i);
+        sumLat += pt.lat();
+        sumLng += pt.lng();
+      }
+      return { lat: sumLat / len, lng: sumLng / len };
+    };
+
+    // Draw all OTHER berths (draggable, grey styling)
+    allBerths.forEach((b) => {
+      if (!b.lat || !b.lng || b.id === currentId) return;
+
+      const bw = b.maxWidth || 2;
+      const bl = b.maxLength || 5;
+      const bh = b.heading || 0;
+      const corners = computeRectCorners(b.lat, b.lng, bw, bl, bh);
+
+      const polygon = new google.maps.Polygon({
+        paths: corners,
+        strokeColor: "#90A4AE",
+        strokeOpacity: 0.8,
+        strokeWeight: 1,
+        fillColor: "#78909C",
+        fillOpacity: 0.3,
+        map,
+        zIndex: 1,
+        draggable: true,
+        geodesic: false,
+      });
+
+      // Label for other berth
+      const labelMarker = new google.maps.marker.AdvancedMarkerElement({
+        position: { lat: b.lat, lng: b.lng },
+        map,
+        content: createLabelElement(b.markingCode, false),
+        zIndex: 2,
+      });
+
+      polygon.addListener("dragend", () => {
+        if (!onMoveOther) return;
+        const center = getCenterFromPath(polygon);
+        onMoveOther(b.id, center.lat, center.lng);
+        // Update the label position too
+        labelMarker.position = center;
+      });
+
+      cleanups.push(() => {
+        polygon.setMap(null);
+        labelMarker.map = null;
+      });
+    });
+
+    // Draw CURRENT berth (draggable, cyan)
+    if (lat && lng) {
+      const corners = computeRectCorners(lat, lng, width, length, heading);
+      const polygon = new google.maps.Polygon({
+        paths: corners,
+        strokeColor: "#00E5FF",
+        strokeOpacity: 1,
+        strokeWeight: 2,
+        fillColor: "#00E5FF",
+        fillOpacity: 0.35,
+        map,
+        zIndex: 10,
+        draggable: true,
+        geodesic: false,
+      });
+
+      // Label for current berth
+      const labelMarker = new google.maps.marker.AdvancedMarkerElement({
+        position: { lat, lng },
+        map,
+        content: createLabelElement(label, true),
+        zIndex: 11,
+      });
+
+      polygon.addListener("dragend", () => {
+        if (!onMove) return;
+        const center = getCenterFromPath(polygon);
+        onMove(center.lat, center.lng);
+      });
+
+      cleanups.push(() => {
+        polygon.setMap(null);
+        labelMarker.map = null;
+      });
+    }
+
+    return () => { cleanups.forEach((fn) => fn()); };
+  }, [map, coreLib, markerLib, lat, lng, width, length, heading, label, onMove, onMoveOther, allBerths, currentId]);
+
+  return null;
+}
+
+// Helper: create a styled label DOM element for map markers
+function createLabelElement(text: string, isCurrent: boolean): HTMLElement {
+  const el = document.createElement("div");
+  el.textContent = text;
+  el.style.cssText = `
+    font-size: 11px;
+    font-weight: 700;
+    color: ${isCurrent ? "#00E5FF" : "#CFD8DC"};
+    background: ${isCurrent ? "rgba(0,0,0,0.7)" : "rgba(0,0,0,0.5)"};
+    padding: 1px 4px;
+    border-radius: 3px;
+    border: 1px solid ${isCurrent ? "#00E5FF" : "transparent"};
+    white-space: nowrap;
+    pointer-events: none;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.8);
+  `;
+  return el;
 }
 
 // ─── Resources Tab ────────────────────────────────────────
 function ResourcesTab() {
   const [resources, setResources] = useState<Resource[]>([]);
   const [docks, setDocks] = useState<Dock[]>([]);
+  const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [successMsg, setSuccessMsg] = useState("");
+  const [editResource, setEditResource] = useState<Berth | null>(null);
+  const [movedBerths, setMovedBerths] = useState<Record<string, { lat: number; lng: number }>>({});
   const [form, setForm] = useState({
     type: "Berth" as Resource["type"],
     markingCode: "",
@@ -653,20 +1139,50 @@ function ResourcesTab() {
   async function fetchAll() {
     setLoading(true);
     try {
-      const [rSnap, dSnap] = await Promise.all([
+      const [rSnap, dSnap, uSnap] = await Promise.all([
         getDocs(collection(db, "resources")),
         getDocs(collection(db, "docks")),
+        getDocs(collection(db, "users")),
       ]);
       setResources(
         rSnap.docs.map((d) => ({ id: d.id, ...d.data() }) as Resource)
+          .sort((a, b) => {
+            const sa = (a as Berth).sortOrder ?? 9999;
+            const sb = (b as Berth).sortOrder ?? 9999;
+            return sa - sb || a.markingCode.localeCompare(b.markingCode, undefined, { numeric: true });
+          })
       );
       setDocks(dSnap.docs.map((d) => ({ id: d.id, ...d.data() }) as Dock));
+      setUsers(uSnap.docs.map((d) => ({ id: d.id, ...d.data() }) as User));
     } catch (err) {
       console.error("Error:", err);
     } finally {
       setLoading(false);
     }
   }
+
+  const handleTenantChange = async (resourceId: string, userIds: string[]) => {
+    try {
+      await updateDoc(doc(db, "resources", resourceId), {
+        occupantIds: userIds,
+        status: userIds.length > 0 ? "Occupied" : "Available",
+      });
+      setResources((prev) =>
+        prev.map((r) =>
+          r.id === resourceId
+            ? { ...r, occupantIds: userIds, status: (userIds.length > 0 ? "Occupied" : "Available") as Resource["status"] }
+            : r
+        )
+      );
+    } catch (err) {
+      console.error("Error assigning tenant:", err);
+    }
+  };
+
+  const getTenants = (ids?: string[]) => {
+    if (!ids || ids.length === 0) return [];
+    return users.filter((u) => ids.includes(u.id));
+  };
 
   const handleAddResource = async () => {
     try {
@@ -677,8 +1193,8 @@ function ResourcesTab() {
         dockId: form.dockId,
         status: form.status,
         paymentStatus: form.paymentStatus,
-        occupantId: "",
-        boatImageUrl: "",
+        occupantIds: [],
+        objectImageUrl: "",
       });
       setDialogOpen(false);
       setForm({
@@ -710,6 +1226,49 @@ function ResourcesTab() {
 
   const getDockName = (dockId: string) =>
     docks.find((d) => d.id === dockId)?.name || dockId || "—";
+
+  const openEditDialog = (r: Resource) => {
+    setEditResource(r as Berth);
+    setMovedBerths({});
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editResource) return;
+    try {
+      // Save current resource
+      const { id, ...data } = editResource;
+      await updateDoc(doc(db, "resources", id), data as Record<string, unknown>);
+
+      // Batch-save any other berths that were moved by dragging
+      const moveEntries = Object.entries(movedBerths);
+      for (const [berthId, pos] of moveEntries) {
+        if (berthId !== id) {
+          await updateDoc(doc(db, "resources", berthId), { lat: pos.lat, lng: pos.lng });
+        }
+      }
+
+      // Update local state
+      setResources((prev) =>
+        prev.map((r) => {
+          if (r.id === id) return editResource;
+          const moved = movedBerths[r.id];
+          if (moved) return { ...r, lat: moved.lat, lng: moved.lng } as Resource;
+          return r;
+        })
+          .sort((a, b) => {
+            const sa = (a as Berth).sortOrder ?? 9999;
+            const sb = (b as Berth).sortOrder ?? 9999;
+            return sa - sb || a.markingCode.localeCompare(b.markingCode, undefined, { numeric: true });
+          })
+      );
+      setEditResource(null);
+      setMovedBerths({});
+      setSuccessMsg(`Resource updated!${moveEntries.length > 0 ? ` ${moveEntries.length} berth(s) repositioned.` : ""}`);
+      setTimeout(() => setSuccessMsg(""), 3000);
+    } catch (err) {
+      console.error("Error saving resource:", err);
+    }
+  };
 
   return (
     <Box>
@@ -744,8 +1303,11 @@ function ResourcesTab() {
                 <TableCell>Marking Code</TableCell>
                 <TableCell>Type</TableCell>
                 <TableCell>Dock</TableCell>
+                <TableCell>Dir</TableCell>
                 <TableCell>Status</TableCell>
                 <TableCell>Payment</TableCell>
+                <TableCell>Ansvarig</TableCell>
+                <TableCell sx={{ minWidth: 220 }}>Tenant</TableCell>
                 <TableCell align="right">Actions</TableCell>
               </TableRow>
             </TableHead>
@@ -760,6 +1322,18 @@ function ResourcesTab() {
                   </TableCell>
                   <TableCell>{getDockName(r.dockId || "")}</TableCell>
                   <TableCell>
+                    {r.type === "Berth" && (r as Berth).direction ? (
+                      <Chip
+                        label={(r as Berth).direction === "inside" ? "Insida" : "Utsida"}
+                        size="small"
+                        color={(r as Berth).direction === "inside" ? "info" : "warning"}
+                        variant="outlined"
+                      />
+                    ) : (
+                      <Typography variant="caption" color="text.secondary">—</Typography>
+                    )}
+                  </TableCell>
+                  <TableCell>
                     <Chip
                       label={r.status}
                       size="small"
@@ -773,7 +1347,50 @@ function ResourcesTab() {
                       color={r.paymentStatus === "Paid" ? "success" : "error"}
                     />
                   </TableCell>
+                  <TableCell>
+                    {(() => {
+                      const b = r as Berth;
+                      const name = [b.occupantFirstName, b.occupantLastName].filter(Boolean).join(" ");
+                      if (!name) return <Typography variant="caption" color="text.secondary">—</Typography>;
+                      const matched = users.some(
+                        (u) => u.name.toLowerCase() === name.toLowerCase()
+                              || u.email?.toLowerCase() === b.occupantEmail?.toLowerCase()
+                      );
+                      return (
+                        <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                          <Typography variant="body2">{name}</Typography>
+                          {matched ? (
+                            <Chip label="✓" size="small" color="success" sx={{ height: 20, fontSize: 11 }} />
+                          ) : (
+                            <Chip label="?" size="small" color="default" sx={{ height: 20, fontSize: 11 }} />
+                          )}
+                        </Box>
+                      );
+                    })()}
+                  </TableCell>
+                  <TableCell>
+                    <Autocomplete
+                      multiple
+                      size="small"
+                      options={users}
+                      getOptionLabel={(u) => `${u.name} (${u.email})`}
+                      value={getTenants(r.occupantIds)}
+                      onChange={(_e, newVal) => handleTenantChange(r.id, newVal.map((u) => u.id))}
+                      isOptionEqualToValue={(opt, val) => opt.id === val.id}
+                      renderInput={(params) => (
+                        <TextField {...params} placeholder="Tilldela..." variant="outlined" size="small" />
+                      )}
+                      sx={{ minWidth: 220 }}
+                    />
+                  </TableCell>
                   <TableCell align="right">
+                    <IconButton
+                      size="small"
+                      onClick={() => openEditDialog(r)}
+                      sx={{ mr: 0.5 }}
+                    >
+                      <EditIcon fontSize="small" />
+                    </IconButton>
                     <IconButton
                       size="small"
                       color="error"
@@ -840,6 +1457,156 @@ function ResourcesTab() {
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Edit Resource Dialog */}
+      {editResource && (
+        <Dialog open={!!editResource} onClose={() => setEditResource(null)} maxWidth="md" fullWidth>
+          <DialogTitle>Edit Resource — {editResource.markingCode}</DialogTitle>
+          <DialogContent>
+            <Grid container spacing={2} sx={{ mt: 0.5 }}>
+              <Grid size={{ xs: 6, md: 3 }}>
+                <TextField
+                  fullWidth label="Marking Code" value={editResource.markingCode}
+                  onChange={(e) => setEditResource({ ...editResource, markingCode: e.target.value })}
+                />
+              </Grid>
+              <Grid size={{ xs: 6, md: 3 }}>
+                <TextField
+                  fullWidth label="Sort Order" type="number"
+                  value={editResource.sortOrder ?? ""}
+                  onChange={(e) => setEditResource({ ...editResource, sortOrder: e.target.value ? Number(e.target.value) : undefined })}
+                />
+              </Grid>
+              <Grid size={{ xs: 6, md: 3 }}>
+                <FormControl fullWidth>
+                  <InputLabel>Direction</InputLabel>
+                  <Select
+                    value={editResource.direction || ""}
+                    label="Direction"
+                    onChange={(e: SelectChangeEvent) => setEditResource({ ...editResource, direction: (e.target.value || undefined) as Berth["direction"] })}
+                  >
+                    <MenuItem value=""><em>Not set</em></MenuItem>
+                    <MenuItem value="inside">Inside (sheltered)</MenuItem>
+                    <MenuItem value="outside">Outside (exposed)</MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
+              <Grid size={{ xs: 6, md: 3 }}>
+                <FormControl fullWidth>
+                  <InputLabel>Dock</InputLabel>
+                  <Select
+                    value={editResource.dockId || ""}
+                    label="Dock"
+                    onChange={(e: SelectChangeEvent) => setEditResource({ ...editResource, dockId: e.target.value })}
+                  >
+                    {docks.map((d) => (
+                      <MenuItem key={d.id} value={d.id}>{d.name}</MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Grid>
+
+              <Grid size={{ xs: 6, md: 3 }}>
+                <TextField
+                  fullWidth label="Max Width (m)" type="number"
+                  value={editResource.maxWidth ?? ""}
+                  onChange={(e) => setEditResource({ ...editResource, maxWidth: e.target.value ? Number(e.target.value) : undefined })}
+                  slotProps={{ htmlInput: { step: 0.1 } }}
+                />
+              </Grid>
+              <Grid size={{ xs: 6, md: 3 }}>
+                <TextField
+                  fullWidth label="Max Length (m)" type="number"
+                  value={editResource.maxLength ?? ""}
+                  onChange={(e) => setEditResource({ ...editResource, maxLength: e.target.value ? Number(e.target.value) : undefined })}
+                  slotProps={{ htmlInput: { step: 0.1 } }}
+                />
+              </Grid>
+              <Grid size={{ xs: 6, md: 3 }}>
+                <TextField
+                  fullWidth label="Heading (°)" type="number"
+                  value={editResource.heading ?? ""}
+                  onChange={(e) => setEditResource({ ...editResource, heading: e.target.value ? Number(e.target.value) : undefined })}
+                  slotProps={{ htmlInput: { step: 1, min: 0, max: 360 } }}
+                  helperText="0=North, 90=East"
+                />
+              </Grid>
+
+              <Grid size={12}>
+                <Typography variant="subtitle2" sx={{ mt: 1, mb: 0.5, fontWeight: 700 }}>
+                  Position — click on the map to place the berth
+                </Typography>
+                <Box sx={{ height: 350, border: '1px solid rgba(79,195,247,0.15)', borderRadius: 1, overflow: 'hidden', mb: 1 }}>
+                  <APIProvider apiKey={process.env.NEXT_PUBLIC_GOOGLE_MAPS_KEY || ""}>
+                    <GMap
+                      defaultCenter={editResource.lat && editResource.lng ? { lat: editResource.lat, lng: editResource.lng } : HARBOR_CENTER}
+                      defaultZoom={19}
+                      mapId="edit-berth-map"
+                      mapTypeId="satellite"
+                      style={{ width: '100%', height: '100%' }}
+                      gestureHandling="greedy"
+                      disableDefaultUI
+                      zoomControl
+                      onClick={(e) => {
+                        const ll = e.detail?.latLng;
+                        if (ll) setEditResource({ ...editResource, lat: ll.lat, lng: ll.lng, maxWidth: editResource.maxWidth || 2, maxLength: editResource.maxLength || 5 });
+                      }}
+                    >
+                      <EditBerthPolygon
+                        lat={editResource.lat}
+                        lng={editResource.lng}
+                        width={editResource.maxWidth || 2}
+                        length={editResource.maxLength || 5}
+                        heading={editResource.heading || 0}
+                        label={editResource.markingCode}
+                        onMove={(lat, lng) => setEditResource((prev) => prev ? { ...prev, lat, lng } : prev)}
+                        onMoveOther={(id, lat, lng) => setMovedBerths((prev) => ({ ...prev, [id]: { lat, lng } }))}
+                        allBerths={resources.filter((r) => r.type === "Berth") as Berth[]}
+                        currentId={editResource.id}
+                      />
+                    </GMap>
+                  </APIProvider>
+                </Box>
+                <Box sx={{ display: 'flex', gap: 2 }}>
+                  <TextField
+                    label="Latitude" type="number" size="small"
+                    value={editResource.lat ?? ""}
+                    onChange={(e) => setEditResource({ ...editResource, lat: e.target.value ? Number(e.target.value) : undefined })}
+                    slotProps={{ htmlInput: { step: 0.000001 } }}
+                    sx={{ flex: 1 }}
+                  />
+                  <TextField
+                    label="Longitude" type="number" size="small"
+                    value={editResource.lng ?? ""}
+                    onChange={(e) => setEditResource({ ...editResource, lng: e.target.value ? Number(e.target.value) : undefined })}
+                    slotProps={{ htmlInput: { step: 0.000001 } }}
+                    sx={{ flex: 1 }}
+                  />
+                </Box>
+              </Grid>
+
+              <Grid size={{ xs: 6, md: 3 }}>
+                <TextField
+                  fullWidth label="Price 2025" type="number"
+                  value={editResource.price2025 ?? ""}
+                  onChange={(e) => setEditResource({ ...editResource, price2025: e.target.value ? Number(e.target.value) : undefined })}
+                />
+              </Grid>
+              <Grid size={{ xs: 6, md: 3 }}>
+                <TextField
+                  fullWidth label="Price 2026" type="number"
+                  value={editResource.price2026 ?? ""}
+                  onChange={(e) => setEditResource({ ...editResource, price2026: e.target.value ? Number(e.target.value) : undefined })}
+                />
+              </Grid>
+            </Grid>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setEditResource(null)}>Cancel</Button>
+            <Button variant="contained" onClick={handleSaveEdit}>Save</Button>
+          </DialogActions>
+        </Dialog>
+      )}
     </Box>
   );
 }

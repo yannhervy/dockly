@@ -99,7 +99,7 @@ export default function InterestPage() {
     async function fetchDocks() {
       try {
         const snap = await getDocs(collection(db, "docks"));
-        setDocks(snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Dock));
+        setDocks(snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Dock).sort((a, b) => a.name.localeCompare(b.name)));
       } catch (err) {
         console.error("Error fetching docks:", err);
       }

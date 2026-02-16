@@ -73,7 +73,7 @@ function ManagerContent() {
           const snap = await getDocs(q);
           items = snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Dock);
         }
-        setDocks(items);
+        setDocks(items.sort((a, b) => a.name.localeCompare(b.name)));
         if (items.length > 0) setSelectedDockId(items[0].id);
       } catch (err) {
         console.error("Error fetching docks:", err);
@@ -102,7 +102,7 @@ function ManagerContent() {
 
         // Fetch occupant info
         const uniqueIds = [
-          ...new Set(items.filter((r) => r.occupantId).map((r) => r.occupantId as string)),
+          ...new Set(items.flatMap((r) => r.occupantIds || [])),
         ];
         const oMap: Record<string, User> = {};
         for (const uid of uniqueIds) {
@@ -312,8 +312,8 @@ function ManagerContent() {
                         />
                       </TableCell>
                       <TableCell>
-                        {r.occupantId
-                          ? occupants[r.occupantId]?.name || r.occupantId
+                        {r.occupantIds && r.occupantIds.length > 0
+                          ? r.occupantIds.map((id) => occupants[id]?.name || id).join(", ")
                           : "—"}
                       </TableCell>
                       <TableCell align="right">

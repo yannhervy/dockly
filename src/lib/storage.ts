@@ -74,3 +74,23 @@ export async function uploadBoatImage(
   const downloadUrl = await getDownloadURL(snapshot.ref);
   return downloadUrl;
 }
+
+/**
+ * Upload a dock image to Firebase Storage and return the download URL.
+ * Images are resized to max 1200px and compressed as JPEG.
+ * Stored at `dock-images/{dockId}/{filename}`.
+ */
+export async function uploadDockImage(
+  file: File,
+  dockId: string
+): Promise<string> {
+  const resizedBlob = await resizeImage(file);
+  const baseName = file.name.replace(/\.[^.]+$/, "");
+  const fileName = `${baseName}.jpg`;
+  const storageRef = ref(storage, `dock-images/${dockId}/${fileName}`);
+  const snapshot = await uploadBytes(storageRef, resizedBlob, {
+    contentType: "image/jpeg",
+  });
+  const downloadUrl = await getDownloadURL(snapshot.ref);
+  return downloadUrl;
+}

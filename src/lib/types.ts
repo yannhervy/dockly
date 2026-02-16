@@ -20,7 +20,15 @@ export interface Dock {
   id: string;
   name: string;
   type: DockType;
+  prefix?: string; // e.g. "A", "B", "C", "D"
+  associationName?: string; // Name of the owning association (groups docks)
+  imageUrl?: string; // Firebase Storage URL for dock photo
   managerIds: string[]; // List of User IDs who manage this dock
+  lat?: number; // GPS latitude
+  lng?: number; // GPS longitude
+  heading?: number; // Orientation 0-360°
+  maxWidth?: number; // Width in meters (for map rectangle)
+  maxLength?: number; // Length in meters (for map rectangle)
 }
 
 // ─── Resource (polymorphic base) ──────────────────────────
@@ -34,18 +42,32 @@ export interface Resource {
   status: ResourceStatus;
   paymentStatus: PaymentStatus;
   markingCode: string; // Unique marking code, e.g. V-104
-  occupantId?: string; // FK to User (optional, not all occupants are registered)
-  boatImageUrl?: string; // Firebase Storage URL
+  occupantIds: string[]; // FK to User (supports multiple tenants)
+  objectImageUrl?: string; // Firebase Storage URL
   dockId?: string; // FK to Dock (only required for Berths)
+  lat?: number; // GPS latitude for map positioning
+  lng?: number; // GPS longitude for map positioning
+  heading?: number; // Orientation in degrees (0-360)
+  maxWidth?: number; // Width in meters (for map rectangle)
+  maxLength?: number; // Length in meters (for map rectangle)
 }
 
 // ─── Resource subtypes ────────────────────────────────────
+export type BerthDirection = "inside" | "outside";
+
 export interface Berth extends Resource {
   type: "Berth";
   dockId: string; // Required for berths
   berthNumber: number; // The berth number within the dock
+  sortOrder?: number; // Custom display order within dock
+  direction?: BerthDirection; // inside = sheltered, outside = exposed
   width?: number;
   length?: number;
+  maxWidth?: number; // Maximum allowed boat width (meters)
+  maxLength?: number; // Maximum allowed boat length (meters)
+  heading?: number; // Orientation in degrees (0-360)
+  lat?: number; // GPS latitude for map positioning
+  lng?: number; // GPS longitude for map positioning
   price2025?: number;
   price2026?: number;
   occupantFirstName?: string;

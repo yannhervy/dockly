@@ -88,7 +88,7 @@ export default function DirectoryPage() {
         const items = snap.docs.map(
           (d) => ({ id: d.id, ...d.data() }) as Dock
         );
-        setDocks(items);
+        setDocks(items.sort((a, b) => a.name.localeCompare(b.name)));
       } catch (err) {
         console.error("Error fetching docks:", err);
       } finally {
@@ -104,10 +104,10 @@ export default function DirectoryPage() {
 
     async function checkUserResources() {
       try {
-        // Check if any berth has this user's uid as occupantId
+        // Check if any resource has this user's uid in occupantIds
         const q = query(
           collection(db, "resources"),
-          where("occupantId", "==", firebaseUser!.uid)
+          where("occupantIds", "array-contains", firebaseUser!.uid)
         );
         const snap = await getDocs(q);
         if (snap.size > 0) {
@@ -320,11 +320,11 @@ export default function DirectoryPage() {
     try {
       const url = await uploadBoatImage(file, uploadTargetId);
       await updateDoc(doc(db, "resources", uploadTargetId), {
-        boatImageUrl: url,
+        objectImageUrl: url,
       });
       setBerths((prev) =>
         prev.map((b) =>
-          b.id === uploadTargetId ? { ...b, boatImageUrl: url } : b
+          b.id === uploadTargetId ? { ...b, objectImageUrl: url } : b
         )
       );
       setSuccessMsg("Image uploaded!");
@@ -646,12 +646,12 @@ export default function DirectoryPage() {
                     )}
                     <TableCell>
                       <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                        {b.boatImageUrl ? (
+                        {b.objectImageUrl ? (
                           <Avatar
-                            src={b.boatImageUrl}
+                            src={b.objectImageUrl}
                             variant="rounded"
                             sx={{ width: 40, height: 40, cursor: "pointer" }}
-                            onClick={() => setPreviewImageUrl(b.boatImageUrl!)}
+                            onClick={() => setPreviewImageUrl(b.objectImageUrl!)}
                           />
                         ) : null}
                         {isManager && (
@@ -667,7 +667,7 @@ export default function DirectoryPage() {
                             onClick={() => handleUploadClick(b.id)}
                             disabled={uploadingId === b.id}
                           >
-                            {b.boatImageUrl ? "Change" : "Upload"}
+                            {b.objectImageUrl ? "Change" : "Upload"}
                           </Button>
                         )}
                       </Box>

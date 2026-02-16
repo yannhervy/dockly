@@ -74,7 +74,7 @@ function DashboardContent() {
       try {
         const q = query(
           collection(db, "resources"),
-          where("occupantId", "==", firebaseUser!.uid)
+          where("occupantIds", "array-contains", firebaseUser!.uid)
         );
         const snap = await getDocs(q);
         setResources(
@@ -124,12 +124,12 @@ function DashboardContent() {
     try {
       const url = await uploadBoatImage(file, uploadTargetId);
       await updateDoc(doc(db, "resources", uploadTargetId), {
-        boatImageUrl: url,
+        objectImageUrl: url,
       });
       // Update local state
       setResources((prev) =>
         prev.map((r) =>
-          r.id === uploadTargetId ? { ...r, boatImageUrl: url } : r
+          r.id === uploadTargetId ? { ...r, objectImageUrl: url } : r
         )
       );
       setSuccessMsg("Boat image updated successfully!");
@@ -330,12 +330,12 @@ function DashboardContent() {
                           </TableCell>
                           <TableCell>
                             <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                              {r.boatImageUrl ? (
+                              {r.objectImageUrl ? (
                               <Avatar
-                                  src={r.boatImageUrl}
+                                  src={r.objectImageUrl}
                                   variant="rounded"
                                   sx={{ width: 40, height: 40, cursor: "pointer" }}
-                                  onClick={() => setPreviewImageUrl(r.boatImageUrl!)}
+                                  onClick={() => setPreviewImageUrl(r.objectImageUrl!)}
                                 />
                               ) : null}
                               <Button
@@ -350,7 +350,7 @@ function DashboardContent() {
                                 onClick={() => handleUploadClick(r.id)}
                                 disabled={uploading === r.id}
                               >
-                                {r.boatImageUrl ? "Change" : "Upload"}
+                                {r.objectImageUrl ? "Change" : "Upload"}
                               </Button>
                             </Box>
                           </TableCell>

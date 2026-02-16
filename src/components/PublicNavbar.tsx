@@ -28,6 +28,7 @@ const PUBLIC_NAV = [
   { label: "Hem", path: "/" },
   { label: "Nyheter", path: "/news" },
   { label: "Bryggor", path: "/docks" },
+  { label: "Karta", path: "/map" },
   { label: "Info", path: "/info" },
   { label: "FAQ", path: "/faq" },
   { label: "Köp & Sälj", path: "/marketplace" },

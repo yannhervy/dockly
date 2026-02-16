@@ -8,7 +8,7 @@ import AppShell from "./AppShell";
 const PUBLIC_PATHS = ["/", "/docks", "/info", "/faq", "/marketplace", "/interest", "/news"];
 
 // Pages that get NO layout wrapper at all (login, setup)
-const BARE_PATHS = ["/login", "/setup"];
+const BARE_PATHS = ["/login", "/setup", "/map"];
 
 export default function LayoutRouter({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
