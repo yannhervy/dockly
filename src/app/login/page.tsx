@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { useRouter } from "next/navigation";
 import Box from "@mui/material/Box";
@@ -21,7 +21,7 @@ import EmailIcon from "@mui/icons-material/Email";
 import LockIcon from "@mui/icons-material/Lock";
 
 export default function LoginPage() {
-  const { login, register, loginWithGoogle, resetPassword } = useAuth();
+  const { login, register, loginWithGoogle, resetPassword, firebaseUser, loading: authLoading } = useAuth();
   const router = useRouter();
 
   const [email, setEmail] = useState("");
@@ -31,6 +31,13 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [loading, setLoading] = useState(false);
+
+  // Redirect when auth state confirms user is logged in
+  useEffect(() => {
+    if (!authLoading && firebaseUser) {
+      router.replace("/");
+    }
+  }, [authLoading, firebaseUser, router]);
 
   const handleEmailSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -42,7 +49,7 @@ export default function LoginPage() {
       } else {
         await login(email, password);
       }
-      router.push("/");
+      // Navigation handled by useEffect above
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : isRegister ? "Registration failed" : "Login failed";
       setError(msg);
@@ -56,7 +63,7 @@ export default function LoginPage() {
     setLoading(true);
     try {
       await loginWithGoogle();
-      router.push("/");
+      // Navigation handled by useEffect above
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Google login failed";
       setError(msg);

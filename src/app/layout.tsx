@@ -1,12 +1,12 @@
 import type { Metadata } from "next";
 import ThemeRegistry from "@/theme/ThemeRegistry";
 import { AuthProvider } from "@/context/AuthContext";
-import AppShell from "@/components/AppShell";
+import LayoutRouter from "@/components/LayoutRouter";
 
 export const metadata: Metadata = {
-  title: "Dockly – Harbor Management System",
+  title: "Stegerholmens Hamn – Båtplatser & Hamnförening",
   description:
-    "Manage berths, sea huts, boxes, and land storage for your harbor association.",
+    "Stegerholmens Hamn – Båtplatser, bryggförvaltning och hamnservice i skärgården. Intresseanmälan, köp & sälj, och mer.",
 };
 
 export default function RootLayout({
@@ -25,10 +25,11 @@ export default function RootLayout({
       <body>
         <ThemeRegistry>
           <AuthProvider>
-            <AppShell>{children}</AppShell>
+            <LayoutRouter>{children}</LayoutRouter>
           </AuthProvider>
         </ThemeRegistry>
       </body>
     </html>
   );
 }
+

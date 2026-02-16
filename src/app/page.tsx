@@ -1,51 +1,223 @@
 "use client";
 
-import { useAuth } from "@/context/AuthContext";
-import { useRouter } from "next/navigation";
-import { useEffect } from "react";
 import Box from "@mui/material/Box";
-import CircularProgress from "@mui/material/CircularProgress";
 import Typography from "@mui/material/Typography";
-import AnchorIcon from "@mui/icons-material/Anchor";
+import Button from "@mui/material/Button";
+import Grid from "@mui/material/Grid";
+import Card from "@mui/material/Card";
+import CardContent from "@mui/material/CardContent";
+import SailingIcon from "@mui/icons-material/Sailing";
+import InfoIcon from "@mui/icons-material/Info";
+import DirectionsBoatIcon from "@mui/icons-material/DirectionsBoat";
+import StorefrontIcon from "@mui/icons-material/Storefront";
+import PlaceIcon from "@mui/icons-material/Place";
+import { useRouter } from "next/navigation";
 
 export default function HomePage() {
-  const { firebaseUser, loading, needsSetup } = useAuth();
   const router = useRouter();
 
-  useEffect(() => {
-    if (!loading) {
-      if (!firebaseUser) {
-        router.replace("/login");
-      } else if (needsSetup) {
-        router.replace("/setup");
-      } else {
-        router.replace("/dashboard");
-      }
-    }
-  }, [loading, firebaseUser, needsSetup, router]);
-
   return (
-    <Box
-      sx={{
-        display: "flex",
-        flexDirection: "column",
-        justifyContent: "center",
-        alignItems: "center",
-        height: "80vh",
-        gap: 2,
-      }}
-    >
-      <AnchorIcon sx={{ fontSize: 64, color: "primary.main", animation: "pulse 2s infinite" }} />
-      <Typography variant="h5" sx={{ color: "text.secondary" }}>
-        Loading Dockly...
-      </Typography>
-      <CircularProgress size={32} />
-      <style>{`
-        @keyframes pulse {
-          0%, 100% { opacity: 1; transform: scale(1); }
-          50% { opacity: 0.6; transform: scale(1.05); }
-        }
-      `}</style>
+    <Box>
+      {/* ─── Hero Section ─────────────────────────────────── */}
+      <Box
+        sx={{
+          position: "relative",
+          minHeight: { xs: 420, md: 520 },
+          display: "flex",
+          flexDirection: "column",
+          justifyContent: "center",
+          alignItems: "center",
+          textAlign: "center",
+          px: 3,
+          py: 8,
+          overflow: "hidden",
+          // Full photo background, no overlay
+          backgroundImage: "url('/IMG20221112150016-EDIT.jpg')",
+          backgroundSize: "cover",
+          backgroundPosition: "center",
+        }}
+      >
+        {/* Semi-transparent text plate */}
+        <Box
+          sx={{
+            position: "relative",
+            zIndex: 1,
+            maxWidth: 700,
+            bgcolor: "rgba(10, 25, 41, 0.75)",
+            backdropFilter: "blur(16px)",
+            borderRadius: 4,
+            px: { xs: 3, sm: 5 },
+            py: { xs: 4, sm: 5 },
+            border: "1px solid rgba(79,195,247,0.15)",
+          }}
+        >
+          <SailingIcon
+            sx={{
+              fontSize: 56,
+              color: "#FFB74D",
+              mb: 2,
+              filter: "drop-shadow(0 4px 12px rgba(255,183,77,0.3))",
+            }}
+          />
+          <Typography
+            variant="h2"
+            sx={{
+              fontWeight: 800,
+              mb: 1,
+              fontSize: { xs: "2rem", sm: "2.8rem", md: "3.5rem" },
+              background: "linear-gradient(135deg, #fff 0%, #4FC3F7 100%)",
+              WebkitBackgroundClip: "text",
+              WebkitTextFillColor: "transparent",
+            }}
+          >
+            Stegerholmens Hamn
+          </Typography>
+          <Typography
+            variant="h6"
+            sx={{
+              color: "rgba(255,255,255,0.85)",
+              fontWeight: 400,
+              mb: 4,
+              maxWidth: 520,
+              mx: "auto",
+              lineHeight: 1.6,
+            }}
+          >
+            En idyllisk hamn med nära till både skärgården och stan. Båtplatser, sjöbodar och gemenskap
+            vid vattnet.
+          </Typography>
+          <Box sx={{ display: "flex", gap: 2, justifyContent: "center", flexWrap: "wrap" }}>
+            <Button
+              variant="contained"
+              size="large"
+              onClick={() => router.push("/interest")}
+              sx={{
+                px: 4,
+                py: 1.5,
+                fontSize: "1rem",
+                textTransform: "none",
+                borderRadius: 3,
+                background: "linear-gradient(135deg, #4FC3F7, #0288D1)",
+                "&:hover": {
+                  background: "linear-gradient(135deg, #29B6F6, #0277BD)",
+                },
+              }}
+            >
+              Intresseanmälan för båtplats
+            </Button>
+            <Button
+              variant="outlined"
+              size="large"
+              onClick={() => router.push("/docks")}
+              sx={{
+                px: 4,
+                py: 1.5,
+                fontSize: "1rem",
+                textTransform: "none",
+                borderRadius: 3,
+                borderColor: "rgba(255,255,255,0.4)",
+                color: "#fff",
+                "&:hover": {
+                  borderColor: "rgba(255,255,255,0.7)",
+                  bgcolor: "rgba(255,255,255,0.08)",
+                },
+              }}
+            >
+              Se våra bryggor
+            </Button>
+          </Box>
+        </Box>
+      </Box>
+
+      {/* ─── Quick Links Section ──────────────────────────── */}
+      <Box sx={{ maxWidth: 1100, mx: "auto", px: 3, py: 6 }}>
+        <Grid container spacing={3}>
+          {[
+            {
+              icon: <DirectionsBoatIcon sx={{ fontSize: 36, color: "primary.main" }} />,
+              title: "Bryggor",
+              desc: "Se vilka bryggor som finns och hur du kontaktar bryggägaren.",
+              path: "/docks",
+            },
+            {
+              icon: <InfoIcon sx={{ fontSize: 36, color: "#66BB6A" }} />,
+              title: "Om hamnen",
+              desc: "Läs om hur hamnen drivs, regler och säsonger.",
+              path: "/info",
+            },
+            {
+              icon: <StorefrontIcon sx={{ fontSize: 36, color: "#FFB74D" }} />,
+              title: "Köp & Sälj",
+              desc: "Marknadsplats för utrustning, tjänster och mer.",
+              path: "/marketplace",
+            },
+          ].map((item) => (
+            <Grid size={{ xs: 12, md: 4 }} key={item.title}>
+              <Card
+                onClick={() => router.push(item.path)}
+                sx={{
+                  cursor: "pointer",
+                  height: "100%",
+                  bgcolor: "rgba(13, 33, 55, 0.6)",
+                  backdropFilter: "blur(12px)",
+                  border: "1px solid rgba(79,195,247,0.08)",
+                  transition: "all 0.3s",
+                  "&:hover": {
+                    transform: "translateY(-4px)",
+                    border: "1px solid rgba(79,195,247,0.25)",
+                    boxShadow: "0 8px 32px rgba(79,195,247,0.1)",
+                  },
+                }}
+              >
+                <CardContent sx={{ p: 3, textAlign: "center" }}>
+                  {item.icon}
+                  <Typography variant="h6" sx={{ fontWeight: 700, mt: 1.5, mb: 1 }}>
+                    {item.title}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    {item.desc}
+                  </Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+          ))}
+        </Grid>
+      </Box>
+
+      {/* ─── Map Section ──────────────────────────────────── */}
+      <Box sx={{ maxWidth: 1100, mx: "auto", px: 3, py: 4 }}>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 2 }}>
+          <PlaceIcon sx={{ color: "primary.main" }} />
+          <Typography variant="h5" sx={{ fontWeight: 700 }}>
+            Hitta hit
+          </Typography>
+        </Box>
+        <Box
+          sx={{
+            borderRadius: 3,
+            overflow: "hidden",
+            border: "1px solid rgba(79,195,247,0.12)",
+            height: { xs: 300, md: 400 },
+          }}
+        >
+          <iframe
+            title="Stegerholmens Hamn"
+            src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d2070.0!2d11.8797606!3d57.6138617!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x464fed4c872dc499%3A0x9e451918bb806f76!2sStegerholmens%20sm%C3%A5b%C3%A5tshamn!5e1!3m2!1ssv!2sse"
+            width="100%"
+            height="100%"
+            style={{ border: 0 }}
+            allowFullScreen
+            loading="lazy"
+            referrerPolicy="no-referrer-when-downgrade"
+          />
+        </Box>
+        <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: "block" }}>
+          Stegerholmens småbåtshamn, Göteborgs skärgård
+        </Typography>
+      </Box>
+
+      {/* Bottom spacer */}
+      <Box sx={{ height: 40 }} />
     </Box>
   );
 }

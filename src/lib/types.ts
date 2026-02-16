@@ -96,3 +96,71 @@ export interface LandStorage extends Resource {
 
 // Union type for all resource variants
 export type AnyResource = Berth | SeaHut | Box | LandStorage;
+
+// ─── Marketplace ──────────────────────────────────────────
+export type ListingCategory = "Sale" | "Service" | "SubletOffer" | "SubletWanted";
+export type ListingStatus = "Active" | "Sold" | "Closed";
+
+export interface MarketplaceListing {
+  id: string;
+  title: string;
+  description: string;
+  price: number;
+  category: ListingCategory;
+  imageUrl?: string;
+  contactEmail: string;
+  contactPhone?: string;
+  createdBy: string;
+  createdAt: Timestamp;
+  expiresAt: Timestamp; // Auto-removed after 6 months
+  status: ListingStatus;
+}
+
+// ─── News ─────────────────────────────────────────────────
+// Configurable list of reaction emojis — edit this array to change available reactions
+export const REACTION_EMOJIS = ["🐟", "🦀", "🧜", "🌊", "⚓", "☠️"];
+
+// Reactions stored as a map of emoji -> array of user IDs
+export type ReactionMap = Record<string, string[]>;
+
+export interface NewsPost {
+  id: string;
+  title: string;
+  body: string;
+  imageUrls: string[]; // Multiple images supported
+  authorId: string;
+  authorName: string;
+  createdAt: Timestamp;
+  reactions: ReactionMap;
+}
+
+// ─── Berth Interest Registration ──────────────────────────
+export type InterestStatus = "Pending" | "Contacted" | "Resolved";
+
+export interface BerthInterest {
+  id: string;
+  userId: string;
+  userName: string;
+  email: string;
+  phone: string;
+  boatWidth: number;   // meters
+  boatLength: number;  // meters
+  preferredDockId?: string;
+  message?: string;
+  imageUrl?: string;
+  createdAt: Timestamp;
+  status: InterestStatus;
+}
+
+// Reply on an interest registration (subcollection: interests/{id}/replies)
+export interface InterestReply {
+  id: string;
+  interestId: string;
+  authorId: string;
+  authorName: string;
+  authorEmail: string;
+  authorPhone: string;
+  message: string;
+  createdAt: Timestamp;
+}
+

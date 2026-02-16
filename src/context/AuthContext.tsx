@@ -50,19 +50,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Listen to Firebase Auth state and fetch Firestore profile
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      setFirebaseUser(user);
       if (user) {
         try {
           const snap = await getDoc(doc(db, "users", user.uid));
-          if (snap.exists()) {
-            setProfile({ id: snap.id, ...snap.data() } as User);
-          } else {
-            setProfile(null);
-          }
+          const profileData = snap.exists()
+            ? ({ id: snap.id, ...snap.data() } as User)
+            : null;
+          // Set both user and profile together before clearing loading
+          setFirebaseUser(user);
+          setProfile(profileData);
         } catch {
+          setFirebaseUser(user);
           setProfile(null);
         }
       } else {
+        setFirebaseUser(null);
         setProfile(null);
       }
       setLoading(false);

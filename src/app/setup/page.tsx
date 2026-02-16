@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import { useAuth } from "@/context/AuthContext";
-import { doc, setDoc, Timestamp } from "firebase/firestore";
+import { doc, setDoc, getDoc, Timestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useRouter } from "next/navigation";
 import Box from "@mui/material/Box";
@@ -55,14 +55,23 @@ export default function ProfileSetupPage() {
 
     setSaving(true);
     try {
-      await setDoc(doc(db, "users", firebaseUser.uid), {
+      const userRef = doc(db, "users", firebaseUser.uid);
+      const existingDoc = await getDoc(userRef);
+
+      const profileData: Record<string, unknown> = {
         email: firebaseUser.email || "",
         name: name.trim(),
-        role: "Tenant", // Default role for new users
         isPublic: true,
         phone: phone.trim(),
-        createdAt: Timestamp.now(),
-      });
+      };
+
+      // Only set role and createdAt for genuinely new users
+      if (!existingDoc.exists()) {
+        profileData.role = "Tenant";
+        profileData.createdAt = Timestamp.now();
+      }
+
+      await setDoc(userRef, profileData, { merge: true });
       // Force reload to pick up the new profile
       window.location.href = "/dashboard";
     } catch (err) {

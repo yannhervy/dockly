@@ -2,7 +2,8 @@
 
 import React, { useEffect, useState } from "react";
 import { db } from "@/lib/firebase";
-import { User, Dock, Resource } from "@/lib/types";
+import { useAuth } from "@/context/AuthContext";
+import { User, Dock, Resource, BerthInterest, InterestReply } from "@/lib/types";
 import {
   collection,
   getDocs,
@@ -10,6 +11,9 @@ import {
   setDoc,
   updateDoc,
   deleteDoc,
+  addDoc,
+  query,
+  orderBy,
   Timestamp,
 } from "firebase/firestore";
 import ProtectedRoute from "@/components/ProtectedRoute";
@@ -48,17 +52,22 @@ import EditIcon from "@mui/icons-material/Edit";
 import PeopleIcon from "@mui/icons-material/People";
 import DirectionsBoatIcon from "@mui/icons-material/DirectionsBoat";
 import AnchorIcon from "@mui/icons-material/Anchor";
+import SailingIcon from "@mui/icons-material/Sailing";
+import ReplyIcon from "@mui/icons-material/Reply";
+import VisibilityIcon from "@mui/icons-material/Visibility";
 
 export default function AdminPage() {
   return (
-    <ProtectedRoute allowedRoles={["Superadmin"]}>
+    <ProtectedRoute allowedRoles={["Superadmin", "Dock Manager"]}>
       <AdminContent />
     </ProtectedRoute>
   );
 }
 
 function AdminContent() {
-  const [tabIndex, setTabIndex] = useState(0);
+  const { profile } = useAuth();
+  const isSuperadmin = profile?.role === "Superadmin";
+  const [tabIndex, setTabIndex] = useState(isSuperadmin ? 0 : 3);
 
   return (
     <Box>
@@ -80,14 +89,16 @@ function AdminContent() {
         onChange={(_, v) => setTabIndex(v)}
         sx={{ mb: 3 }}
       >
-        <Tab icon={<PeopleIcon />} label="Users" iconPosition="start" />
-        <Tab icon={<AnchorIcon />} label="Docks" iconPosition="start" />
-        <Tab icon={<DirectionsBoatIcon />} label="Resources" iconPosition="start" />
+        {isSuperadmin && <Tab value={0} icon={<PeopleIcon />} label="Users" iconPosition="start" />}
+        {isSuperadmin && <Tab value={1} icon={<AnchorIcon />} label="Docks" iconPosition="start" />}
+        {isSuperadmin && <Tab value={2} icon={<DirectionsBoatIcon />} label="Resources" iconPosition="start" />}
+        <Tab value={3} icon={<SailingIcon />} label="Intresseanmälningar" iconPosition="start" />
       </Tabs>
 
-      {tabIndex === 0 && <UsersTab />}
-      {tabIndex === 1 && <DocksTab />}
-      {tabIndex === 2 && <ResourcesTab />}
+      {tabIndex === 0 && isSuperadmin && <UsersTab />}
+      {tabIndex === 1 && isSuperadmin && <DocksTab />}
+      {tabIndex === 2 && isSuperadmin && <ResourcesTab />}
+      {tabIndex === 3 && <InterestsTab />}
     </Box>
   );
 }
@@ -313,8 +324,11 @@ function UsersTab() {
 // ─── Docks Tab ────────────────────────────────────────────
 function DocksTab() {
   const [docks, setDocks] = useState<Dock[]>([]);
+  const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [managerDialogDock, setManagerDialogDock] = useState<Dock | null>(null);
+  const [selectedManagerIds, setSelectedManagerIds] = useState<string[]>([]);
   const [successMsg, setSuccessMsg] = useState("");
   const [form, setForm] = useState({
     name: "",
@@ -322,20 +336,32 @@ function DocksTab() {
   });
 
   useEffect(() => {
-    fetchDocks();
+    fetchData();
   }, []);
 
-  async function fetchDocks() {
+  async function fetchData() {
     setLoading(true);
     try {
-      const snap = await getDocs(collection(db, "docks"));
-      setDocks(snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Dock));
+      const [dSnap, uSnap] = await Promise.all([
+        getDocs(collection(db, "docks")),
+        getDocs(collection(db, "users")),
+      ]);
+      setDocks(dSnap.docs.map((d) => ({ id: d.id, ...d.data() }) as Dock));
+      setUsers(uSnap.docs.map((d) => ({ id: d.id, ...d.data() }) as User));
     } catch (err) {
-      console.error("Error fetching docks:", err);
+      console.error("Error fetching data:", err);
     } finally {
       setLoading(false);
     }
   }
+
+  // Users eligible to be dock managers
+  const eligibleManagers = users.filter(
+    (u) => u.role === "Dock Manager" || u.role === "Superadmin"
+  );
+
+  const getUserName = (uid: string) =>
+    users.find((u) => u.id === uid)?.name || uid;
 
   const handleAddDock = async () => {
     try {
@@ -349,7 +375,7 @@ function DocksTab() {
       setForm({ name: "", type: "Association" });
       setSuccessMsg("Dock created!");
       setTimeout(() => setSuccessMsg(""), 3000);
-      fetchDocks();
+      fetchData();
     } catch (err) {
       console.error("Error adding dock:", err);
     }
@@ -361,9 +387,54 @@ function DocksTab() {
       await deleteDoc(doc(db, "docks", dockId));
       setSuccessMsg("Dock deleted.");
       setTimeout(() => setSuccessMsg(""), 3000);
-      fetchDocks();
+      fetchData();
     } catch (err) {
       console.error("Error deleting dock:", err);
+    }
+  };
+
+  // Open manager assignment dialog
+  const openManagerDialog = (dock: Dock) => {
+    setManagerDialogDock(dock);
+    setSelectedManagerIds(dock.managerIds || []);
+  };
+
+  // Save manager assignments
+  const handleSaveManagers = async () => {
+    if (!managerDialogDock) return;
+    try {
+      await updateDoc(doc(db, "docks", managerDialogDock.id), {
+        managerIds: selectedManagerIds,
+      });
+      setDocks((prev) =>
+        prev.map((d) =>
+          d.id === managerDialogDock.id
+            ? { ...d, managerIds: selectedManagerIds }
+            : d
+        )
+      );
+      setManagerDialogDock(null);
+      setSuccessMsg("Managers updated!");
+      setTimeout(() => setSuccessMsg(""), 3000);
+    } catch (err) {
+      console.error("Error updating managers:", err);
+    }
+  };
+
+  // Remove a single manager from a dock
+  const handleRemoveManager = async (dock: Dock, managerId: string) => {
+    const newIds = (dock.managerIds || []).filter((id) => id !== managerId);
+    try {
+      await updateDoc(doc(db, "docks", dock.id), { managerIds: newIds });
+      setDocks((prev) =>
+        prev.map((d) =>
+          d.id === dock.id ? { ...d, managerIds: newIds } : d
+        )
+      );
+      setSuccessMsg("Manager removed.");
+      setTimeout(() => setSuccessMsg(""), 3000);
+    } catch (err) {
+      console.error("Error removing manager:", err);
     }
   };
 
@@ -428,13 +499,43 @@ function DocksTab() {
                       <DeleteIcon fontSize="small" />
                     </IconButton>
                   </Box>
+
+                  {/* Assigned managers */}
                   <Typography
                     variant="caption"
                     color="text.secondary"
-                    sx={{ mt: 1, display: "block" }}
+                    sx={{ mt: 2, mb: 0.5, display: "block", fontWeight: 600 }}
                   >
-                    {dock.managerIds?.length || 0} manager(s)
+                    Managers
                   </Typography>
+                  <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5, mb: 1 }}>
+                    {(dock.managerIds || []).length === 0 ? (
+                      <Typography variant="caption" color="text.secondary" sx={{ fontStyle: "italic" }}>
+                        No managers assigned
+                      </Typography>
+                    ) : (
+                      dock.managerIds.map((mid) => (
+                        <Chip
+                          key={mid}
+                          label={getUserName(mid)}
+                          size="small"
+                          onDelete={() => handleRemoveManager(dock, mid)}
+                          sx={{
+                            bgcolor: "rgba(255, 183, 77, 0.12)",
+                            color: "warning.light",
+                          }}
+                        />
+                      ))
+                    )}
+                  </Box>
+                  <Button
+                    size="small"
+                    startIcon={<EditIcon />}
+                    onClick={() => openManagerDialog(dock)}
+                    sx={{ textTransform: "none" }}
+                  >
+                    Assign Managers
+                  </Button>
                 </CardContent>
               </Card>
             </Grid>
@@ -471,6 +572,58 @@ function DocksTab() {
           <Button onClick={() => setDialogOpen(false)}>Cancel</Button>
           <Button variant="contained" onClick={handleAddDock}>
             Create
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Assign Managers Dialog */}
+      <Dialog
+        open={!!managerDialogDock}
+        onClose={() => setManagerDialogDock(null)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>
+          Assign Managers — {managerDialogDock?.name}
+        </DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Select which users should manage this dock. Only users with the
+            &quot;Dock Manager&quot; or &quot;Superadmin&quot; role are shown.
+          </Typography>
+          <FormControl fullWidth>
+            <InputLabel>Managers</InputLabel>
+            <Select
+              multiple
+              value={selectedManagerIds}
+              label="Managers"
+              onChange={(e) => {
+                const val = e.target.value;
+                setSelectedManagerIds(
+                  typeof val === "string" ? val.split(",") : (val as string[])
+                );
+              }}
+              renderValue={(selected) =>
+                (selected as string[]).map((id: string) => getUserName(id)).join(", ")
+              }
+            >
+              {eligibleManagers.map((u) => (
+                <MenuItem key={u.id} value={u.id}>
+                  {u.name} ({u.role})
+                </MenuItem>
+              ))}
+              {eligibleManagers.length === 0 && (
+                <MenuItem disabled>
+                  No users with Dock Manager or Superadmin role
+                </MenuItem>
+              )}
+            </Select>
+          </FormControl>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setManagerDialogDock(null)}>Cancel</Button>
+          <Button variant="contained" onClick={handleSaveManagers}>
+            Save
           </Button>
         </DialogActions>
       </Dialog>
@@ -686,6 +839,499 @@ function ResourcesTab() {
             Create
           </Button>
         </DialogActions>
+      </Dialog>
+    </Box>
+  );
+}
+
+// ─── Interests Tab ────────────────────────────────────────
+function InterestsTab() {
+  const { firebaseUser, profile } = useAuth();
+  const [interests, setInterests] = useState<BerthInterest[]>([]);
+  const [docks, setDocks] = useState<Dock[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [successMsg, setSuccessMsg] = useState("");
+
+  // Detail dialog state
+  const [selectedInterest, setSelectedInterest] = useState<BerthInterest | null>(null);
+  const [replies, setReplies] = useState<InterestReply[]>([]);
+  const [loadingReplies, setLoadingReplies] = useState(false);
+  const [replyMessage, setReplyMessage] = useState("");
+  const [sendingReply, setSendingReply] = useState(false);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  async function fetchData() {
+    setLoading(true);
+    try {
+      const [iSnap, dSnap] = await Promise.all([
+        getDocs(query(collection(db, "interests"), orderBy("createdAt", "desc"))),
+        getDocs(collection(db, "docks")),
+      ]);
+      setInterests(iSnap.docs.map((d) => ({ id: d.id, ...d.data() }) as BerthInterest));
+      setDocks(dSnap.docs.map((d) => ({ id: d.id, ...d.data() }) as Dock));
+    } catch (err) {
+      console.error("Error fetching interests:", err);
+      try {
+        const iSnap = await getDocs(collection(db, "interests"));
+        setInterests(iSnap.docs.map((d) => ({ id: d.id, ...d.data() }) as BerthInterest));
+      } catch {
+        // Ignore
+      }
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function fetchReplies(interestId: string) {
+    setLoadingReplies(true);
+    try {
+      const snap = await getDocs(
+        query(
+          collection(db, "interests", interestId, "replies"),
+          orderBy("createdAt", "asc")
+        )
+      );
+      setReplies(snap.docs.map((d) => ({ id: d.id, ...d.data() }) as InterestReply));
+    } catch (err) {
+      console.error("Error fetching replies:", err);
+      try {
+        const snap = await getDocs(collection(db, "interests", interestId, "replies"));
+        setReplies(snap.docs.map((d) => ({ id: d.id, ...d.data() }) as InterestReply));
+      } catch {
+        // Ignore
+      }
+    } finally {
+      setLoadingReplies(false);
+    }
+  }
+
+  const openDetail = (interest: BerthInterest) => {
+    setSelectedInterest(interest);
+    setReplyMessage("");
+    fetchReplies(interest.id);
+  };
+
+  const handleStatusChange = async (interestId: string, newStatus: string) => {
+    try {
+      await updateDoc(doc(db, "interests", interestId), { status: newStatus });
+      setInterests((prev) =>
+        prev.map((i) =>
+          i.id === interestId ? { ...i, status: newStatus as BerthInterest["status"] } : i
+        )
+      );
+      if (selectedInterest?.id === interestId) {
+        setSelectedInterest((prev) =>
+          prev ? { ...prev, status: newStatus as BerthInterest["status"] } : prev
+        );
+      }
+      setSuccessMsg("Status uppdaterad");
+      setTimeout(() => setSuccessMsg(""), 3000);
+    } catch (err) {
+      console.error("Error updating status:", err);
+    }
+  };
+
+  const handleSendReply = async () => {
+    if (!firebaseUser || !profile || !selectedInterest || !replyMessage.trim()) return;
+    setSendingReply(true);
+    try {
+      await addDoc(collection(db, "interests", selectedInterest.id, "replies"), {
+        interestId: selectedInterest.id,
+        authorId: firebaseUser.uid,
+        authorName: profile.name,
+        authorEmail: profile.email || firebaseUser.email || "",
+        authorPhone: profile.phone || "",
+        message: replyMessage.trim(),
+        createdAt: Timestamp.now(),
+      });
+
+      // Move status to Contacted if still Pending
+      if (selectedInterest.status === "Pending") {
+        await handleStatusChange(selectedInterest.id, "Contacted");
+      }
+
+      setReplyMessage("");
+      setSuccessMsg("Svar skickat!");
+      setTimeout(() => setSuccessMsg(""), 3000);
+      fetchReplies(selectedInterest.id);
+    } catch (err) {
+      console.error("Error sending reply:", err);
+    } finally {
+      setSendingReply(false);
+    }
+  };
+
+  const getDockName = (dockId?: string) =>
+    dockId ? docks.find((d) => d.id === dockId)?.name || "—" : "Ingen";
+
+  const formatDate = (ts: Timestamp) =>
+    ts.toDate().toLocaleDateString("sv-SE");
+
+  const formatDateTime = (ts: Timestamp) =>
+    ts.toDate().toLocaleString("sv-SE", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+
+  const statusColor = (status: string): "warning" | "info" | "success" =>
+    status === "Pending" ? "warning" : status === "Contacted" ? "info" : "success";
+
+  return (
+    <Box>
+      {successMsg && (
+        <Alert severity="success" sx={{ mb: 2 }}>
+          {successMsg}
+        </Alert>
+      )}
+
+      {loading ? (
+        <Box sx={{ display: "flex", justifyContent: "center", py: 4 }}>
+          <CircularProgress />
+        </Box>
+      ) : interests.length === 0 ? (
+        <Box sx={{ textAlign: "center", py: 8 }}>
+          <Typography color="text.secondary">Inga intresseanmälningar ännu.</Typography>
+        </Box>
+      ) : (
+        <TableContainer
+          component={Paper}
+          sx={{ bgcolor: "background.paper", backgroundImage: "none" }}
+        >
+          <Table>
+            <TableHead>
+              <TableRow>
+                <TableCell>Namn</TableCell>
+                <TableCell>Bild</TableCell>
+                <TableCell>E-post</TableCell>
+                <TableCell>Telefon</TableCell>
+                <TableCell>Båt (B×L)</TableCell>
+                <TableCell>Önskad brygga</TableCell>
+                <TableCell>Datum</TableCell>
+                <TableCell>Status</TableCell>
+                <TableCell align="right">Åtgärd</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {interests.map((interest) => (
+                <TableRow key={interest.id} hover>
+                  <TableCell sx={{ fontWeight: 600 }}>{interest.userName}</TableCell>
+                  <TableCell>
+                    {interest.imageUrl ? (
+                      <Box
+                        component="img"
+                        src={interest.imageUrl}
+                        alt="Båt"
+                        sx={{
+                          width: 48,
+                          height: 48,
+                          objectFit: "cover",
+                          borderRadius: 1,
+                        }}
+                      />
+                    ) : (
+                      <Typography variant="caption" color="text.secondary">—</Typography>
+                    )}
+                  </TableCell>
+                  <TableCell>{interest.email}</TableCell>
+                  <TableCell>{interest.phone || "—"}</TableCell>
+                  <TableCell>
+                    {interest.boatWidth}×{interest.boatLength} m
+                  </TableCell>
+                  <TableCell>{getDockName(interest.preferredDockId)}</TableCell>
+                  <TableCell>{formatDate(interest.createdAt)}</TableCell>
+                  <TableCell>
+                    <Select
+                      value={interest.status}
+                      size="small"
+                      onChange={(e) =>
+                        handleStatusChange(interest.id, e.target.value)
+                      }
+                      sx={{
+                        minWidth: 120,
+                        ".MuiSelect-select": { py: 0.5 },
+                      }}
+                    >
+                      <MenuItem value="Pending">Väntande</MenuItem>
+                      <MenuItem value="Contacted">Kontaktad</MenuItem>
+                      <MenuItem value="Resolved">Avslutad</MenuItem>
+                    </Select>
+                  </TableCell>
+                  <TableCell align="right">
+                    <IconButton
+                      size="small"
+                      onClick={() => openDetail(interest)}
+                      sx={{ color: "primary.main" }}
+                    >
+                      <VisibilityIcon fontSize="small" />
+                    </IconButton>
+                    <IconButton
+                      size="small"
+                      onClick={() => setDeleteConfirmId(interest.id)}
+                      sx={{ color: "error.main" }}
+                    >
+                      <DeleteIcon fontSize="small" />
+                    </IconButton>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      )}
+
+      {/* Delete confirmation dialog */}
+      <Dialog open={!!deleteConfirmId} onClose={() => setDeleteConfirmId(null)}>
+        <DialogTitle>Ta bort intresseanmälan?</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2">
+            Är du säker på att du vill ta bort denna intresseanmälan? Detta kan inte ångras.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeleteConfirmId(null)}>Avbryt</Button>
+          <Button
+            color="error"
+            variant="contained"
+            onClick={async () => {
+              if (!deleteConfirmId) return;
+              try {
+                await deleteDoc(doc(db, "interests", deleteConfirmId));
+                setInterests((prev) => prev.filter((i) => i.id !== deleteConfirmId));
+                setSuccessMsg("Intresseanmälan borttagen.");
+                setTimeout(() => setSuccessMsg(""), 3000);
+              } catch (err) {
+                console.error("Error deleting interest:", err);
+              } finally {
+                setDeleteConfirmId(null);
+              }
+            }}
+          >
+            Ta bort
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Detail / Reply Dialog */}
+      <Dialog
+        open={!!selectedInterest}
+        onClose={() => setSelectedInterest(null)}
+        maxWidth="sm"
+        fullWidth
+      >
+        {selectedInterest && (
+          <>
+            <DialogTitle>
+              Intresseanmälan — {selectedInterest.userName}
+            </DialogTitle>
+            <DialogContent>
+              {selectedInterest.imageUrl && (
+                <Box
+                  component="img"
+                  src={selectedInterest.imageUrl}
+                  alt="Båtbild"
+                  sx={{
+                    width: "100%",
+                    maxHeight: 220,
+                    objectFit: "cover",
+                    borderRadius: 2,
+                    mb: 2,
+                  }}
+                />
+              )}
+              <Box sx={{ mb: 2 }}>
+                <Grid container spacing={2}>
+                  <Grid size={{ xs: 6 }}>
+                    <Typography variant="caption" color="text.secondary">
+                      E-post
+                    </Typography>
+                    <Typography variant="body2">{selectedInterest.email}</Typography>
+                  </Grid>
+                  <Grid size={{ xs: 6 }}>
+                    <Typography variant="caption" color="text.secondary">
+                      Telefon
+                    </Typography>
+                    <Typography variant="body2">{selectedInterest.phone || "—"}</Typography>
+                  </Grid>
+                  <Grid size={{ xs: 6 }}>
+                    <Typography variant="caption" color="text.secondary">
+                      Båt (bredd × längd)
+                    </Typography>
+                    <Typography variant="body2">
+                      {selectedInterest.boatWidth} × {selectedInterest.boatLength} m
+                    </Typography>
+                  </Grid>
+                  <Grid size={{ xs: 6 }}>
+                    <Typography variant="caption" color="text.secondary">
+                      Önskad brygga
+                    </Typography>
+                    <Typography variant="body2">
+                      {getDockName(selectedInterest.preferredDockId)}
+                    </Typography>
+                  </Grid>
+                  <Grid size={{ xs: 6 }}>
+                    <Typography variant="caption" color="text.secondary">
+                      Skickat
+                    </Typography>
+                    <Typography variant="body2">
+                      {formatDate(selectedInterest.createdAt)}
+                    </Typography>
+                  </Grid>
+                  <Grid size={{ xs: 6 }}>
+                    <Typography variant="caption" color="text.secondary">
+                      Status
+                    </Typography>
+                    <Box>
+                      <Chip
+                        label={
+                          selectedInterest.status === "Pending"
+                            ? "Väntande"
+                            : selectedInterest.status === "Contacted"
+                            ? "Kontaktad"
+                            : "Avslutad"
+                        }
+                        size="small"
+                        color={statusColor(selectedInterest.status)}
+                      />
+                    </Box>
+                  </Grid>
+                </Grid>
+                {selectedInterest.message && (
+                  <Box sx={{ mt: 2, p: 2, bgcolor: "rgba(79,195,247,0.05)", borderRadius: 2 }}>
+                    <Typography variant="caption" color="text.secondary">
+                      Meddelande
+                    </Typography>
+                    <Typography variant="body2" sx={{ whiteSpace: "pre-wrap" }}>
+                      {selectedInterest.message}
+                    </Typography>
+                  </Box>
+                )}
+              </Box>
+
+              {/* Reply thread */}
+              <Typography
+                variant="subtitle2"
+                sx={{ fontWeight: 700, mt: 3, mb: 1, color: "primary.light" }}
+              >
+                Svar ({replies.length})
+              </Typography>
+
+              {loadingReplies ? (
+                <Box sx={{ display: "flex", justifyContent: "center", py: 2 }}>
+                  <CircularProgress size={24} />
+                </Box>
+              ) : replies.length === 0 ? (
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                  sx={{ fontStyle: "italic", mb: 2 }}
+                >
+                  Inga svar ännu.
+                </Typography>
+              ) : (
+                <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5, mb: 2 }}>
+                  {replies.map((reply) => (
+                    <Card
+                      key={reply.id}
+                      variant="outlined"
+                      sx={{
+                        bgcolor: "rgba(79,195,247,0.04)",
+                        border: "1px solid rgba(79,195,247,0.12)",
+                      }}
+                    >
+                      <CardContent sx={{ p: 2, "&:last-child": { pb: 2 } }}>
+                        <Box
+                          sx={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "center",
+                            mb: 1,
+                          }}
+                        >
+                          <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+                            {reply.authorName}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            {formatDateTime(reply.createdAt)}
+                          </Typography>
+                        </Box>
+                        <Typography variant="body2" sx={{ whiteSpace: "pre-wrap", mb: 1 }}>
+                          {reply.message}
+                        </Typography>
+                        <Box
+                          sx={{
+                            display: "flex",
+                            gap: 2,
+                            mt: 1,
+                            pt: 1,
+                            borderTop: "1px solid rgba(79,195,247,0.08)",
+                          }}
+                        >
+                          {reply.authorEmail && (
+                            <Typography variant="caption" color="text.secondary">
+                              📧 {reply.authorEmail}
+                            </Typography>
+                          )}
+                          {reply.authorPhone && (
+                            <Typography variant="caption" color="text.secondary">
+                              📱 {reply.authorPhone}
+                            </Typography>
+                          )}
+                        </Box>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </Box>
+              )}
+
+              {/* Reply form */}
+              <Box
+                sx={{
+                  mt: 2,
+                  p: 2,
+                  bgcolor: "rgba(13, 33, 55, 0.4)",
+                  borderRadius: 2,
+                  border: "1px solid rgba(79,195,247,0.08)",
+                }}
+              >
+                <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
+                  Skriv svar
+                </Typography>
+                <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1.5 }}>
+                  Dina kontaktuppgifter ({profile?.name}, {profile?.email || firebaseUser?.email},{" "}
+                  {profile?.phone || "ingen telefon"}) bifogas automatiskt.
+                </Typography>
+                <TextField
+                  fullWidth
+                  multiline
+                  rows={3}
+                  value={replyMessage}
+                  onChange={(e) => setReplyMessage(e.target.value)}
+                  placeholder="Skriv ett svar till den intresserade..."
+                  sx={{ mb: 1.5 }}
+                />
+                <Button
+                  variant="contained"
+                  startIcon={<ReplyIcon />}
+                  onClick={handleSendReply}
+                  disabled={!replyMessage.trim() || sendingReply}
+                  sx={{ textTransform: "none" }}
+                >
+                  {sendingReply ? "Skickar..." : "Skicka svar"}
+                </Button>
+              </Box>
+            </DialogContent>
+            <DialogActions>
+              <Button onClick={() => setSelectedInterest(null)}>Stäng</Button>
+            </DialogActions>
+          </>
+        )}
       </Dialog>
     </Box>
   );

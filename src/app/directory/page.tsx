@@ -62,6 +62,7 @@ export default function DirectoryPage() {
   const [uploadingId, setUploadingId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploadTargetId, setUploadTargetId] = useState<string | null>(null);
+  const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
 
   // Edit dialog state (admin/manager only)
   const [editBerth, setEditBerth] = useState<Berth | null>(null);
@@ -643,24 +644,14 @@ export default function DirectoryPage() {
                         {b.comment || "—"}
                       </TableCell>
                     )}
-                    {isManager && (
-                      <TableCell align="right">
-                        <Button
-                          size="small"
-                          startIcon={<EditIcon />}
-                          onClick={() => openEdit(b)}
-                        >
-                          Edit
-                        </Button>
-                      </TableCell>
-                    )}
                     <TableCell>
                       <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
                         {b.boatImageUrl ? (
                           <Avatar
                             src={b.boatImageUrl}
                             variant="rounded"
-                            sx={{ width: 40, height: 40 }}
+                            sx={{ width: 40, height: 40, cursor: "pointer" }}
+                            onClick={() => setPreviewImageUrl(b.boatImageUrl!)}
                           />
                         ) : null}
                         {isManager && (
@@ -681,6 +672,17 @@ export default function DirectoryPage() {
                         )}
                       </Box>
                     </TableCell>
+                    {isManager && (
+                      <TableCell align="right">
+                        <Button
+                          size="small"
+                          startIcon={<EditIcon />}
+                          onClick={() => openEdit(b)}
+                        >
+                          Edit
+                        </Button>
+                      </TableCell>
+                    )}
                   </TableRow>
                 );
               })}
@@ -847,6 +849,26 @@ export default function DirectoryPage() {
             {saving ? "Saving..." : "Save"}
           </Button>
         </DialogActions>
+      </Dialog>
+
+      {/* Image preview lightbox */}
+      <Dialog
+        open={!!previewImageUrl}
+        onClose={() => setPreviewImageUrl(null)}
+        maxWidth="md"
+      >
+        <Box
+          sx={{ p: 1, display: "flex", justifyContent: "center", bgcolor: "black" }}
+          onClick={() => setPreviewImageUrl(null)}
+        >
+          {previewImageUrl && (
+            <Box
+              component="img"
+              src={previewImageUrl}
+              sx={{ maxWidth: "100%", maxHeight: "80vh", objectFit: "contain" }}
+            />
+          )}
+        </Box>
       </Dialog>
 
       {/* Hidden file input for image uploads */}

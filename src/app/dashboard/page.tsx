@@ -33,6 +33,7 @@ import TableHead from "@mui/material/TableHead";
 import TableRow from "@mui/material/TableRow";
 import Paper from "@mui/material/Paper";
 import CircularProgress from "@mui/material/CircularProgress";
+import Dialog from "@mui/material/Dialog";
 import DashboardIcon from "@mui/icons-material/Dashboard";
 import PersonIcon from "@mui/icons-material/Person";
 import PhotoCameraIcon from "@mui/icons-material/PhotoCamera";
@@ -57,6 +58,7 @@ function DashboardContent() {
   const [successMsg, setSuccessMsg] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploadTargetId, setUploadTargetId] = useState<string | null>(null);
+  const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
 
   useEffect(() => {
     if (profile) {
@@ -329,10 +331,11 @@ function DashboardContent() {
                           <TableCell>
                             <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
                               {r.boatImageUrl ? (
-                                <Avatar
+                              <Avatar
                                   src={r.boatImageUrl}
                                   variant="rounded"
-                                  sx={{ width: 40, height: 40 }}
+                                  sx={{ width: 40, height: 40, cursor: "pointer" }}
+                                  onClick={() => setPreviewImageUrl(r.boatImageUrl!)}
                                 />
                               ) : null}
                               <Button
@@ -361,6 +364,26 @@ function DashboardContent() {
           </Card>
         </Grid>
       </Grid>
+
+      {/* Image preview lightbox */}
+      <Dialog
+        open={!!previewImageUrl}
+        onClose={() => setPreviewImageUrl(null)}
+        maxWidth="md"
+      >
+        <Box
+          sx={{ p: 1, display: "flex", justifyContent: "center", bgcolor: "black" }}
+          onClick={() => setPreviewImageUrl(null)}
+        >
+          {previewImageUrl && (
+            <Box
+              component="img"
+              src={previewImageUrl}
+              sx={{ maxWidth: "100%", maxHeight: "80vh", objectFit: "contain" }}
+            />
+          )}
+        </Box>
+      </Dialog>
 
       {/* Hidden file input */}
       <input
