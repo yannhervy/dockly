@@ -4,16 +4,19 @@ import { useEffect, useState, useCallback } from "react";
 import { collection, getDocs } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useAuth } from "@/context/AuthContext";
-import type { Berth, Dock, Resource, LandStorageEntry } from "@/lib/types";
+import type { Berth, Dock, Resource, LandStorageEntry, SeaHut, Box as BoxType } from "@/lib/types";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 import Chip from "@mui/material/Chip";
 import Paper from "@mui/material/Paper";
 import CircularProgress from "@mui/material/CircularProgress";
 import IconButton from "@mui/material/IconButton";
+import Button from "@mui/material/Button";
+import Divider from "@mui/material/Divider";
 import CloseIcon from "@mui/icons-material/Close";
 import MapIcon from "@mui/icons-material/Map";
 import HomeIcon from "@mui/icons-material/Home";
+import SmsIcon from "@mui/icons-material/Sms";
 import {
   APIProvider,
   Map,
@@ -21,9 +24,28 @@ import {
   useMapsLibrary,
 } from "@vis.gl/react-google-maps";
 import { computeRectCorners, computeBoatHull, HARBOR_CENTER } from "@/lib/mapUtils";
+import { normalizePhone } from "@/lib/phoneUtils";
 import ProtectedRoute from "@/components/ProtectedRoute";
 
 const DEFAULT_ZOOM = 18;
+
+// Discriminated union for any clickable map object
+type SelectedObject =
+  | { kind: "berth"; data: Berth }
+  | { kind: "resource"; data: Resource }
+  | { kind: "landStorage"; data: LandStorageEntry };
+
+// Check if a normalized phone number is a valid Swedish mobile (07x)
+function isMobileNumber(phone: string): boolean {
+  const n = normalizePhone(phone);
+  return n.length === 10 && n.startsWith("07");
+}
+
+// Format phone to international E.164 for sms: link
+function toSmsHref(phone: string): string {
+  const n = normalizePhone(phone);
+  return `sms:+46${n.slice(1)}`;
+}
 
 // Get color based on berth status
 function getBerthColor(berth: Berth): string {
@@ -207,7 +229,7 @@ function DockPolygons({ docks }: { docks: Dock[] }) {
 }
 
 // Component that draws SeaHuts and Boxes as circle markers (like land storage)
-function ResourceMarkers({ resources, currentUid }: { resources: Resource[]; currentUid?: string }) {
+function ResourceMarkers({ resources, currentUid, onSelect }: { resources: Resource[]; currentUid?: string; onSelect: (r: Resource) => void }) {
   const map = useMap();
   const markerLib = useMapsLibrary("marker");
 
@@ -249,6 +271,7 @@ function ResourceMarkers({ resources, currentUid }: { resources: Resource[]; cur
       `;
       el.addEventListener("mouseenter", () => { el.style.transform = "scale(1.3)"; });
       el.addEventListener("mouseleave", () => { el.style.transform = "scale(1)"; });
+      el.addEventListener("click", () => onSelect(res));
 
       const typeLabel = res.type === "SeaHut" ? "Sjöbod" : "Låda";
       const marker = new google.maps.marker.AdvancedMarkerElement({
@@ -263,13 +286,13 @@ function ResourceMarkers({ resources, currentUid }: { resources: Resource[]; cur
     });
 
     return () => { cleanups.forEach((fn) => fn()); };
-  }, [map, markerLib, resources, currentUid]);
+  }, [map, markerLib, resources, currentUid, onSelect]);
 
   return null;
 }
 
 // Component that draws land storage entries as orange circle markers
-function LandStorageMarkers({ entries, currentUid }: { entries: LandStorageEntry[]; currentUid?: string }) {
+function LandStorageMarkers({ entries, currentUid, onSelect }: { entries: LandStorageEntry[]; currentUid?: string; onSelect: (e: LandStorageEntry) => void }) {
   const map = useMap();
   const markerLib = useMapsLibrary("marker");
 
@@ -306,12 +329,13 @@ function LandStorageMarkers({ entries, currentUid }: { entries: LandStorageEntry
       `;
       el.addEventListener("mouseenter", () => { el.style.transform = "scale(1.3)"; });
       el.addEventListener("mouseleave", () => { el.style.transform = "scale(1)"; });
+      el.addEventListener("click", () => onSelect(entry));
 
       const marker = new google.maps.marker.AdvancedMarkerElement({
         position: { lat: entry.lat, lng: entry.lng },
         map,
         content: el,
-        title: `${entry.code} — ${isOccupied ? (entry.firstName + " " + entry.lastName).trim() : "Available"}`,
+        title: `${entry.code} — Markförvaring`,
         zIndex: 4,
       });
 
@@ -319,20 +343,21 @@ function LandStorageMarkers({ entries, currentUid }: { entries: LandStorageEntry
     });
 
     return () => { cleanups.forEach((fn) => fn()); };
-  }, [map, markerLib, entries, currentUid]);
+  }, [map, markerLib, entries, currentUid, onSelect]);
 
   return null;
 }
 
 export default function MapPage() {
-  const { firebaseUser } = useAuth();
+  const { firebaseUser, isSuperadmin, isDockManager } = useAuth();
   const currentUid = firebaseUser?.uid;
+  const isManager = isSuperadmin || isDockManager;
   const [berths, setBerths] = useState<Berth[]>([]);
   const [otherResources, setOtherResources] = useState<Resource[]>([]);
   const [docks, setDocks] = useState<Dock[]>([]);
   const [landEntries, setLandEntries] = useState<LandStorageEntry[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedBerth, setSelectedBerth] = useState<Berth | null>(null);
+  const [selectedObject, setSelectedObject] = useState<SelectedObject | null>(null);
 
   useEffect(() => {
     async function fetchData() {
@@ -373,8 +398,17 @@ export default function MapPage() {
   const getDockName = (dockId?: string) =>
     docks.find((d) => d.id === dockId)?.name || "";
 
-  const handleSelect = useCallback((b: Berth | null) => {
-    setSelectedBerth(b);
+  const handleSelectBerth = useCallback((b: Berth | null) => {
+    if (b) setSelectedObject({ kind: "berth", data: b });
+    else setSelectedObject(null);
+  }, []);
+
+  const handleSelectResource = useCallback((r: Resource) => {
+    setSelectedObject({ kind: "resource", data: r });
+  }, []);
+
+  const handleSelectLandStorage = useCallback((e: LandStorageEntry) => {
+    setSelectedObject({ kind: "landStorage", data: e });
   }, []);
 
   const berthsWithCoords = berths.filter((b) => b.lat && b.lng);
@@ -459,82 +493,200 @@ export default function MapPage() {
               <BerthPolygons
                 berths={berthsWithCoords}
                 docks={docks}
-                onSelect={handleSelect}
+                onSelect={handleSelectBerth}
                 currentUid={currentUid}
               />
               <DockPolygons docks={docks} />
-              <ResourceMarkers resources={otherResources} currentUid={currentUid} />
-              <LandStorageMarkers entries={landEntries} currentUid={currentUid} />
+              <ResourceMarkers resources={otherResources} currentUid={currentUid} onSelect={handleSelectResource} />
+              <LandStorageMarkers entries={landEntries} currentUid={currentUid} onSelect={handleSelectLandStorage} />
             </Map>
           </APIProvider>
         )}
 
-        {/* Info panel */}
-        {selectedBerth && (
-          <Paper
-            elevation={8}
-            sx={{
-              position: "absolute",
-              bottom: 24,
-              left: 24,
-              p: 2.5,
-              minWidth: 280,
-              maxWidth: 360,
-              bgcolor: "rgba(13, 33, 55, 0.95)",
-              backdropFilter: "blur(12px)",
-              border: "1px solid rgba(79,195,247,0.15)",
-              borderRadius: 2,
-              zIndex: 5,
-            }}
-          >
-            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", mb: 1 }}>
-              <Typography variant="h6" sx={{ fontWeight: 700 }}>
-                {selectedBerth.markingCode}
-              </Typography>
-              <IconButton size="small" onClick={() => setSelectedBerth(null)}>
-                <CloseIcon fontSize="small" />
-              </IconButton>
-            </Box>
+        {/* Unified Info panel */}
+        {selectedObject && (() => {
+          // Extract common display data based on selected object kind
+          const obj = selectedObject;
+          const label =
+            obj.kind === "berth" ? obj.data.markingCode
+            : obj.kind === "resource" ? obj.data.markingCode
+            : obj.data.code;
+          const typeLabel =
+            obj.kind === "berth" ? "Båtplats"
+            : obj.kind === "resource" ? (obj.data.type === "SeaHut" ? "Sjöbod" : "Låda")
+            : "Markförvaring";
+          const statusText =
+            obj.kind === "landStorage"
+              ? (obj.data.status === "Occupied" ? "Upptagen" : "Ledig")
+              : obj.kind === "berth"
+                ? getBerthColorLabel(obj.data)
+                : (obj.data.status === "Available" ? "Ledig" : ((obj.data.occupantIds?.length ?? 0) > 0 ? "Upptagen" : "Upptagen - ej reg."));
+          const statusColor =
+            obj.kind === "berth" ? getBerthColor(obj.data)
+            : obj.kind === "landStorage"
+              ? (obj.data.status === "Occupied" ? "#F57C00" : "#4CAF50")
+              : (obj.data.status === "Available" ? "#4CAF50" : ((obj.data.occupantIds?.length ?? 0) > 0 ? "#F44336" : "#FFC107"));
 
-            <Box sx={{ display: "flex", gap: 1, mb: 1.5, flexWrap: "wrap" }}>
-              <Chip
-                label={getBerthColorLabel(selectedBerth)}
-                size="small"
-                sx={{
-                  bgcolor: getBerthColor(selectedBerth),
-                  color: selectedBerth.status === "Available" || (selectedBerth.occupantIds?.length ?? 0) > 0 ? "#fff" : "#000",
-                  fontWeight: 600,
-                }}
-              />
-              {selectedBerth.direction && (
-                <Chip
-                  label={selectedBerth.direction === "inside" ? "Insida" : "Utsida"}
-                  size="small"
-                  variant="outlined"
-                  color={selectedBerth.direction === "inside" ? "info" : "warning"}
+          // Occupant personal data
+          let occupantName = "";
+          let occupantPhone = "";
+          let occupantEmail = "";
+          let occupantAddress = "";
+          let occupantPostalAddress = "";
+          let comment = "";
+
+          if (obj.kind === "resource" && (obj.data.type === "SeaHut" || obj.data.type === "Box")) {
+            const d = obj.data as SeaHut | BoxType;
+            occupantName = [d.occupantFirstName, d.occupantLastName].filter(Boolean).join(" ");
+            occupantPhone = d.occupantPhone || "";
+            occupantEmail = d.occupantEmail || "";
+            occupantAddress = d.occupantAddress || "";
+            occupantPostalAddress = d.occupantPostalAddress || "";
+            comment = d.comment || "";
+          } else if (obj.kind === "landStorage") {
+            occupantName = [obj.data.firstName, obj.data.lastName].filter(Boolean).join(" ");
+            occupantPhone = obj.data.phone || "";
+            occupantEmail = obj.data.email || "";
+            comment = obj.data.comment || "";
+          }
+
+          // Image URL
+          const imageUrl =
+            obj.kind === "landStorage" ? obj.data.imageUrl
+            : (obj.data as Resource).objectImageUrl;
+
+          // Dimensions
+          const width = obj.kind !== "landStorage" ? (obj.data as Resource).maxWidth : undefined;
+          const length = obj.kind !== "landStorage" ? (obj.data as Resource).maxLength : undefined;
+          const heading = obj.kind !== "landStorage" ? (obj.data as Resource).heading : undefined;
+
+          // Pricing — never show for berths
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const price2025 = obj.kind !== "berth" ? (obj.data as any).price2025 : undefined;
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const price2026 = obj.kind !== "berth" ? (obj.data as any).price2026 : undefined;
+
+          // SeaHut size
+          const seaHutSize = obj.kind === "resource" && obj.data.type === "SeaHut" ? (obj.data as SeaHut).size : undefined;
+
+          // Berth-specific
+          const direction = obj.kind === "berth" ? obj.data.direction : undefined;
+          const dockName = obj.kind === "berth" ? getDockName(obj.data.dockId) : "";
+
+          return (
+            <Paper
+              elevation={8}
+              sx={{
+                position: "absolute",
+                bottom: 24,
+                left: 24,
+                p: 2.5,
+                minWidth: 300,
+                maxWidth: 380,
+                maxHeight: "calc(100% - 48px)",
+                overflowY: "auto",
+                bgcolor: "rgba(13, 33, 55, 0.95)",
+                backdropFilter: "blur(12px)",
+                border: "1px solid rgba(79,195,247,0.15)",
+                borderRadius: 2,
+                zIndex: 5,
+              }}
+            >
+              {/* Header */}
+              <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", mb: 1 }}>
+                <Box>
+                  <Typography variant="h6" sx={{ fontWeight: 700 }}>{label}</Typography>
+                  <Typography variant="caption" color="text.secondary">{typeLabel}</Typography>
+                </Box>
+                <IconButton size="small" onClick={() => setSelectedObject(null)}>
+                  <CloseIcon fontSize="small" />
+                </IconButton>
+              </Box>
+
+              {/* Status chips */}
+              <Box sx={{ display: "flex", gap: 1, mb: 1.5, flexWrap: "wrap" }}>
+                <Chip label={statusText} size="small" sx={{ bgcolor: statusColor, color: statusColor === "#FFC107" ? "#000" : "#fff", fontWeight: 600 }} />
+                {direction && (
+                  <Chip label={direction === "inside" ? "Insida" : "Utsida"} size="small" variant="outlined" color={direction === "inside" ? "info" : "warning"} />
+                )}
+                {seaHutSize && (
+                  <Chip label={seaHutSize === "Large" ? "Stor" : "Liten"} size="small" variant="outlined" color="info" />
+                )}
+              </Box>
+
+              {/* Image */}
+              {imageUrl && (
+                <Box
+                  component="img"
+                  src={imageUrl}
+                  alt={label}
+                  sx={{ width: "100%", maxHeight: 180, objectFit: "cover", borderRadius: 1, mb: 1.5, border: "1px solid rgba(79,195,247,0.1)" }}
                 />
               )}
-            </Box>
 
-            {getDockName(selectedBerth.dockId) && (
-              <Typography variant="body2" color="text.secondary">
-                <strong>Brygga:</strong> {getDockName(selectedBerth.dockId)}
-              </Typography>
-            )}
-            {(selectedBerth.maxLength || selectedBerth.maxWidth) && (
-              <Typography variant="body2" color="text.secondary">
-                <strong>Max mått:</strong>{" "}
-                {selectedBerth.maxLength ? `${selectedBerth.maxLength}m` : "—"} ×{" "}
-                {selectedBerth.maxWidth ? `${selectedBerth.maxWidth}m` : "—"}
-              </Typography>
-            )}
-            {selectedBerth.heading !== undefined && (
-              <Typography variant="body2" color="text.secondary">
-                <strong>Riktning:</strong> {selectedBerth.heading}°
-              </Typography>
-            )}
-          </Paper>
-        )}
+              {/* General info */}
+              {dockName && (
+                <Typography variant="body2" color="text.secondary"><strong>Brygga:</strong> {dockName}</Typography>
+              )}
+              {(width || length) && (
+                <Typography variant="body2" color="text.secondary">
+                  <strong>{obj.kind === "berth" ? "Max mått:" : "Mått:"}</strong>{" "}
+                  {length ? `${length}m` : "—"} × {width ? `${width}m` : "—"}
+                </Typography>
+              )}
+              {heading !== undefined && heading !== 0 && (
+                <Typography variant="body2" color="text.secondary"><strong>Riktning:</strong> {heading}°</Typography>
+              )}
+
+              {/* Pricing — never for berths */}
+              {(price2025 || price2026) && (
+                <Typography variant="body2" color="text.secondary">
+                  <strong>Pris:</strong>{" "}
+                  {price2025 ? `${price2025} kr (2025)` : ""}
+                  {price2025 && price2026 ? " / " : ""}
+                  {price2026 ? `${price2026} kr (2026)` : ""}
+                </Typography>
+              )}
+
+              {/* Manager-only: Personal info */}
+              {isManager && occupantName && (
+                <>
+                  <Divider sx={{ my: 1.5, borderColor: "rgba(79,195,247,0.15)" }} />
+                  <Typography variant="body2" sx={{ fontWeight: 600, mb: 0.5, color: "primary.main" }}>Uppgifter</Typography>
+                  <Typography variant="body2" color="text.secondary"><strong>Namn:</strong> {occupantName}</Typography>
+                  {occupantPhone && (
+                    <Typography variant="body2" color="text.secondary"><strong>Telefon:</strong> {occupantPhone}</Typography>
+                  )}
+                  {occupantEmail && (
+                    <Typography variant="body2" color="text.secondary"><strong>E-post:</strong> {occupantEmail}</Typography>
+                  )}
+                  {occupantAddress && (
+                    <Typography variant="body2" color="text.secondary"><strong>Adress:</strong> {occupantAddress}</Typography>
+                  )}
+                  {occupantPostalAddress && (
+                    <Typography variant="body2" color="text.secondary"><strong>Postadress:</strong> {occupantPostalAddress}</Typography>
+                  )}
+                  {comment && (
+                    <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, fontStyle: "italic" }}>{comment}</Typography>
+                  )}
+
+                  {/* SMS button for managers when valid mobile */}
+                  {occupantPhone && isMobileNumber(occupantPhone) && (
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      startIcon={<SmsIcon />}
+                      href={toSmsHref(occupantPhone)}
+                      sx={{ mt: 1.5 }}
+                    >
+                      Skicka SMS
+                    </Button>
+                  )}
+                </>
+              )}
+            </Paper>
+          );
+        })()}
 
         {/* Stats */}
         {!loading && (
