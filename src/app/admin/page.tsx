@@ -69,6 +69,10 @@ import LinkIcon from "@mui/icons-material/Link";
 import SaveIcon from "@mui/icons-material/Save";
 import SmsIcon from "@mui/icons-material/Sms";
 import SendIcon from "@mui/icons-material/Send";
+import InputAdornment from "@mui/material/InputAdornment";
+import SearchIcon from "@mui/icons-material/Search";
+import ToggleButton from "@mui/material/ToggleButton";
+import ToggleButtonGroup from "@mui/material/ToggleButtonGroup";
 
 export default function AdminPage() {
   return (
@@ -1464,6 +1468,8 @@ function ResourcesTab() {
   const [successMsg, setSuccessMsg] = useState("");
   const [editResource, setEditResource] = useState<Berth | null>(null);
   const [movedBerths, setMovedBerths] = useState<Record<string, { lat: number; lng: number }>>({});
+  const [searchQuery, setSearchQuery] = useState("");
+  const [filterType, setFilterType] = useState<"all" | Resource["type"]>("all");
   const [form, setForm] = useState({
     type: "Berth" as Resource["type"],
     markingCode: "",
@@ -1628,6 +1634,37 @@ function ResourcesTab() {
         </Button>
       </Box>
 
+      {/* Search and filter bar */}
+      <Box sx={{ display: "flex", gap: 2, mb: 2, alignItems: "center", flexWrap: "wrap" }}>
+        <TextField
+          size="small"
+          placeholder="Search by code, name, phone..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          sx={{ minWidth: 260 }}
+          slotProps={{
+            input: {
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon fontSize="small" />
+                </InputAdornment>
+              ),
+            },
+          }}
+        />
+        <ToggleButtonGroup
+          size="small"
+          value={filterType}
+          exclusive
+          onChange={(_, val) => val && setFilterType(val)}
+        >
+          <ToggleButton value="all">All ({resources.length})</ToggleButton>
+          <ToggleButton value="Berth">Berth ({resources.filter((r) => r.type === "Berth").length})</ToggleButton>
+          <ToggleButton value="SeaHut">SeaHut ({resources.filter((r) => r.type === "SeaHut").length})</ToggleButton>
+          <ToggleButton value="Box">Box ({resources.filter((r) => r.type === "Box").length})</ToggleButton>
+        </ToggleButtonGroup>
+      </Box>
+
       {loading ? (
         <Box sx={{ display: "flex", justifyContent: "center", py: 4 }}>
           <CircularProgress />
@@ -1652,7 +1689,21 @@ function ResourcesTab() {
               </TableRow>
             </TableHead>
             <TableBody>
-              {resources.map((r) => (
+              {resources
+                .filter((r) => filterType === "all" || r.type === filterType)
+                .filter((r) => {
+                  if (!searchQuery.trim()) return true;
+                  const q = searchQuery.toLowerCase();
+                  const tenants = getTenants(r.occupantIds);
+                  const tenantNames = tenants.map((t) => t.name.toLowerCase()).join(" ");
+                  const dockName = getDockName(r.dockId || "").toLowerCase();
+                  return (
+                    r.markingCode.toLowerCase().includes(q) ||
+                    tenantNames.includes(q) ||
+                    dockName.includes(q)
+                  );
+                })
+                .map((r) => (
                 <TableRow key={r.id} hover>
                   <TableCell sx={{ fontWeight: 600 }}>
                     {r.markingCode}
