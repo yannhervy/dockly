@@ -3,7 +3,9 @@
 import React, { useEffect, useState, useRef } from "react";
 import { db } from "@/lib/firebase";
 import { useAuth } from "@/context/AuthContext";
-import { User, Dock, Resource, BerthInterest, InterestReply, Berth } from "@/lib/types";
+import { User, Dock, Resource, BerthInterest, InterestReply, Berth, LandStorageEntry, UserMessage } from "@/lib/types";
+import { normalizePhone } from "@/lib/phoneUtils";
+import { sendSms } from "@/lib/sms";
 import {
   collection,
   getDocs,
@@ -15,9 +17,12 @@ import {
   query,
   orderBy,
   Timestamp,
+  arrayUnion,
 } from "firebase/firestore";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import { uploadDockImage } from "@/lib/storage";
+import Checkbox from "@mui/material/Checkbox";
+import Divider from "@mui/material/Divider";
 import { computeRectCorners, HARBOR_CENTER } from "@/lib/mapUtils";
 import { APIProvider, Map as GMap, useMap, useMapsLibrary } from "@vis.gl/react-google-maps";
 import Box from "@mui/material/Box";
@@ -60,6 +65,10 @@ import SailingIcon from "@mui/icons-material/Sailing";
 import ReplyIcon from "@mui/icons-material/Reply";
 import VisibilityIcon from "@mui/icons-material/Visibility";
 import PublicIcon from "@mui/icons-material/Public";
+import LinkIcon from "@mui/icons-material/Link";
+import SaveIcon from "@mui/icons-material/Save";
+import SmsIcon from "@mui/icons-material/Sms";
+import SendIcon from "@mui/icons-material/Send";
 
 export default function AdminPage() {
   return (
@@ -110,16 +119,34 @@ function AdminContent() {
 
 // ─── Users Tab ────────────────────────────────────────────
 function UsersTab() {
+  const { firebaseUser } = useAuth();
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [successMsg, setSuccessMsg] = useState("");
+  const [matching, setMatching] = useState(false);
   const [form, setForm] = useState({
     name: "",
     email: "",
     role: "Tenant" as User["role"],
     phone: "",
   });
+
+  // Edit user state
+  const [editUser, setEditUser] = useState<User | null>(null);
+  const [editForm, setEditForm] = useState({
+    name: "",
+    email: "",
+    phone: "",
+    role: "Tenant" as User["role"],
+    internalComment: "",
+  });
+  const [editSaving, setEditSaving] = useState(false);
+
+  // Send message state
+  const [msgText, setMsgText] = useState("");
+  const [msgSendSms, setMsgSendSms] = useState(false);
+  const [sendingMsg, setSendingMsg] = useState(false);
 
   useEffect(() => {
     fetchUsers();
@@ -159,14 +186,31 @@ function UsersTab() {
   };
 
   const handleDeleteUser = async (userId: string) => {
-    if (!confirm("Are you sure you want to delete this user?")) return;
+    if (!confirm("Are you sure you want to delete this user? This will also remove their login.")) return;
     try {
-      await deleteDoc(doc(db, "users", userId));
-      setSuccessMsg("User deleted.");
+      const token = await firebaseUser?.getIdToken();
+      const res = await fetch(
+        "https://deleteuser-srp7u2ucna-ew.a.run.app",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ uid: userId }),
+        }
+      );
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || data.errors?.join(", ") || "Delete failed");
+      }
+      setSuccessMsg("User and login deleted.");
       setTimeout(() => setSuccessMsg(""), 3000);
       fetchUsers();
     } catch (err) {
       console.error("Error deleting user:", err);
+      setSuccessMsg("");
+      alert(err instanceof Error ? err.message : "Failed to delete user");
     }
   };
 
@@ -185,6 +229,178 @@ function UsersTab() {
     }
   };
 
+  // Open edit dialog for a user
+  const handleEditOpen = (user: User) => {
+    setEditUser(user);
+    setEditForm({
+      name: user.name || "",
+      email: user.email || "",
+      phone: user.phone || "",
+      role: user.role,
+      internalComment: user.internalComment || "",
+    });
+    setMsgText("");
+    setMsgSendSms(false);
+  };
+
+  // Save user edits
+  const handleEditSave = async () => {
+    if (!editUser) return;
+    setEditSaving(true);
+    try {
+      await updateDoc(doc(db, "users", editUser.id), {
+        name: editForm.name.trim(),
+        email: editForm.email.trim(),
+        phone: editForm.phone.trim(),
+        role: editForm.role,
+        internalComment: editForm.internalComment.trim(),
+      });
+      setUsers((prev) =>
+        prev.map((u) =>
+          u.id === editUser.id
+            ? { ...u, name: editForm.name.trim(), email: editForm.email.trim(), phone: editForm.phone.trim(), role: editForm.role, internalComment: editForm.internalComment.trim() }
+            : u
+        )
+      );
+      setSuccessMsg("User updated.");
+      setTimeout(() => setSuccessMsg(""), 3000);
+      setEditUser(null);
+    } catch (err) {
+      console.error("Error updating user:", err);
+    } finally {
+      setEditSaving(false);
+    }
+  };
+
+  // Send external message to a user
+  const handleSendMessage = async () => {
+    if (!editUser || !msgText.trim()) return;
+    setSendingMsg(true);
+    try {
+      const authorName = firebaseUser?.displayName || "Admin";
+      // Create message in subcollection
+      await addDoc(collection(db, "users", editUser.id, "messages"), {
+        text: msgText.trim(),
+        authorId: firebaseUser?.uid || "",
+        authorName,
+        sentAsSms: msgSendSms,
+        read: false,
+        createdAt: Timestamp.now(),
+      });
+
+      // Send SMS if checkbox is checked and user has a phone number
+      if (msgSendSms && editUser.phone) {
+        try {
+          await sendSms(editUser.phone, msgText.trim());
+        } catch (smsErr) {
+          console.error("SMS send failed:", smsErr);
+          // Still show success for message, but warn about SMS
+          setSuccessMsg("Message saved, but SMS failed to send.");
+          setTimeout(() => setSuccessMsg(""), 4000);
+          setMsgText("");
+          setMsgSendSms(false);
+          return;
+        }
+      }
+
+      setSuccessMsg("Message sent" + (msgSendSms ? " + SMS delivered." : "."));
+      setTimeout(() => setSuccessMsg(""), 3000);
+      setMsgText("");
+      setMsgSendSms(false);
+    } catch (err) {
+      console.error("Error sending message:", err);
+      alert("Failed to send message.");
+    } finally {
+      setSendingMsg(false);
+    }
+  };
+
+  // Bulk match all users to resources and land storage
+  const handleMatchAll = async () => {
+    setMatching(true);
+    let matchCount = 0;
+    try {
+      // Fetch all users, resources, and land storage
+      const allUsersSnap = await getDocs(collection(db, "users"));
+      const allUsers = allUsersSnap.docs.map(
+        (d) => ({ id: d.id, ...d.data() }) as User
+      );
+
+      const allResSnap = await getDocs(collection(db, "resources"));
+      const allResources = allResSnap.docs.map(
+        (d) => ({ id: d.id, ...d.data() }) as Resource
+      );
+
+      const allLandSnap = await getDocs(collection(db, "landStorage"));
+      const allLand = allLandSnap.docs.map(
+        (d) => ({ id: d.id, ...d.data() }) as LandStorageEntry
+      );
+
+      for (const user of allUsers) {
+        const userPhone = normalizePhone(user.phone || "");
+        const userEmail = (user.email || "").trim().toLowerCase();
+        const uid = user.id;
+
+        // Match resources (berths etc.)
+        for (const r of allResources) {
+          const ids = r.occupantIds || [];
+          if (ids.includes(uid)) continue;
+
+          const berth = r as Berth;
+          const phoneMatch =
+            userPhone &&
+            berth.occupantPhone &&
+            normalizePhone(berth.occupantPhone) === userPhone;
+          const emailMatch =
+            userEmail &&
+            berth.occupantEmail &&
+            berth.occupantEmail.trim().toLowerCase() === userEmail;
+
+          if (phoneMatch || emailMatch) {
+            await updateDoc(doc(db, "resources", r.id), {
+              occupantIds: arrayUnion(uid),
+            });
+            matchCount++;
+          }
+        }
+
+        // Match land storage entries
+        for (const entry of allLand) {
+          if (entry.occupantId === uid) continue;
+          if (entry.occupantId) continue; // already linked to someone
+
+          const phoneMatch =
+            userPhone &&
+            entry.phone &&
+            normalizePhone(entry.phone) === userPhone;
+          const emailMatch =
+            userEmail &&
+            entry.email &&
+            entry.email.trim().toLowerCase() === userEmail;
+
+          if (phoneMatch || emailMatch) {
+            await updateDoc(doc(db, "landStorage", entry.id), {
+              occupantId: uid,
+            });
+            matchCount++;
+          }
+        }
+      }
+
+      setSuccessMsg(
+        matchCount > 0
+          ? `Matching complete! ${matchCount} new link(s) created.`
+          : "Matching complete. No new matches found."
+      );
+      setTimeout(() => setSuccessMsg(""), 5000);
+    } catch (err) {
+      console.error("Error in bulk match:", err);
+      alert("Failed to match users. See console.");
+    } finally {
+      setMatching(false);
+    }
+  };
+
   return (
     <Box>
       {successMsg && (
@@ -193,7 +409,15 @@ function UsersTab() {
         </Alert>
       )}
 
-      <Box sx={{ display: "flex", justifyContent: "flex-end", mb: 2 }}>
+      <Box sx={{ display: "flex", justifyContent: "flex-end", mb: 2, gap: 1 }}>
+        <Button
+          variant="outlined"
+          startIcon={matching ? <CircularProgress size={18} /> : <LinkIcon />}
+          onClick={handleMatchAll}
+          disabled={matching}
+        >
+          {matching ? "Matching..." : "Match All Users"}
+        </Button>
         <Button
           variant="contained"
           startIcon={<AddIcon />}
@@ -262,6 +486,13 @@ function UsersTab() {
                   <TableCell align="right">
                     <IconButton
                       size="small"
+                      onClick={() => handleEditOpen(u)}
+                      sx={{ mr: 0.5 }}
+                    >
+                      <EditIcon fontSize="small" />
+                    </IconButton>
+                    <IconButton
+                      size="small"
                       color="error"
                       onClick={() => handleDeleteUser(u.id)}
                     >
@@ -319,6 +550,114 @@ function UsersTab() {
           <Button onClick={() => setDialogOpen(false)}>Cancel</Button>
           <Button variant="contained" onClick={handleAddUser}>
             Create
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Edit User Dialog */}
+      <Dialog open={!!editUser} onClose={() => setEditUser(null)} maxWidth="sm" fullWidth>
+        <DialogTitle>Edit User</DialogTitle>
+        <DialogContent>
+          <TextField
+            fullWidth
+            label="Name"
+            value={editForm.name}
+            onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+            sx={{ mb: 2, mt: 1 }}
+          />
+          <TextField
+            fullWidth
+            label="Email"
+            type="email"
+            value={editForm.email}
+            onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
+            sx={{ mb: 2 }}
+          />
+          <FormControl fullWidth sx={{ mb: 2 }}>
+            <InputLabel>Role</InputLabel>
+            <Select
+              value={editForm.role}
+              label="Role"
+              onChange={(e: SelectChangeEvent) =>
+                setEditForm({ ...editForm, role: e.target.value as User["role"] })
+              }
+            >
+              <MenuItem value="Tenant">Tenant</MenuItem>
+              <MenuItem value="Dock Manager">Dock Manager</MenuItem>
+              <MenuItem value="Superadmin">Superadmin</MenuItem>
+            </Select>
+          </FormControl>
+          <TextField
+            fullWidth
+            label="Phone"
+            value={editForm.phone}
+            onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
+            sx={{ mb: 2 }}
+          />
+
+          <Divider sx={{ my: 2 }} />
+
+          {/* Internal comment — only for managers/superadmin */}
+          <TextField
+            fullWidth
+            label="Internal Comment (not visible to tenant)"
+            multiline
+            rows={2}
+            value={editForm.internalComment}
+            onChange={(e) => setEditForm({ ...editForm, internalComment: e.target.value })}
+            sx={{ mb: 2 }}
+            helperText="Only visible to Dock Managers and Superadmins"
+          />
+
+          <Divider sx={{ my: 2 }} />
+
+          {/* Send message to user */}
+          <Typography variant="subtitle2" sx={{ mb: 1, display: "flex", alignItems: "center", gap: 0.5 }}>
+            <SmsIcon fontSize="small" color="primary" />
+            Send Message to User
+          </Typography>
+          <TextField
+            fullWidth
+            label="Message"
+            multiline
+            rows={2}
+            value={msgText}
+            onChange={(e) => setMsgText(e.target.value)}
+            placeholder="Write a message to this tenant..."
+            sx={{ mb: 1 }}
+          />
+          <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <Box sx={{ display: "flex", alignItems: "center" }}>
+              <Checkbox
+                checked={msgSendSms}
+                onChange={(e) => setMsgSendSms(e.target.checked)}
+                size="small"
+                disabled={!editUser?.phone}
+              />
+              <Typography variant="body2" sx={{ opacity: editUser?.phone ? 1 : 0.4 }}>
+                Also send as SMS
+              </Typography>
+            </Box>
+            <Button
+              variant="outlined"
+              size="small"
+              onClick={handleSendMessage}
+              disabled={!msgText.trim() || sendingMsg}
+              startIcon={sendingMsg ? <CircularProgress size={16} /> : <SendIcon />}
+            >
+              {sendingMsg ? "Sending..." : "Send"}
+            </Button>
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setEditUser(null)}>Cancel</Button>
+          <Button
+            variant="contained"
+            onClick={handleEditSave}
+            disabled={editSaving}
+            startIcon={editSaving ? <CircularProgress size={18} /> : <SaveIcon />}
+          >
+            {editSaving ? "Saving..." : "Save"}
           </Button>
         </DialogActions>
       </Dialog>

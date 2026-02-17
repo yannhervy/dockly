@@ -27,6 +27,7 @@ import LogoutIcon from "@mui/icons-material/Logout";
 import AnchorIcon from "@mui/icons-material/Anchor";
 
 import ConstructionIcon from "@mui/icons-material/Construction";
+import OpenInNewIcon from "@mui/icons-material/OpenInNew";
 
 const DRAWER_WIDTH = 260;
 
@@ -129,6 +130,23 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             </ListItemButton>
           </ListItem>
         ))}
+      </List>
+
+      {/* Link to public website */}
+      <List sx={{ px: 1, pb: 0 }}>
+        <ListItem disablePadding>
+          <ListItemButton
+            component="a"
+            href="/"
+            target="_blank"
+            sx={{ borderRadius: 2 }}
+          >
+            <ListItemIcon sx={{ minWidth: 40, color: "text.secondary" }}>
+              <OpenInNewIcon />
+            </ListItemIcon>
+            <ListItemText primary="Visit Website" />
+          </ListItemButton>
+        </ListItem>
       </List>
 
       <Divider />

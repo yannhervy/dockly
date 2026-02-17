@@ -3,7 +3,8 @@
 import { useEffect, useState, useCallback } from "react";
 import { collection, getDocs } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import type { Berth, Dock, Resource } from "@/lib/types";
+import { useAuth } from "@/context/AuthContext";
+import type { Berth, Dock, Resource, LandStorageEntry } from "@/lib/types";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 import Chip from "@mui/material/Chip";
@@ -12,6 +13,7 @@ import CircularProgress from "@mui/material/CircularProgress";
 import IconButton from "@mui/material/IconButton";
 import CloseIcon from "@mui/icons-material/Close";
 import MapIcon from "@mui/icons-material/Map";
+import HomeIcon from "@mui/icons-material/Home";
 import {
   APIProvider,
   Map,
@@ -19,6 +21,7 @@ import {
   useMapsLibrary,
 } from "@vis.gl/react-google-maps";
 import { computeRectCorners, HARBOR_CENTER } from "@/lib/mapUtils";
+import ProtectedRoute from "@/components/ProtectedRoute";
 
 const DEFAULT_ZOOM = 18;
 
@@ -33,7 +36,7 @@ function getBerthColor(berth: Berth): string {
 function getBerthColorLabel(berth: Berth): string {
   if (berth.status === "Available") return "Ledig";
   if (berth.occupantIds && berth.occupantIds.length > 0) return "Upptagen (registrerad)";
-  return "Upptagen (ej registrerad)";
+  return "Upptagen - ej registrerad användare";
 }
 
 // Component that draws polygons + labels using the Maps API directly
@@ -41,10 +44,12 @@ function BerthPolygons({
   berths,
   docks,
   onSelect,
+  currentUid,
 }: {
   berths: Berth[];
   docks: Dock[];
   onSelect: (b: Berth | null) => void;
+  currentUid?: string;
 }) {
   const map = useMap();
   const coreLib = useMapsLibrary("core");
@@ -64,26 +69,27 @@ function BerthPolygons({
 
       const corners = computeRectCorners(berth.lat, berth.lng, w, l, h);
       const color = getBerthColor(berth);
+      const isMine = !!(currentUid && berth.occupantIds?.includes(currentUid));
 
       const polygon = new google.maps.Polygon({
         paths: corners,
-        strokeColor: color,
+        strokeColor: isMine ? "#00E5FF" : color,
         strokeOpacity: 0.9,
-        strokeWeight: 2,
-        fillColor: color,
-        fillOpacity: 0.45,
+        strokeWeight: isMine ? 4 : 2,
+        fillColor: isMine ? "#00E5FF" : color,
+        fillOpacity: isMine ? 0.55 : 0.45,
         map,
-        zIndex: 1,
+        zIndex: isMine ? 10 : 1,
       });
 
       polygon.addListener("click", () => onSelect(berth));
 
       // Hover effects
       polygon.addListener("mouseover", () => {
-        polygon.setOptions({ fillOpacity: 0.7, strokeWeight: 3 });
+        polygon.setOptions({ fillOpacity: 0.7, strokeWeight: isMine ? 5 : 3 });
       });
       polygon.addListener("mouseout", () => {
-        polygon.setOptions({ fillOpacity: 0.45, strokeWeight: 2 });
+        polygon.setOptions({ fillOpacity: isMine ? 0.55 : 0.45, strokeWeight: isMine ? 4 : 2 });
       });
 
       // Label with marking code
@@ -116,7 +122,7 @@ function BerthPolygons({
     return () => {
       cleanups.forEach((fn) => fn());
     };
-  }, [map, coreLib, markerLib, berths, docks, onSelect]);
+  }, [map, coreLib, markerLib, berths, docks, onSelect, currentUid]);
 
   return null;
 }
@@ -201,7 +207,7 @@ function DockPolygons({ docks }: { docks: Dock[] }) {
 }
 
 // Component that draws SeaHuts and Boxes as polygons with labels
-function ResourcePolygons({ resources }: { resources: Resource[] }) {
+function ResourcePolygons({ resources, currentUid }: { resources: Resource[]; currentUid?: string }) {
   const map = useMap();
   const coreLib = useMapsLibrary("core");
   const markerLib = useMapsLibrary("marker");
@@ -225,18 +231,19 @@ function ResourcePolygons({ resources }: { resources: Resource[] }) {
       const l = res.maxLength || 3;
       const h = res.heading || 0;
       const color = getColor(res);
+      const isMine = !!(currentUid && res.occupantIds?.includes(currentUid));
 
       const corners = computeRectCorners(res.lat, res.lng, w, l, h);
 
       const polygon = new google.maps.Polygon({
         paths: corners,
-        strokeColor: color,
+        strokeColor: isMine ? "#00E5FF" : color,
         strokeOpacity: 0.9,
-        strokeWeight: 2,
-        fillColor: color,
-        fillOpacity: 0.35,
+        strokeWeight: isMine ? 4 : 2,
+        fillColor: isMine ? "#00E5FF" : color,
+        fillOpacity: isMine ? 0.5 : 0.35,
         map,
-        zIndex: 0,
+        zIndex: isMine ? 10 : 0,
       });
 
       const labelEl = document.createElement("div");
@@ -266,24 +273,84 @@ function ResourcePolygons({ resources }: { resources: Resource[] }) {
     });
 
     return () => { cleanups.forEach((fn) => fn()); };
-  }, [map, coreLib, markerLib, resources]);
+  }, [map, coreLib, markerLib, resources, currentUid]);
+
+  return null;
+}
+
+// Component that draws land storage entries as orange circle markers
+function LandStorageMarkers({ entries, currentUid }: { entries: LandStorageEntry[]; currentUid?: string }) {
+  const map = useMap();
+  const markerLib = useMapsLibrary("marker");
+
+  useEffect(() => {
+    if (!map || !markerLib) return;
+
+    const cleanups: (() => void)[] = [];
+
+    entries.forEach((entry) => {
+      if (!entry.lat || !entry.lng) return;
+
+      const isOccupied = entry.status === "Occupied";
+      const isMine = !!(currentUid && entry.occupantId === currentUid);
+
+      // Create a styled circle marker
+      const el = document.createElement("div");
+      el.innerHTML = `<span>${entry.code}</span>`;
+      el.style.cssText = `
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        background: ${isMine ? "#00E5FF" : isOccupied ? "#F57C00" : "#66BB6A"};
+        border: 2px solid ${isMine ? "#00B8D4" : isOccupied ? "#E65100" : "#388E3C"};
+        color: ${isMine ? "#000" : "#fff"};
+        font-size: 8px;
+        font-weight: 800;
+        cursor: pointer;
+        box-shadow: ${isMine ? "0 0 10px 3px rgba(0,229,255,0.6)" : "0 2px 6px rgba(0,0,0,0.5)"};
+        text-shadow: ${isMine ? "none" : "0 1px 2px rgba(0,0,0,0.6)"};
+        transition: transform 0.15s;
+      `;
+      el.addEventListener("mouseenter", () => { el.style.transform = "scale(1.3)"; });
+      el.addEventListener("mouseleave", () => { el.style.transform = "scale(1)"; });
+
+      const marker = new google.maps.marker.AdvancedMarkerElement({
+        position: { lat: entry.lat, lng: entry.lng },
+        map,
+        content: el,
+        title: `${entry.code} — ${isOccupied ? (entry.firstName + " " + entry.lastName).trim() : "Available"}`,
+        zIndex: 4,
+      });
+
+      cleanups.push(() => { marker.map = null; });
+    });
+
+    return () => { cleanups.forEach((fn) => fn()); };
+  }, [map, markerLib, entries, currentUid]);
 
   return null;
 }
 
 export default function MapPage() {
+  const { firebaseUser } = useAuth();
+  const currentUid = firebaseUser?.uid;
   const [berths, setBerths] = useState<Berth[]>([]);
   const [otherResources, setOtherResources] = useState<Resource[]>([]);
   const [docks, setDocks] = useState<Dock[]>([]);
+  const [landEntries, setLandEntries] = useState<LandStorageEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedBerth, setSelectedBerth] = useState<Berth | null>(null);
 
   useEffect(() => {
     async function fetchData() {
       try {
-        const [rSnap, dSnap] = await Promise.all([
+        const [rSnap, dSnap, lSnap] = await Promise.all([
           getDocs(collection(db, "resources")),
           getDocs(collection(db, "docks")),
+          getDocs(collection(db, "landStorage")),
         ]);
 
         const allResources = rSnap.docs.map(
@@ -300,6 +367,9 @@ export default function MapPage() {
         setOtherResources(otherItems);
         setDocks(
           dSnap.docs.map((d) => ({ id: d.id, ...d.data() }) as Dock)
+        );
+        setLandEntries(
+          lSnap.docs.map((d) => ({ id: d.id, ...d.data() }) as LandStorageEntry)
         );
       } catch (err) {
         console.error("Error fetching map data:", err);
@@ -318,8 +388,12 @@ export default function MapPage() {
   }, []);
 
   const berthsWithCoords = berths.filter((b) => b.lat && b.lng);
+  const seaHuts = otherResources.filter((r) => r.type === "SeaHut");
+  const boxes = otherResources.filter((r) => r.type === "Box");
+  const landWithCoords = landEntries.filter((e) => e.lat && e.lng);
 
   return (
+    <ProtectedRoute>
     <Box sx={{ height: "100vh", display: "flex", flexDirection: "column" }}>
       {/* Header */}
       <Box
@@ -334,6 +408,9 @@ export default function MapPage() {
           zIndex: 10,
         }}
       >
+        <IconButton href="/" sx={{ color: "text.secondary" }}>
+          <HomeIcon />
+        </IconButton>
         <MapIcon sx={{ color: "primary.main" }} />
         <Typography variant="h6" sx={{ fontWeight: 700, flexGrow: 1 }}>
           Hamnkarta
@@ -352,7 +429,12 @@ export default function MapPage() {
           <Chip
             size="small"
             sx={{ bgcolor: "#FFC107", color: "#000", fontWeight: 600 }}
-            label="Ej registrerad"
+            label="Upptagen - ej reg."
+          />
+          <Chip
+            size="small"
+            sx={{ bgcolor: "#F57C00", color: "#fff", fontWeight: 600 }}
+            label="Markförvaring"
           />
         </Box>
       </Box>
@@ -388,9 +470,11 @@ export default function MapPage() {
                 berths={berthsWithCoords}
                 docks={docks}
                 onSelect={handleSelect}
+                currentUid={currentUid}
               />
               <DockPolygons docks={docks} />
-              <ResourcePolygons resources={otherResources} />
+              <ResourcePolygons resources={otherResources} currentUid={currentUid} />
+              <LandStorageMarkers entries={landEntries} currentUid={currentUid} />
             </Map>
           </APIProvider>
         )}
@@ -479,11 +563,27 @@ export default function MapPage() {
             }}
           >
             <Typography variant="caption" color="text.secondary">
-              {berthsWithCoords.length} / {berths.length} platser på kartan
+              {berthsWithCoords.length} / {berths.length} båtplatser
             </Typography>
+            {seaHuts.length > 0 && (
+              <Typography variant="caption" color="text.secondary">
+                {seaHuts.length} sjöbodar
+              </Typography>
+            )}
+            {boxes.length > 0 && (
+              <Typography variant="caption" color="text.secondary">
+                {boxes.length} lådor
+              </Typography>
+            )}
+            {landEntries.length > 0 && (
+              <Typography variant="caption" color="text.secondary">
+                {landWithCoords.length} / {landEntries.length} markplatser
+              </Typography>
+            )}
           </Paper>
         )}
       </Box>
     </Box>
+    </ProtectedRoute>
   );
 }

@@ -3,7 +3,7 @@
 import React, { useEffect, useState, useMemo } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { db } from "@/lib/firebase";
-import { LandStorageEntry } from "@/lib/types";
+import { LandStorageEntry, User } from "@/lib/types";
 import {
   collection,
   getDocs,
@@ -35,13 +35,24 @@ import DialogActions from "@mui/material/DialogActions";
 import Button from "@mui/material/Button";
 import Alert from "@mui/material/Alert";
 import Grid from "@mui/material/Grid";
+import Autocomplete from "@mui/material/Autocomplete";
+import Divider from "@mui/material/Divider";
+import Tooltip from "@mui/material/Tooltip";
 import SearchIcon from "@mui/icons-material/Search";
 import ConstructionIcon from "@mui/icons-material/Construction";
 import EditIcon from "@mui/icons-material/Edit";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import CancelIcon from "@mui/icons-material/Cancel";
+import PersonIcon from "@mui/icons-material/Person";
+import PersonOffIcon from "@mui/icons-material/PersonOff";
+import LinkIcon from "@mui/icons-material/Link";
+import LinkOffIcon from "@mui/icons-material/LinkOff";
+import PublicIcon from "@mui/icons-material/Public";
 import ToggleButton from "@mui/material/ToggleButton";
 import ToggleButtonGroup from "@mui/material/ToggleButtonGroup";
+import { APIProvider, Map as GMap, AdvancedMarker } from "@vis.gl/react-google-maps";
+import { HARBOR_CENTER } from "@/lib/mapUtils";
+import PlaceIcon from "@mui/icons-material/Place";
 
 export default function LandStoragePage() {
   return (
@@ -66,8 +77,13 @@ function LandStorageContent() {
     firstName: "",
     lastName: "",
     phone: "",
+    email: "",
     comment: "",
   });
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+  const [allUsers, setAllUsers] = useState<User[]>([]);
+  const [editLat, setEditLat] = useState<number | undefined>(undefined);
+  const [editLng, setEditLng] = useState<number | undefined>(undefined);
   const [saving, setSaving] = useState(false);
   const [successMsg, setSuccessMsg] = useState("");
 
@@ -124,14 +140,28 @@ function LandStorageContent() {
   const availableCount = totalCount - occupiedCount;
 
   // Edit dialog handlers
-  const handleEditOpen = (entry: LandStorageEntry) => {
+  const handleEditOpen = async (entry: LandStorageEntry) => {
     setEditEntry(entry);
     setEditForm({
       firstName: entry.firstName || "",
       lastName: entry.lastName || "",
       phone: entry.phone || "",
+      email: entry.email || "",
       comment: entry.comment || "",
     });
+    setSelectedUserId(entry.occupantId || null);
+    setEditLat(entry.lat);
+    setEditLng(entry.lng);
+
+    // Fetch users list if not loaded yet
+    if (allUsers.length === 0) {
+      try {
+        const snap = await getDocs(collection(db, "users"));
+        setAllUsers(snap.docs.map((d) => ({ id: d.id, ...d.data() }) as User));
+      } catch (err) {
+        console.error("Error fetching users:", err);
+      }
+    }
   };
 
   const handleEditSave = async () => {
@@ -143,8 +173,12 @@ function LandStorageContent() {
         firstName: editForm.firstName.trim(),
         lastName: editForm.lastName.trim(),
         phone: editForm.phone.trim(),
+        email: editForm.email.trim(),
         comment: editForm.comment.trim(),
         status: isOccupied ? "Occupied" : "Available",
+        occupantId: selectedUserId || null,
+        lat: editLat ?? null,
+        lng: editLng ?? null,
         updatedAt: Timestamp.now(),
       });
       // Update local state
@@ -155,6 +189,9 @@ function LandStorageContent() {
                 ...e,
                 ...editForm,
                 status: isOccupied ? "Occupied" : "Available",
+                occupantId: selectedUserId || undefined,
+                lat: editLat,
+                lng: editLng,
               }
             : e
         )
@@ -177,9 +214,13 @@ function LandStorageContent() {
         firstName: "",
         lastName: "",
         phone: "",
+        email: "",
         comment: "",
         status: "Available",
         paymentStatus: "Unpaid",
+        occupantId: null,
+        lat: null,
+        lng: null,
         updatedAt: Timestamp.now(),
       });
       setEntries((prev) =>
@@ -190,9 +231,13 @@ function LandStorageContent() {
                 firstName: "",
                 lastName: "",
                 phone: "",
+                email: "",
                 comment: "",
                 status: "Available" as const,
                 paymentStatus: "Unpaid" as const,
+                occupantId: undefined,
+                lat: undefined,
+                lng: undefined,
               }
             : e
         )
@@ -340,16 +385,23 @@ function LandStorageContent() {
                     }}
                   >
                     <TableCell>
-                      <Typography
-                        variant="body2"
-                        sx={{
-                          fontFamily: "monospace",
-                          fontWeight: 700,
-                          fontSize: 15,
-                        }}
-                      >
-                        {entry.code}
-                      </Typography>
+                      <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                        <Typography
+                          variant="body2"
+                          sx={{
+                            fontFamily: "monospace",
+                            fontWeight: 700,
+                            fontSize: 15,
+                          }}
+                        >
+                          {entry.code}
+                        </Typography>
+                        {entry.lat && entry.lng && (
+                          <Tooltip title="Has map position">
+                            <PublicIcon sx={{ fontSize: 16, color: "success.main" }} />
+                          </Tooltip>
+                        )}
+                      </Box>
                     </TableCell>
                     <TableCell>
                       <Chip
@@ -367,9 +419,30 @@ function LandStorageContent() {
                       />
                     </TableCell>
                     <TableCell>
-                      {entry.firstName
-                        ? `${entry.firstName} ${entry.lastName}`.trim()
-                        : "—"}
+                      <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                        {entry.firstName
+                          ? `${entry.firstName} ${entry.lastName}`.trim()
+                          : "—"}
+                        {entry.status === "Occupied" && (
+                          <Tooltip
+                            title={
+                              entry.occupantId
+                                ? "Connected to a registered user"
+                                : "Not linked to any user account"
+                            }
+                          >
+                            {entry.occupantId ? (
+                              <LinkIcon
+                                sx={{ fontSize: 16, color: "success.main", ml: 0.5 }}
+                              />
+                            ) : (
+                              <LinkOffIcon
+                                sx={{ fontSize: 16, color: "text.disabled", ml: 0.5 }}
+                              />
+                            )}
+                          </Tooltip>
+                        )}
+                      </Box>
                     </TableCell>
                     <TableCell>
                       {entry.phone || "—"}
@@ -416,7 +489,47 @@ function LandStorageContent() {
           Edit Code: {editEntry?.code}
         </DialogTitle>
         <DialogContent sx={{ pt: 2 }}>
-          <Grid container spacing={2} sx={{ mt: 0.5 }}>
+          {/* User picker */}
+          <Autocomplete
+            options={allUsers}
+            getOptionLabel={(u) => `${u.name} (${u.email})`}
+            value={allUsers.find((u) => u.id === selectedUserId) || null}
+            onChange={(_, user) => {
+              if (user) {
+                setSelectedUserId(user.id);
+                // Auto-fill from selected user
+                const [first, ...rest] = (user.name || "").split(" ");
+                setEditForm({
+                  ...editForm,
+                  firstName: first || "",
+                  lastName: rest.join(" ") || "",
+                  phone: user.phone || editForm.phone,
+                  email: user.email || editForm.email,
+                });
+              } else {
+                setSelectedUserId(null);
+              }
+            }}
+            renderInput={(params) => (
+              <TextField
+                {...params}
+                label="Link to existing user (optional)"
+                placeholder="Search by name or email..."
+                sx={{ mb: 2, mt: 0.5 }}
+                helperText={selectedUserId ? "Linked — details auto-filled from user" : "Leave empty to enter details manually"}
+              />
+            )}
+            isOptionEqualToValue={(opt, val) => opt.id === val.id}
+            noOptionsText="No users found"
+          />
+
+          <Divider sx={{ mb: 2 }}>
+            <Typography variant="caption" color="text.secondary">
+              {selectedUserId ? "Auto-filled from linked user" : "Manual entry"}
+            </Typography>
+          </Divider>
+
+          <Grid container spacing={2}>
             <Grid size={{ xs: 6 }}>
               <TextField
                 fullWidth
@@ -450,6 +563,17 @@ function LandStorageContent() {
             <Grid size={{ xs: 12 }}>
               <TextField
                 fullWidth
+                label="Email"
+                type="email"
+                value={editForm.email}
+                onChange={(e) =>
+                  setEditForm({ ...editForm, email: e.target.value })
+                }
+              />
+            </Grid>
+            <Grid size={{ xs: 12 }}>
+              <TextField
+                fullWidth
                 label="Comment"
                 value={editForm.comment}
                 onChange={(e) =>
@@ -460,6 +584,62 @@ function LandStorageContent() {
               />
             </Grid>
           </Grid>
+
+          {/* Map location picker */}
+          <Typography variant="subtitle2" sx={{ mt: 2, mb: 0.5, fontWeight: 700 }}>
+            <PlaceIcon sx={{ fontSize: 18, verticalAlign: "text-bottom", mr: 0.5 }} />
+            Location — click on the map to place
+          </Typography>
+          <Box sx={{ height: 300, border: '1px solid rgba(79,195,247,0.15)', borderRadius: 1, overflow: 'hidden', mb: 1 }}>
+            <APIProvider apiKey={process.env.NEXT_PUBLIC_GOOGLE_MAPS_KEY || ""}>
+              <GMap
+                defaultCenter={editLat && editLng ? { lat: editLat, lng: editLng } : HARBOR_CENTER}
+                defaultZoom={18}
+                mapId="edit-land-storage-map"
+                mapTypeId="satellite"
+                style={{ width: '100%', height: '100%' }}
+                gestureHandling="greedy"
+                disableDefaultUI
+                zoomControl
+                onClick={(e) => {
+                  const ll = e.detail?.latLng;
+                  if (ll) {
+                    setEditLat(ll.lat);
+                    setEditLng(ll.lng);
+                  }
+                }}
+              >
+                {editLat && editLng && (
+                  <AdvancedMarker position={{ lat: editLat, lng: editLng }} />
+                )}
+              </GMap>
+            </APIProvider>
+          </Box>
+          <Box sx={{ display: 'flex', gap: 2 }}>
+            <TextField
+              label="Latitude" type="number" size="small"
+              value={editLat ?? ""}
+              onChange={(e) => setEditLat(e.target.value ? Number(e.target.value) : undefined)}
+              slotProps={{ htmlInput: { step: 0.000001 } }}
+              sx={{ flex: 1 }}
+            />
+            <TextField
+              label="Longitude" type="number" size="small"
+              value={editLng ?? ""}
+              onChange={(e) => setEditLng(e.target.value ? Number(e.target.value) : undefined)}
+              slotProps={{ htmlInput: { step: 0.000001 } }}
+              sx={{ flex: 1 }}
+            />
+            {editLat && editLng && (
+              <Button
+                size="small"
+                color="error"
+                onClick={() => { setEditLat(undefined); setEditLng(undefined); }}
+              >
+                Clear
+              </Button>
+            )}
+          </Box>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2, justifyContent: "space-between" }}>
           <Box>

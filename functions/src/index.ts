@@ -202,3 +202,83 @@ export const onInterestCreated = onDocumentCreated(
     }
   }
 );
+
+
+/**
+ * Delete a user completely: both the Firebase Auth account and the
+ * Firestore users/{uid} document. Only Superadmin users may call this.
+ *
+ * POST /deleteUser
+ * Body: { "uid": "theUserIdToDelete" }
+ * Headers: Authorization: Bearer <firebase-id-token>
+ */
+export const deleteUser = onRequest(
+  { cors: true, region: "europe-west1" },
+  async (req, res) => {
+    if (req.method !== "POST") {
+      res.status(405).json({ error: "Method not allowed" });
+      return;
+    }
+
+    // Verify caller is authenticated
+    const authHeader = req.headers.authorization;
+    if (!authHeader?.startsWith("Bearer ")) {
+      res.status(401).json({ error: "Missing or invalid authorization header" });
+      return;
+    }
+
+    const token = authHeader.split("Bearer ")[1];
+    let callerUid: string;
+    try {
+      const decoded = await admin.auth().verifyIdToken(token);
+      callerUid = decoded.uid;
+    } catch {
+      res.status(401).json({ error: "Invalid auth token" });
+      return;
+    }
+
+    // Verify caller is Superadmin
+    const callerDoc = await admin.firestore().doc(`users/${callerUid}`).get();
+    const callerRole = callerDoc.data()?.role;
+    if (callerRole !== "Superadmin") {
+      res.status(403).json({ error: "Only Superadmin can delete users." });
+      return;
+    }
+
+    const { uid } = req.body;
+    if (!uid || typeof uid !== "string") {
+      res.status(400).json({ error: "Missing required field: uid" });
+      return;
+    }
+
+    // Prevent self-deletion
+    if (uid === callerUid) {
+      res.status(400).json({ error: "You cannot delete your own account." });
+      return;
+    }
+
+    const errors: string[] = [];
+
+    // Delete Firestore user document
+    try {
+      await admin.firestore().doc(`users/${uid}`).delete();
+    } catch (err) {
+      console.error(`Failed to delete Firestore doc users/${uid}:`, err);
+      errors.push("Failed to delete user profile.");
+    }
+
+    // Delete Firebase Auth account
+    try {
+      await admin.auth().deleteUser(uid);
+    } catch (err) {
+      console.error(`Failed to delete Auth user ${uid}:`, err);
+      errors.push("Failed to delete auth account.");
+    }
+
+    if (errors.length > 0) {
+      res.status(207).json({ success: false, errors });
+    } else {
+      res.status(200).json({ success: true });
+    }
+  }
+);

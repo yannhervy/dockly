@@ -10,7 +10,21 @@ export interface User {
   role: UserRole;
   isPublic: boolean; // Privacy setting for directory
   phone: string;
+  photoURL?: string; // Profile picture URL
+  internalComment?: string; // Internal note visible only to managers/superadmin
   createdAt: Timestamp;
+}
+
+// External message sent to a user (subcollection: users/{uid}/messages)
+export interface UserMessage {
+  id: string;
+  text: string;
+  authorId: string;
+  authorName: string;
+  sentAsSms: boolean;
+  read: boolean;
+  createdAt: Timestamp;
+  parentId?: string; // Reserved for future reply threading
 }
 
 // ─── Dock ─────────────────────────────────────────────────
@@ -70,6 +84,8 @@ export interface Berth extends Resource {
   lng?: number; // GPS longitude for map positioning
   price2025?: number;
   price2026?: number;
+  allowSecondHand?: boolean; // Allow tenant to sublet this berth
+  invoiceSecondHandTenantDirectly?: boolean; // Invoice the second-hand tenant directly (only relevant if allowSecondHand is true)
   occupantFirstName?: string;
   occupantLastName?: string;
   occupantPhone?: string;
@@ -103,10 +119,13 @@ export interface LandStorageEntry {
   firstName: string;
   lastName: string;
   phone: string;
+  email?: string; // Occupant email (for matching to registered users)
   comment: string;
   occupantId?: string; // FK to User (if the occupant is registered)
   paymentStatus: PaymentStatus;
   season?: LandStorageSeason;
+  lat?: number; // GPS latitude for map positioning
+  lng?: number; // GPS longitude for map positioning
   updatedAt?: Timestamp;
 }
 

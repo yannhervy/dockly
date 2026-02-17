@@ -32,6 +32,7 @@ interface AuthContextValue {
   loginWithGoogle: () => Promise<void>;
   logout: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
+  refreshProfile: () => Promise<void>;
   // Role helpers
   isSuperadmin: boolean;
   isDockManager: boolean;
@@ -94,14 +95,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await sendPasswordResetEmail(auth, email);
   };
 
+  // Re-fetch the user's Firestore profile (call after editing profile)
+  const refreshProfile = async () => {
+    if (!firebaseUser) return;
+    try {
+      const snap = await getDoc(doc(db, "users", firebaseUser.uid));
+      setProfile(snap.exists() ? ({ id: snap.id, ...snap.data() } as User) : null);
+    } catch (err) {
+      console.error("Error refreshing profile:", err);
+    }
+  };
+
   // Role helpers
   const hasRole = (role: UserRole) => profile?.role === role;
   const isSuperadmin = profile?.role === "Superadmin";
   const isDockManager = profile?.role === "Dock Manager";
   const isTenant = profile?.role === "Tenant";
 
-  // True when user is authenticated but has no Firestore profile yet
-  const needsSetup = !loading && !!firebaseUser && !profile;
+  // True when user is authenticated but has no Firestore profile yet,
+  // or has an incomplete profile (missing phone — not yet through /setup)
+  const needsSetup = !loading && !!firebaseUser && (!profile || !profile.phone);
 
   const value = useMemo<AuthContextValue>(
     () => ({
@@ -114,6 +127,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       loginWithGoogle,
       logout,
       resetPassword,
+      refreshProfile,
       isSuperadmin,
       isDockManager,
       isTenant,

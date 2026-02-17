@@ -1,6 +1,8 @@
 "use client";
 
-import { usePathname } from "next/navigation";
+import { useEffect } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { useAuth } from "@/context/AuthContext";
 import PublicLayout from "./PublicLayout";
 import AppShell from "./AppShell";
 
@@ -12,6 +14,15 @@ const BARE_PATHS = ["/login", "/setup", "/map"];
 
 export default function LayoutRouter({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
+  const { needsSetup, loading } = useAuth();
+
+  // Redirect to /setup when authenticated but missing Firestore profile
+  useEffect(() => {
+    if (!loading && needsSetup && pathname !== "/setup" && pathname !== "/login") {
+      router.replace("/setup");
+    }
+  }, [loading, needsSetup, pathname, router]);
 
   // Login / setup — no shell at all
   if (BARE_PATHS.includes(pathname)) {

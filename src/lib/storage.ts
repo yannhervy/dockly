@@ -94,3 +94,21 @@ export async function uploadDockImage(
   const downloadUrl = await getDownloadURL(snapshot.ref);
   return downloadUrl;
 }
+
+/**
+ * Upload a profile image to Firebase Storage and return the download URL.
+ * Images are resized to max 1200px and compressed as JPEG.
+ * Stored at `profile-images/{userId}/profile.jpg`.
+ */
+export async function uploadProfileImage(
+  file: File,
+  userId: string
+): Promise<string> {
+  const resizedBlob = await resizeImage(file);
+  const storageRef = ref(storage, `profile-images/${userId}/profile.jpg`);
+  const snapshot = await uploadBytes(storageRef, resizedBlob, {
+    contentType: "image/jpeg",
+  });
+  const downloadUrl = await getDownloadURL(snapshot.ref);
+  return downloadUrl;
+}

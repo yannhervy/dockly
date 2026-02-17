@@ -39,6 +39,7 @@ import Avatar from "@mui/material/Avatar";
 import CircularProgress from "@mui/material/CircularProgress";
 import FormControlLabel from "@mui/material/FormControlLabel";
 import Switch from "@mui/material/Switch";
+import Checkbox from "@mui/material/Checkbox";
 import Tooltip from "@mui/material/Tooltip";
 import DirectionsBoatIcon from "@mui/icons-material/DirectionsBoat";
 import AnchorIcon from "@mui/icons-material/Anchor";
@@ -76,6 +77,8 @@ export default function DirectoryPage() {
     comment: "",
     price2026: "",
     secret: false,
+    allowSecondHand: false,
+    invoiceSecondHandTenantDirectly: false,
   });
   const [saving, setSaving] = useState(false);
   const [successMsg, setSuccessMsg] = useState("");
@@ -154,6 +157,15 @@ export default function DirectoryPage() {
     return false;
   };
 
+  // Can the current user see prices? Superadmin always, dock manager only on own docks
+  const canSeePrices = (): boolean => {
+    if (isSuperadmin) return true;
+    if (isDockManager && selectedDock && firebaseUser) {
+      return (selectedDock.managerIds || []).includes(firebaseUser.uid);
+    }
+    return false;
+  };
+
   // Fetch berths for selected dock
   useEffect(() => {
     if (!selectedDock) return;
@@ -212,6 +224,8 @@ export default function DirectoryPage() {
       comment: berth.comment || "",
       price2026: String(berth.price2026 || ""),
       secret: berth.secret || false,
+      allowSecondHand: berth.allowSecondHand || false,
+      invoiceSecondHandTenantDirectly: berth.invoiceSecondHandTenantDirectly || false,
     });
   };
 
@@ -231,6 +245,8 @@ export default function DirectoryPage() {
         comment: editForm.comment,
         price2026: editForm.price2026 ? parseInt(editForm.price2026) : null,
         secret: editForm.secret,
+        allowSecondHand: editForm.allowSecondHand,
+        invoiceSecondHandTenantDirectly: editForm.allowSecondHand ? editForm.invoiceSecondHandTenantDirectly : false,
         status: isOccupied ? "Occupied" : "Available",
       });
       setBerths((prev) =>
@@ -249,6 +265,8 @@ export default function DirectoryPage() {
                   ? parseInt(editForm.price2026)
                   : undefined,
                 secret: editForm.secret,
+                allowSecondHand: editForm.allowSecondHand,
+                invoiceSecondHandTenantDirectly: editForm.allowSecondHand ? editForm.invoiceSecondHandTenantDirectly : false,
                 status: isOccupied ? "Occupied" : "Available",
               }
             : b
@@ -554,7 +572,7 @@ export default function DirectoryPage() {
                 {canSeePersonalInfo(berths[0] || {}) && (
                   <TableCell>Phone</TableCell>
                 )}
-                {isManager && <TableCell>Price 2026</TableCell>}
+                {canSeePrices() && <TableCell>Price 2026</TableCell>}
                 {isManager && <TableCell>Comment</TableCell>}
                 <TableCell>Image</TableCell>
                 {isManager && <TableCell align="right">Actions</TableCell>}
@@ -626,7 +644,7 @@ export default function DirectoryPage() {
                           : "—"}
                       </TableCell>
                     )}
-                    {isManager && (
+                    {canSeePrices() && (
                       <TableCell>
                         {b.price2026 ? `${b.price2026} kr` : "—"}
                       </TableCell>
@@ -825,6 +843,46 @@ export default function DirectoryPage() {
                 onChange={(e) =>
                   setEditForm({ ...editForm, comment: e.target.value })
                 }
+              />
+            </Grid>
+            <Grid size={{ xs: 6 }}>
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={editForm.allowSecondHand}
+                    onChange={(e) =>
+                      setEditForm({
+                        ...editForm,
+                        allowSecondHand: e.target.checked,
+                        // Reset sub-option when disabling
+                        invoiceSecondHandTenantDirectly: e.target.checked
+                          ? editForm.invoiceSecondHandTenantDirectly
+                          : false,
+                      })
+                    }
+                  />
+                }
+                label="Allow Second-Hand Subletting"
+              />
+            </Grid>
+            <Grid size={{ xs: 6 }}>
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={editForm.invoiceSecondHandTenantDirectly}
+                    onChange={(e) =>
+                      setEditForm({
+                        ...editForm,
+                        invoiceSecondHandTenantDirectly: e.target.checked,
+                      })
+                    }
+                    disabled={!editForm.allowSecondHand}
+                  />
+                }
+                label="Invoice 2nd-hand tenant directly"
+                sx={{
+                  opacity: editForm.allowSecondHand ? 1 : 0.4,
+                }}
               />
             </Grid>
           </Grid>
