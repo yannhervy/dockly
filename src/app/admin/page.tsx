@@ -21,7 +21,7 @@ import {
   deleteField,
 } from "firebase/firestore";
 import ProtectedRoute from "@/components/ProtectedRoute";
-import { uploadDockImage } from "@/lib/storage";
+import { uploadDockImage, uploadBoatImage } from "@/lib/storage";
 import Checkbox from "@mui/material/Checkbox";
 import Divider from "@mui/material/Divider";
 import { computeRectCorners, computeBoatHull, HARBOR_CENTER } from "@/lib/mapUtils";
@@ -1508,6 +1508,9 @@ function ResourcesTab() {
   const [successMsg, setSuccessMsg] = useState("");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [editResource, setEditResource] = useState<Record<string, any> | null>(null);
+  const [editImageFile, setEditImageFile] = useState<File | null>(null);
+  const [editImagePreview, setEditImagePreview] = useState<string | null>(null);
+  const [removeImage, setRemoveImage] = useState(false);
   const [movedBerths, setMovedBerths] = useState<Record<string, { lat: number; lng: number }>>({});
   const [searchQuery, setSearchQuery] = useState("");
   const [filterType, setFilterType] = useState<"all" | Resource["type"]>("all");
@@ -1617,6 +1620,9 @@ function ResourcesTab() {
   const openEditDialog = (r: Resource) => {
     setEditResource(r as Berth);
     setMovedBerths({});
+    setEditImageFile(null);
+    setEditImagePreview(r.objectImageUrl || null);
+    setRemoveImage(false);
   };
 
   const handleSaveEdit = async () => {
@@ -1624,6 +1630,14 @@ function ResourcesTab() {
     try {
       // Save current resource — convert undefined to deleteField for Firestore
       const { id, ...data } = editResource;
+
+      // Upload image if a new file was selected
+      if (editImageFile) {
+        data.objectImageUrl = await uploadBoatImage(editImageFile, id);
+      } else if (removeImage) {
+        data.objectImageUrl = "";
+      }
+
       const cleanData: Record<string, unknown> = {};
       for (const [key, value] of Object.entries(data)) {
         cleanData[key] = value === undefined ? deleteField() : value;
@@ -2132,6 +2146,59 @@ function ResourcesTab() {
                   value={editResource.price2026 ?? ""}
                   onChange={(e) => setEditResource({ ...editResource, price2026: e.target.value ? Number(e.target.value) : undefined })}
                 />
+              </Grid>
+
+              {/* Image upload section */}
+              <Grid size={12}>
+                <Typography variant="subtitle2" sx={{ mt: 1, mb: 0.5, fontWeight: 700 }}>Photo</Typography>
+                {editImagePreview && !removeImage ? (
+                  <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 2 }}>
+                    <Box
+                      component="img"
+                      src={editImagePreview}
+                      alt="Resource"
+                      sx={{ width: 180, height: 120, objectFit: 'cover', borderRadius: 1, border: '1px solid rgba(79,195,247,0.2)' }}
+                    />
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                      <Button size="small" variant="outlined" component="label">
+                        Change
+                        <input
+                          type="file"
+                          hidden
+                          accept="image/*"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) {
+                              setEditImageFile(file);
+                              setEditImagePreview(URL.createObjectURL(file));
+                              setRemoveImage(false);
+                            }
+                          }}
+                        />
+                      </Button>
+                      <Button size="small" color="error" onClick={() => { setRemoveImage(true); setEditImageFile(null); }}>
+                        Remove
+                      </Button>
+                    </Box>
+                  </Box>
+                ) : (
+                  <Button size="small" variant="outlined" component="label">
+                    Upload photo
+                    <input
+                      type="file"
+                      hidden
+                      accept="image/*"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          setEditImageFile(file);
+                          setEditImagePreview(URL.createObjectURL(file));
+                          setRemoveImage(false);
+                        }
+                      }}
+                    />
+                  </Button>
+                )}
               </Grid>
             </Grid>
           </DialogContent>
