@@ -23,7 +23,7 @@ import ProtectedRoute from "@/components/ProtectedRoute";
 import { uploadDockImage } from "@/lib/storage";
 import Checkbox from "@mui/material/Checkbox";
 import Divider from "@mui/material/Divider";
-import { computeRectCorners, HARBOR_CENTER } from "@/lib/mapUtils";
+import { computeRectCorners, computeBoatHull, HARBOR_CENTER } from "@/lib/mapUtils";
 import { APIProvider, Map as GMap, useMap, useMapsLibrary } from "@vis.gl/react-google-maps";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
@@ -1292,7 +1292,7 @@ function DockMapOverlay({ editDock, allDocks, allBerths, onMoveDock }: {
     // Draw all berths (static, context only)
     allBerths.forEach((b) => {
       if (!b.lat || !b.lng) return;
-      const corners = computeRectCorners(b.lat, b.lng, b.maxWidth || 2, b.maxLength || 5, b.heading || 0);
+      const corners = computeBoatHull(b.lat, b.lng, b.maxWidth || 2, b.maxLength || 5, b.heading || 0);
       const polygon = new google.maps.Polygon({
         paths: corners,
         strokeColor: "#4FC3F7",
@@ -1356,7 +1356,7 @@ function EditBerthPolygon({ lat, lng, width, length, heading, label, onMove, onM
       const bw = b.maxWidth || 2;
       const bl = b.maxLength || 5;
       const bh = b.heading || 0;
-      const corners = computeRectCorners(b.lat, b.lng, bw, bl, bh);
+      const corners = computeBoatHull(b.lat, b.lng, bw, bl, bh);
 
       const polygon = new google.maps.Polygon({
         paths: corners,
@@ -1395,7 +1395,7 @@ function EditBerthPolygon({ lat, lng, width, length, heading, label, onMove, onM
 
     // Draw CURRENT berth (draggable, cyan)
     if (lat && lng) {
-      const corners = computeRectCorners(lat, lng, width, length, heading);
+      const corners = computeBoatHull(lat, lng, width, length, heading);
       const polygon = new google.maps.Polygon({
         paths: corners,
         strokeColor: "#00E5FF",

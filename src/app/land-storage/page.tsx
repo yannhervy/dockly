@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useState, useMemo } from "react";
+import useMediaQuery from "@mui/material/useMediaQuery";
 import { useAuth } from "@/context/AuthContext";
 import { db } from "@/lib/firebase";
 import { LandStorageEntry, User } from "@/lib/types";
@@ -53,6 +54,7 @@ import ToggleButtonGroup from "@mui/material/ToggleButtonGroup";
 import { APIProvider, Map as GMap, AdvancedMarker } from "@vis.gl/react-google-maps";
 import { HARBOR_CENTER } from "@/lib/mapUtils";
 import PlaceIcon from "@mui/icons-material/Place";
+import MyLocationIcon from "@mui/icons-material/MyLocation";
 
 export default function LandStoragePage() {
   return (
@@ -67,6 +69,7 @@ type FilterStatus = "all" | "Available" | "Occupied";
 function LandStorageContent() {
   const { isSuperadmin, isDockManager } = useAuth();
   const canEdit = isSuperadmin || isDockManager;
+  const isTouchDevice = useMediaQuery("(pointer: coarse)");
 
   const [entries, setEntries] = useState<LandStorageEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -586,10 +589,31 @@ function LandStorageContent() {
           </Grid>
 
           {/* Map location picker */}
-          <Typography variant="subtitle2" sx={{ mt: 2, mb: 0.5, fontWeight: 700 }}>
-            <PlaceIcon sx={{ fontSize: 18, verticalAlign: "text-bottom", mr: 0.5 }} />
-            Location — click on the map to place
-          </Typography>
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mt: 2, mb: 0.5 }}>
+            <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+              <PlaceIcon sx={{ fontSize: 18, verticalAlign: "text-bottom", mr: 0.5 }} />
+              Location — click on the map to place
+            </Typography>
+            {isTouchDevice && (
+              <Button
+                size="small"
+                startIcon={<MyLocationIcon />}
+                onClick={() => {
+                  if (!navigator.geolocation) return;
+                  navigator.geolocation.getCurrentPosition(
+                    (pos) => {
+                      setEditLat(pos.coords.latitude);
+                      setEditLng(pos.coords.longitude);
+                    },
+                    (err) => console.error("GPS error:", err),
+                    { enableHighAccuracy: true }
+                  );
+                }}
+              >
+                Use my GPS
+              </Button>
+            )}
+          </Box>
           <Box sx={{ height: 300, border: '1px solid rgba(79,195,247,0.15)', borderRadius: 1, overflow: 'hidden', mb: 1 }}>
             <APIProvider apiKey={process.env.NEXT_PUBLIC_GOOGLE_MAPS_KEY || ""}>
               <GMap

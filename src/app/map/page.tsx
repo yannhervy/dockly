@@ -20,7 +20,7 @@ import {
   useMap,
   useMapsLibrary,
 } from "@vis.gl/react-google-maps";
-import { computeRectCorners, HARBOR_CENTER } from "@/lib/mapUtils";
+import { computeRectCorners, computeBoatHull, HARBOR_CENTER } from "@/lib/mapUtils";
 import ProtectedRoute from "@/components/ProtectedRoute";
 
 const DEFAULT_ZOOM = 18;
@@ -67,7 +67,7 @@ function BerthPolygons({
       const l = berth.maxLength || 10;
       const h = berth.heading || 0;
 
-      const corners = computeRectCorners(berth.lat, berth.lng, w, l, h);
+      const corners = computeBoatHull(berth.lat, berth.lng, w, l, h);
       const color = getBerthColor(berth);
       const isMine = !!(currentUid && berth.occupantIds?.includes(currentUid));
 
@@ -206,74 +206,64 @@ function DockPolygons({ docks }: { docks: Dock[] }) {
   return null;
 }
 
-// Component that draws SeaHuts and Boxes as polygons with labels
-function ResourcePolygons({ resources, currentUid }: { resources: Resource[]; currentUid?: string }) {
+// Component that draws SeaHuts and Boxes as circle markers (like land storage)
+function ResourceMarkers({ resources, currentUid }: { resources: Resource[]; currentUid?: string }) {
   const map = useMap();
-  const coreLib = useMapsLibrary("core");
   const markerLib = useMapsLibrary("marker");
 
   useEffect(() => {
-    if (!map || !coreLib || !markerLib) return;
+    if (!map || !markerLib) return;
 
     const cleanups: (() => void)[] = [];
 
-    // Use same status-based coloring as berths
-    const getColor = (res: Resource): string => {
-      if (res.status === "Available") return "#4CAF50"; // green
-      if (res.occupantIds && res.occupantIds.length > 0) return "#F44336"; // red
-      return "#FFC107"; // yellow — occupied but no registered tenant
+    const getColor = (res: Resource) => {
+      if (res.status === "Available") return { bg: "#4CAF50", border: "#388E3C" };
+      if (res.occupantIds && res.occupantIds.length > 0) return { bg: "#F44336", border: "#C62828" };
+      return { bg: "#FFC107", border: "#F9A825" };
     };
 
     resources.forEach((res) => {
       if (!res.lat || !res.lng) return;
 
-      const w = res.maxWidth || 2;
-      const l = res.maxLength || 3;
-      const h = res.heading || 0;
-      const color = getColor(res);
       const isMine = !!(currentUid && res.occupantIds?.includes(currentUid));
+      const colors = getColor(res);
 
-      const corners = computeRectCorners(res.lat, res.lng, w, l, h);
-
-      const polygon = new google.maps.Polygon({
-        paths: corners,
-        strokeColor: isMine ? "#00E5FF" : color,
-        strokeOpacity: 0.9,
-        strokeWeight: isMine ? 4 : 2,
-        fillColor: isMine ? "#00E5FF" : color,
-        fillOpacity: isMine ? 0.5 : 0.35,
-        map,
-        zIndex: isMine ? 10 : 0,
-      });
-
-      const labelEl = document.createElement("div");
-      labelEl.textContent = res.markingCode;
-      labelEl.style.cssText = `
-        font-size: 10px;
-        font-weight: 700;
-        color: #fff;
-        background: rgba(0,0,0,0.55);
-        padding: 1px 3px;
-        border-radius: 2px;
-        white-space: nowrap;
-        pointer-events: none;
-        text-shadow: 0 1px 2px rgba(0,0,0,0.9);
+      const el = document.createElement("div");
+      el.innerHTML = `<span>${res.markingCode}</span>`;
+      el.style.cssText = `
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        background: ${isMine ? "#00E5FF" : colors.bg};
+        border: 2px solid ${isMine ? "#00B8D4" : colors.border};
+        color: ${isMine ? "#000" : "#fff"};
+        font-size: 7px;
+        font-weight: 800;
+        cursor: pointer;
+        box-shadow: ${isMine ? "0 0 10px 3px rgba(0,229,255,0.6)" : "0 2px 6px rgba(0,0,0,0.5)"};
+        text-shadow: ${isMine ? "none" : "0 1px 2px rgba(0,0,0,0.6)"};
+        transition: transform 0.15s;
       `;
-      const labelMarker = new google.maps.marker.AdvancedMarkerElement({
+      el.addEventListener("mouseenter", () => { el.style.transform = "scale(1.3)"; });
+      el.addEventListener("mouseleave", () => { el.style.transform = "scale(1)"; });
+
+      const typeLabel = res.type === "SeaHut" ? "Sjöbod" : "Låda";
+      const marker = new google.maps.marker.AdvancedMarkerElement({
         position: { lat: res.lat, lng: res.lng },
         map,
-        content: labelEl,
-        zIndex: 1,
+        content: el,
+        title: `${res.markingCode} (${typeLabel})`,
+        zIndex: isMine ? 10 : 1,
       });
 
-      cleanups.push(() => {
-        polygon.setMap(null);
-        labelMarker.map = null;
-      });
+      cleanups.push(() => { marker.map = null; });
     });
 
     return () => { cleanups.forEach((fn) => fn()); };
-  }, [map, coreLib, markerLib, resources, currentUid]);
+  }, [map, markerLib, resources, currentUid]);
 
   return null;
 }
@@ -473,7 +463,7 @@ export default function MapPage() {
                 currentUid={currentUid}
               />
               <DockPolygons docks={docks} />
-              <ResourcePolygons resources={otherResources} currentUid={currentUid} />
+              <ResourceMarkers resources={otherResources} currentUid={currentUid} />
               <LandStorageMarkers entries={landEntries} currentUid={currentUid} />
             </Map>
           </APIProvider>
