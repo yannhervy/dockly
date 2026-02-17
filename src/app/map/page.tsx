@@ -211,9 +211,11 @@ function ResourcePolygons({ resources }: { resources: Resource[] }) {
 
     const cleanups: (() => void)[] = [];
 
-    const colorMap: Record<string, { stroke: string; fill: string; label: string }> = {
-      SeaHut: { stroke: "#66BB6A", fill: "#43A047", label: "#A5D6A7" },
-      Box:    { stroke: "#FFA726", fill: "#FB8C00", label: "#FFE0B2" },
+    // Use same status-based coloring as berths
+    const getColor = (res: Resource): string => {
+      if (res.status === "Available") return "#4CAF50"; // green
+      if (res.occupantIds && res.occupantIds.length > 0) return "#F44336"; // red
+      return "#FFC107"; // yellow — occupied but no registered tenant
     };
 
     resources.forEach((res) => {
@@ -222,17 +224,17 @@ function ResourcePolygons({ resources }: { resources: Resource[] }) {
       const w = res.maxWidth || 2;
       const l = res.maxLength || 3;
       const h = res.heading || 0;
-      const colors = colorMap[res.type] || colorMap.Box;
+      const color = getColor(res);
 
       const corners = computeRectCorners(res.lat, res.lng, w, l, h);
 
       const polygon = new google.maps.Polygon({
         paths: corners,
-        strokeColor: colors.stroke,
+        strokeColor: color,
         strokeOpacity: 0.9,
         strokeWeight: 2,
-        fillColor: colors.fill,
-        fillOpacity: 0.25,
+        fillColor: color,
+        fillOpacity: 0.35,
         map,
         zIndex: 0,
       });
@@ -242,7 +244,7 @@ function ResourcePolygons({ resources }: { resources: Resource[] }) {
       labelEl.style.cssText = `
         font-size: 10px;
         font-weight: 700;
-        color: ${colors.label};
+        color: #fff;
         background: rgba(0,0,0,0.55);
         padding: 1px 3px;
         border-radius: 2px;
