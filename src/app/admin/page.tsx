@@ -1926,53 +1926,14 @@ function ResourcesTab() {
           <DialogTitle>Edit Resource — {editResource.markingCode}</DialogTitle>
           <DialogContent>
             <Grid container spacing={2} sx={{ mt: 0.5 }}>
+
+              {/* ── Section 1: Identity ── */}
               <Grid size={{ xs: 6, md: 3 }}>
                 <TextField
                   fullWidth label="Marking Code" value={editResource.markingCode}
                   onChange={(e) => setEditResource({ ...editResource, markingCode: e.target.value })}
                 />
               </Grid>
-              {editResource.type === "Berth" && (
-                <Grid size={{ xs: 6, md: 3 }}>
-                  <TextField
-                    fullWidth label="Sort Order" type="number"
-                    value={editResource.sortOrder ?? ""}
-                    onChange={(e) => setEditResource({ ...editResource, sortOrder: e.target.value ? Number(e.target.value) : undefined })}
-                  />
-                </Grid>
-              )}
-              {editResource.type === "Berth" && (
-                <Grid size={{ xs: 6, md: 3 }}>
-                  <FormControl fullWidth>
-                    <InputLabel>Direction</InputLabel>
-                    <Select
-                      value={editResource.direction || ""}
-                      label="Direction"
-                      onChange={(e: SelectChangeEvent) => setEditResource({ ...editResource, direction: (e.target.value || undefined) as Berth["direction"] })}
-                    >
-                      <MenuItem value=""><em>Not set</em></MenuItem>
-                      <MenuItem value="inside">Inside (sheltered)</MenuItem>
-                      <MenuItem value="outside">Outside (exposed)</MenuItem>
-                    </Select>
-                  </FormControl>
-                </Grid>
-              )}
-              {editResource.type === "Berth" && (
-                <Grid size={{ xs: 6, md: 3 }}>
-                  <FormControl fullWidth>
-                    <InputLabel>Dock</InputLabel>
-                    <Select
-                      value={editResource.dockId || ""}
-                      label="Dock"
-                      onChange={(e: SelectChangeEvent) => setEditResource({ ...editResource, dockId: e.target.value })}
-                    >
-                      {docks.map((d) => (
-                        <MenuItem key={d.id} value={d.id}>{d.name}</MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
-                </Grid>
-              )}
               {editResource.type === "SeaHut" && (
                 <Grid size={{ xs: 6, md: 3 }}>
                   <FormControl fullWidth>
@@ -1988,63 +1949,105 @@ function ResourcesTab() {
                   </FormControl>
                 </Grid>
               )}
-
-              {/* Occupant fields for SeaHut and Box */}
-              {(editResource.type === "SeaHut" || editResource.type === "Box") && (
+              {editResource.type === "Berth" && (
                 <>
                   <Grid size={{ xs: 6, md: 3 }}>
                     <TextField
+                      fullWidth label="Sort Order" type="number"
+                      value={editResource.sortOrder ?? ""}
+                      onChange={(e) => setEditResource({ ...editResource, sortOrder: e.target.value ? Number(e.target.value) : undefined })}
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 6, md: 3 }}>
+                    <FormControl fullWidth>
+                      <InputLabel>Direction</InputLabel>
+                      <Select
+                        value={editResource.direction || ""}
+                        label="Direction"
+                        onChange={(e: SelectChangeEvent) => setEditResource({ ...editResource, direction: (e.target.value || undefined) as Berth["direction"] })}
+                      >
+                        <MenuItem value=""><em>Not set</em></MenuItem>
+                        <MenuItem value="inside">Inside (sheltered)</MenuItem>
+                        <MenuItem value="outside">Outside (exposed)</MenuItem>
+                      </Select>
+                    </FormControl>
+                  </Grid>
+                  <Grid size={{ xs: 6, md: 3 }}>
+                    <FormControl fullWidth>
+                      <InputLabel>Dock</InputLabel>
+                      <Select
+                        value={editResource.dockId || ""}
+                        label="Dock"
+                        onChange={(e: SelectChangeEvent) => setEditResource({ ...editResource, dockId: e.target.value })}
+                      >
+                        {docks.map((d) => (
+                          <MenuItem key={d.id} value={d.id}>{d.name}</MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
+                  </Grid>
+                </>
+              )}
+
+              {/* ── Section 2: Occupant (SeaHut & Box) ── */}
+              {(editResource.type === "SeaHut" || editResource.type === "Box") && (
+                <>
+                  <Grid size={12}><Divider sx={{ borderColor: 'rgba(79,195,247,0.15)' }} /></Grid>
+                  <Grid size={{ xs: 6, md: 3 }}>
+                    <TextField
                       fullWidth label="First Name"
-                      value={(editResource as SeaHut).occupantFirstName ?? ""}
+                      value={editResource.occupantFirstName ?? ""}
                       onChange={(e) => setEditResource({ ...editResource, occupantFirstName: e.target.value })}
                     />
                   </Grid>
                   <Grid size={{ xs: 6, md: 3 }}>
                     <TextField
                       fullWidth label="Last Name"
-                      value={(editResource as SeaHut).occupantLastName ?? ""}
+                      value={editResource.occupantLastName ?? ""}
                       onChange={(e) => setEditResource({ ...editResource, occupantLastName: e.target.value })}
                     />
                   </Grid>
                   <Grid size={{ xs: 6, md: 3 }}>
                     <TextField
                       fullWidth label="Phone"
-                      value={(editResource as SeaHut).occupantPhone ?? ""}
+                      value={editResource.occupantPhone ?? ""}
                       onChange={(e) => setEditResource({ ...editResource, occupantPhone: e.target.value })}
                     />
                   </Grid>
                   <Grid size={{ xs: 6, md: 3 }}>
                     <TextField
                       fullWidth label="Email" type="email"
-                      value={(editResource as SeaHut).occupantEmail ?? ""}
+                      value={editResource.occupantEmail ?? ""}
                       onChange={(e) => setEditResource({ ...editResource, occupantEmail: e.target.value })}
                     />
                   </Grid>
-                  <Grid size={{ xs: 6, md: 4 }}>
+                  <Grid size={{ xs: 6 }}>
                     <TextField
                       fullWidth label="Address"
-                      value={(editResource as SeaHut).occupantAddress ?? ""}
+                      value={editResource.occupantAddress ?? ""}
                       onChange={(e) => setEditResource({ ...editResource, occupantAddress: e.target.value })}
                     />
                   </Grid>
-                  <Grid size={{ xs: 6, md: 4 }}>
+                  <Grid size={{ xs: 6 }}>
                     <TextField
                       fullWidth label="Postal Address"
-                      value={(editResource as SeaHut).occupantPostalAddress ?? ""}
+                      value={editResource.occupantPostalAddress ?? ""}
                       onChange={(e) => setEditResource({ ...editResource, occupantPostalAddress: e.target.value })}
                     />
                   </Grid>
-                  <Grid size={{ xs: 12, md: 4 }}>
+                  <Grid size={12}>
                     <TextField
-                      fullWidth label="Comment"
-                      value={(editResource as SeaHut).comment ?? ""}
+                      fullWidth label="Comment" multiline minRows={1}
+                      value={editResource.comment ?? ""}
                       onChange={(e) => setEditResource({ ...editResource, comment: e.target.value })}
                     />
                   </Grid>
                 </>
               )}
 
-              <Grid size={{ xs: 6, md: 3 }}>
+              {/* ── Section 3: Dimensions ── */}
+              <Grid size={12}><Divider sx={{ borderColor: 'rgba(79,195,247,0.15)' }} /></Grid>
+              <Grid size={{ xs: 4, md: 2 }}>
                 <TextField
                   fullWidth label={editResource.type === "Berth" ? "Max Width (m)" : "Width (m)"} type="number"
                   value={editResource.maxWidth ?? ""}
@@ -2052,7 +2055,7 @@ function ResourcesTab() {
                   slotProps={{ htmlInput: { step: 0.1 } }}
                 />
               </Grid>
-              <Grid size={{ xs: 6, md: 3 }}>
+              <Grid size={{ xs: 4, md: 2 }}>
                 <TextField
                   fullWidth label={editResource.type === "Berth" ? "Max Length (m)" : "Length (m)"} type="number"
                   value={editResource.maxLength ?? ""}
@@ -2060,16 +2063,17 @@ function ResourcesTab() {
                   slotProps={{ htmlInput: { step: 0.1 } }}
                 />
               </Grid>
-              <Grid size={{ xs: 6, md: 3 }}>
+              <Grid size={{ xs: 4, md: 2 }}>
                 <TextField
                   fullWidth label="Heading (°)" type="number"
                   value={editResource.heading ?? ""}
                   onChange={(e) => setEditResource({ ...editResource, heading: e.target.value ? Number(e.target.value) : undefined })}
                   slotProps={{ htmlInput: { step: 1, min: 0, max: 360 } }}
-                  helperText="0=North, 90=East"
+                  helperText="0=N, 90=E"
                 />
               </Grid>
 
+              {/* ── Section 4: Position / Map ── */}
               <Grid size={12}>
                 <Typography variant="subtitle2" sx={{ mt: 1, mb: 0.5, fontWeight: 700 }}>
                   Position — click on the map to position the object
@@ -2133,6 +2137,8 @@ function ResourcesTab() {
                 </Box>
               </Grid>
 
+              {/* ── Section 5: Pricing ── */}
+              <Grid size={12}><Divider sx={{ borderColor: 'rgba(79,195,247,0.15)' }} /></Grid>
               <Grid size={{ xs: 6, md: 3 }}>
                 <TextField
                   fullWidth label="Price 2025" type="number"
@@ -2148,9 +2154,10 @@ function ResourcesTab() {
                 />
               </Grid>
 
-              {/* Image upload section */}
+              {/* ── Section 6: Photo ── */}
+              <Grid size={12}><Divider sx={{ borderColor: 'rgba(79,195,247,0.15)' }} /></Grid>
               <Grid size={12}>
-                <Typography variant="subtitle2" sx={{ mt: 1, mb: 0.5, fontWeight: 700 }}>Photo</Typography>
+                <Typography variant="subtitle2" sx={{ mb: 0.5, fontWeight: 700 }}>Photo</Typography>
                 {editImagePreview && !removeImage ? (
                   <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 2 }}>
                     <Box
