@@ -3,7 +3,7 @@
 import React, { useEffect, useState, useRef } from "react";
 import { db } from "@/lib/firebase";
 import { useAuth } from "@/context/AuthContext";
-import { User, Dock, Resource, BerthInterest, InterestReply, Berth, LandStorageEntry, UserMessage } from "@/lib/types";
+import { User, Dock, Resource, BerthInterest, InterestReply, Berth, SeaHut, LandStorageEntry, UserMessage } from "@/lib/types";
 import { normalizePhone } from "@/lib/phoneUtils";
 import { sendSms } from "@/lib/sms";
 import {
@@ -1506,7 +1506,8 @@ function ResourcesTab() {
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [successMsg, setSuccessMsg] = useState("");
-  const [editResource, setEditResource] = useState<Berth | null>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [editResource, setEditResource] = useState<Record<string, any> | null>(null);
   const [movedBerths, setMovedBerths] = useState<Record<string, { lat: number; lng: number }>>({});
   const [searchQuery, setSearchQuery] = useState("");
   const [filterType, setFilterType] = useState<"all" | Resource["type"]>("all");
@@ -1640,7 +1641,7 @@ function ResourcesTab() {
       // Update local state
       setResources((prev) =>
         prev.map((r) => {
-          if (r.id === id) return editResource;
+          if (r.id === id) return editResource as Resource;
           const moved = movedBerths[r.id];
           if (moved) return { ...r, lat: moved.lat, lng: moved.lng } as Resource;
           return r;
@@ -1917,45 +1918,121 @@ function ResourcesTab() {
                   onChange={(e) => setEditResource({ ...editResource, markingCode: e.target.value })}
                 />
               </Grid>
-              <Grid size={{ xs: 6, md: 3 }}>
-                <TextField
-                  fullWidth label="Sort Order" type="number"
-                  value={editResource.sortOrder ?? ""}
-                  onChange={(e) => setEditResource({ ...editResource, sortOrder: e.target.value ? Number(e.target.value) : undefined })}
-                />
-              </Grid>
-              <Grid size={{ xs: 6, md: 3 }}>
-                <FormControl fullWidth>
-                  <InputLabel>Direction</InputLabel>
-                  <Select
-                    value={editResource.direction || ""}
-                    label="Direction"
-                    onChange={(e: SelectChangeEvent) => setEditResource({ ...editResource, direction: (e.target.value || undefined) as Berth["direction"] })}
-                  >
-                    <MenuItem value=""><em>Not set</em></MenuItem>
-                    <MenuItem value="inside">Inside (sheltered)</MenuItem>
-                    <MenuItem value="outside">Outside (exposed)</MenuItem>
-                  </Select>
-                </FormControl>
-              </Grid>
-              <Grid size={{ xs: 6, md: 3 }}>
-                <FormControl fullWidth>
-                  <InputLabel>Dock</InputLabel>
-                  <Select
-                    value={editResource.dockId || ""}
-                    label="Dock"
-                    onChange={(e: SelectChangeEvent) => setEditResource({ ...editResource, dockId: e.target.value })}
-                  >
-                    {docks.map((d) => (
-                      <MenuItem key={d.id} value={d.id}>{d.name}</MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-              </Grid>
+              {editResource.type === "Berth" && (
+                <Grid size={{ xs: 6, md: 3 }}>
+                  <TextField
+                    fullWidth label="Sort Order" type="number"
+                    value={editResource.sortOrder ?? ""}
+                    onChange={(e) => setEditResource({ ...editResource, sortOrder: e.target.value ? Number(e.target.value) : undefined })}
+                  />
+                </Grid>
+              )}
+              {editResource.type === "Berth" && (
+                <Grid size={{ xs: 6, md: 3 }}>
+                  <FormControl fullWidth>
+                    <InputLabel>Direction</InputLabel>
+                    <Select
+                      value={editResource.direction || ""}
+                      label="Direction"
+                      onChange={(e: SelectChangeEvent) => setEditResource({ ...editResource, direction: (e.target.value || undefined) as Berth["direction"] })}
+                    >
+                      <MenuItem value=""><em>Not set</em></MenuItem>
+                      <MenuItem value="inside">Inside (sheltered)</MenuItem>
+                      <MenuItem value="outside">Outside (exposed)</MenuItem>
+                    </Select>
+                  </FormControl>
+                </Grid>
+              )}
+              {editResource.type === "Berth" && (
+                <Grid size={{ xs: 6, md: 3 }}>
+                  <FormControl fullWidth>
+                    <InputLabel>Dock</InputLabel>
+                    <Select
+                      value={editResource.dockId || ""}
+                      label="Dock"
+                      onChange={(e: SelectChangeEvent) => setEditResource({ ...editResource, dockId: e.target.value })}
+                    >
+                      {docks.map((d) => (
+                        <MenuItem key={d.id} value={d.id}>{d.name}</MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                </Grid>
+              )}
+              {editResource.type === "SeaHut" && (
+                <Grid size={{ xs: 6, md: 3 }}>
+                  <FormControl fullWidth>
+                    <InputLabel>Size</InputLabel>
+                    <Select
+                      value={(editResource as SeaHut).size || ""}
+                      label="Size"
+                      onChange={(e: SelectChangeEvent) => setEditResource({ ...editResource, size: e.target.value as SeaHut["size"] })}
+                    >
+                      <MenuItem value="Large">Large (Stor)</MenuItem>
+                      <MenuItem value="Small">Small (Liten)</MenuItem>
+                    </Select>
+                  </FormControl>
+                </Grid>
+              )}
+
+              {/* Occupant fields for SeaHut and Box */}
+              {(editResource.type === "SeaHut" || editResource.type === "Box") && (
+                <>
+                  <Grid size={{ xs: 6, md: 3 }}>
+                    <TextField
+                      fullWidth label="First Name"
+                      value={(editResource as SeaHut).occupantFirstName ?? ""}
+                      onChange={(e) => setEditResource({ ...editResource, occupantFirstName: e.target.value })}
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 6, md: 3 }}>
+                    <TextField
+                      fullWidth label="Last Name"
+                      value={(editResource as SeaHut).occupantLastName ?? ""}
+                      onChange={(e) => setEditResource({ ...editResource, occupantLastName: e.target.value })}
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 6, md: 3 }}>
+                    <TextField
+                      fullWidth label="Phone"
+                      value={(editResource as SeaHut).occupantPhone ?? ""}
+                      onChange={(e) => setEditResource({ ...editResource, occupantPhone: e.target.value })}
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 6, md: 3 }}>
+                    <TextField
+                      fullWidth label="Email" type="email"
+                      value={(editResource as SeaHut).occupantEmail ?? ""}
+                      onChange={(e) => setEditResource({ ...editResource, occupantEmail: e.target.value })}
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 6, md: 4 }}>
+                    <TextField
+                      fullWidth label="Address"
+                      value={(editResource as SeaHut).occupantAddress ?? ""}
+                      onChange={(e) => setEditResource({ ...editResource, occupantAddress: e.target.value })}
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 6, md: 4 }}>
+                    <TextField
+                      fullWidth label="Postal Address"
+                      value={(editResource as SeaHut).occupantPostalAddress ?? ""}
+                      onChange={(e) => setEditResource({ ...editResource, occupantPostalAddress: e.target.value })}
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 12, md: 4 }}>
+                    <TextField
+                      fullWidth label="Comment"
+                      value={(editResource as SeaHut).comment ?? ""}
+                      onChange={(e) => setEditResource({ ...editResource, comment: e.target.value })}
+                    />
+                  </Grid>
+                </>
+              )}
 
               <Grid size={{ xs: 6, md: 3 }}>
                 <TextField
-                  fullWidth label="Max Width (m)" type="number"
+                  fullWidth label={editResource.type === "Berth" ? "Max Width (m)" : "Width (m)"} type="number"
                   value={editResource.maxWidth ?? ""}
                   onChange={(e) => setEditResource({ ...editResource, maxWidth: e.target.value ? Number(e.target.value) : undefined })}
                   slotProps={{ htmlInput: { step: 0.1 } }}
@@ -1963,7 +2040,7 @@ function ResourcesTab() {
               </Grid>
               <Grid size={{ xs: 6, md: 3 }}>
                 <TextField
-                  fullWidth label="Max Length (m)" type="number"
+                  fullWidth label={editResource.type === "Berth" ? "Max Length (m)" : "Length (m)"} type="number"
                   value={editResource.maxLength ?? ""}
                   onChange={(e) => setEditResource({ ...editResource, maxLength: e.target.value ? Number(e.target.value) : undefined })}
                   slotProps={{ htmlInput: { step: 0.1 } }}
@@ -1981,7 +2058,7 @@ function ResourcesTab() {
 
               <Grid size={12}>
                 <Typography variant="subtitle2" sx={{ mt: 1, mb: 0.5, fontWeight: 700 }}>
-                  Position — click on the map to place the berth
+                  Position — click on the map to position the object
                 </Typography>
                 <Box sx={{ height: 350, border: '1px solid rgba(79,195,247,0.15)', borderRadius: 1, overflow: 'hidden', mb: 1 }}>
                   <APIProvider apiKey={process.env.NEXT_PUBLIC_GOOGLE_MAPS_KEY || ""}>
