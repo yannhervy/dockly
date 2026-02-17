@@ -18,6 +18,7 @@ import {
   orderBy,
   Timestamp,
   arrayUnion,
+  deleteField,
 } from "firebase/firestore";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import { uploadDockImage } from "@/lib/storage";
@@ -1620,9 +1621,13 @@ function ResourcesTab() {
   const handleSaveEdit = async () => {
     if (!editResource) return;
     try {
-      // Save current resource
+      // Save current resource — convert undefined to deleteField for Firestore
       const { id, ...data } = editResource;
-      await updateDoc(doc(db, "resources", id), data as Record<string, unknown>);
+      const cleanData: Record<string, unknown> = {};
+      for (const [key, value] of Object.entries(data)) {
+        cleanData[key] = value === undefined ? deleteField() : value;
+      }
+      await updateDoc(doc(db, "resources", id), cleanData);
 
       // Batch-save any other berths that were moved by dragging
       const moveEntries = Object.entries(movedBerths);
@@ -2010,7 +2015,7 @@ function ResourcesTab() {
                     </GMap>
                   </APIProvider>
                 </Box>
-                <Box sx={{ display: 'flex', gap: 2 }}>
+                <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
                   <TextField
                     label="Latitude" type="number" size="small"
                     value={editResource.lat ?? ""}
@@ -2025,6 +2030,15 @@ function ResourcesTab() {
                     slotProps={{ htmlInput: { step: 0.000001 } }}
                     sx={{ flex: 1 }}
                   />
+                  {(editResource.lat != null || editResource.lng != null) && (
+                    <Button
+                      size="small"
+                      color="error"
+                      onClick={() => setEditResource({ ...editResource, lat: undefined, lng: undefined })}
+                    >
+                      Clear
+                    </Button>
+                  )}
                 </Box>
               </Grid>
 
