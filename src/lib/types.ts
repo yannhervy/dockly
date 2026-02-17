@@ -101,10 +101,24 @@ export type SeaHutSize = "Large" | "Small";
 export interface SeaHut extends Resource {
   type: "SeaHut";
   size: SeaHutSize;
+  occupantFirstName?: string;
+  occupantLastName?: string;
+  occupantPhone?: string;
+  occupantEmail?: string;
+  occupantAddress?: string;
+  occupantPostalAddress?: string;
+  comment?: string;
 }
 
 export interface Box extends Resource {
   type: "Box";
+  occupantFirstName?: string;
+  occupantLastName?: string;
+  occupantPhone?: string;
+  occupantEmail?: string;
+  occupantAddress?: string;
+  occupantPostalAddress?: string;
+  comment?: string;
 }
 
 export type LandStorageSeason = "Winter" | "Summer" | "Year-round";

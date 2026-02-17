@@ -1323,13 +1323,14 @@ function DockMapOverlay({ editDock, allDocks, allBerths, onMoveDock }: {
 }
 
 // ─── Edit Berth Polygon (draws ALL placed berths as draggable + current berth highlighted) ──
-function EditBerthPolygon({ lat, lng, width, length, heading, label, onMove, onMoveOther, allBerths, currentId }: {
+function EditBerthPolygon({ lat, lng, width, length, heading, label, onMove, onMoveOther, allBerths, currentId, resourceType }: {
   lat?: number; lng?: number; width: number; length: number; heading: number;
   label: string;
   onMove?: (lat: number, lng: number) => void;
   onMoveOther?: (id: string, lat: number, lng: number) => void;
   allBerths: Berth[];
   currentId: string;
+  resourceType?: string;
 }) {
   const map = useMap();
   const coreLib = useMapsLibrary("core");
@@ -1397,44 +1398,82 @@ function EditBerthPolygon({ lat, lng, width, length, heading, label, onMove, onM
       });
     });
 
-    // Draw CURRENT berth (draggable, cyan)
+    // Draw CURRENT resource (draggable, cyan)
     if (lat && lng) {
-      const corners = computeBoatHull(lat, lng, width, length, heading);
-      const polygon = new google.maps.Polygon({
-        paths: corners,
-        strokeColor: "#00E5FF",
-        strokeOpacity: 1,
-        strokeWeight: 2,
-        fillColor: "#00E5FF",
-        fillOpacity: 0.35,
-        map,
-        zIndex: 10,
-        draggable: true,
-        geodesic: false,
-      });
+      const isNonBerth = resourceType === "SeaHut" || resourceType === "Box";
 
-      // Label for current berth
-      const labelMarker = new google.maps.marker.AdvancedMarkerElement({
-        position: { lat, lng },
-        map,
-        content: createLabelElement(label, true),
-        zIndex: 11,
-      });
+      if (isNonBerth) {
+        // Draw a circle marker for SeaHuts and Boxes
+        const circle = new google.maps.Circle({
+          center: { lat, lng },
+          radius: 2,
+          strokeColor: resourceType === "SeaHut" ? "#FF9800" : "#8BC34A",
+          strokeOpacity: 1,
+          strokeWeight: 2,
+          fillColor: resourceType === "SeaHut" ? "#FF9800" : "#8BC34A",
+          fillOpacity: 0.4,
+          map,
+          zIndex: 10,
+          draggable: true,
+        });
 
-      polygon.addListener("dragend", () => {
-        if (!onMove) return;
-        const center = getCenterFromPath(polygon);
-        onMove(center.lat, center.lng);
-      });
+        const labelMarker = new google.maps.marker.AdvancedMarkerElement({
+          position: { lat, lng },
+          map,
+          content: createLabelElement(label, true),
+          zIndex: 11,
+        });
 
-      cleanups.push(() => {
-        polygon.setMap(null);
-        labelMarker.map = null;
-      });
+        circle.addListener("dragend", () => {
+          if (!onMove) return;
+          const center = circle.getCenter();
+          if (center) onMove(center.lat(), center.lng());
+          labelMarker.position = center;
+        });
+
+        cleanups.push(() => {
+          circle.setMap(null);
+          labelMarker.map = null;
+        });
+      } else {
+        // Draw a boat-hull polygon for Berths
+        const corners = computeBoatHull(lat, lng, width, length, heading);
+        const polygon = new google.maps.Polygon({
+          paths: corners,
+          strokeColor: "#00E5FF",
+          strokeOpacity: 1,
+          strokeWeight: 2,
+          fillColor: "#00E5FF",
+          fillOpacity: 0.35,
+          map,
+          zIndex: 10,
+          draggable: true,
+          geodesic: false,
+        });
+
+        const labelMarker = new google.maps.marker.AdvancedMarkerElement({
+          position: { lat, lng },
+          map,
+          content: createLabelElement(label, true),
+          zIndex: 11,
+        });
+
+        polygon.addListener("dragend", () => {
+          if (!onMove) return;
+          const center = getCenterFromPath(polygon);
+          onMove(center.lat, center.lng);
+          labelMarker.position = center;
+        });
+
+        cleanups.push(() => {
+          polygon.setMap(null);
+          labelMarker.map = null;
+        });
+      }
     }
 
     return () => { cleanups.forEach((fn) => fn()); };
-  }, [map, coreLib, markerLib, lat, lng, width, length, heading, label, onMove, onMoveOther, allBerths, currentId]);
+  }, [map, coreLib, markerLib, lat, lng, width, length, heading, label, onMove, onMoveOther, allBerths, currentId, resourceType]);
 
   return null;
 }
@@ -1697,10 +1736,14 @@ function ResourcesTab() {
                   const tenants = getTenants(r.occupantIds);
                   const tenantNames = tenants.map((t) => t.name.toLowerCase()).join(" ");
                   const dockName = getDockName(r.dockId || "").toLowerCase();
+                  // Also check occupant fields stored directly on the resource
+                  const b = r as Berth;
+                  const occupantName = [b.occupantFirstName, b.occupantLastName].filter(Boolean).join(" ").toLowerCase();
                   return (
                     r.markingCode.toLowerCase().includes(q) ||
                     tenantNames.includes(q) ||
-                    dockName.includes(q)
+                    dockName.includes(q) ||
+                    occupantName.includes(q)
                   );
                 })
                 .map((r) => (
@@ -1958,6 +2001,7 @@ function ResourcesTab() {
                         length={editResource.maxLength || 5}
                         heading={editResource.heading || 0}
                         label={editResource.markingCode}
+                        resourceType={editResource.type}
                         onMove={(lat, lng) => setEditResource((prev) => prev ? { ...prev, lat, lng } : prev)}
                         onMoveOther={(id, lat, lng) => setMovedBerths((prev) => ({ ...prev, [id]: { lat, lng } }))}
                         allBerths={resources.filter((r) => r.type === "Berth") as Berth[]}
