@@ -112,3 +112,23 @@ export async function uploadProfileImage(
   const downloadUrl = await getDownloadURL(snapshot.ref);
   return downloadUrl;
 }
+
+/**
+ * Upload a land storage image to Firebase Storage and return the download URL.
+ * Images are resized to max 1200px and compressed as JPEG.
+ * Stored at `land-storage-images/{entryId}/{filename}`.
+ */
+export async function uploadLandStorageImage(
+  file: File,
+  entryId: string
+): Promise<string> {
+  const resizedBlob = await resizeImage(file);
+  const baseName = file.name.replace(/\.[^.]+$/, "");
+  const fileName = `${baseName}.jpg`;
+  const storageRef = ref(storage, `land-storage-images/${entryId}/${fileName}`);
+  const snapshot = await uploadBytes(storageRef, resizedBlob, {
+    contentType: "image/jpeg",
+  });
+  const downloadUrl = await getDownloadURL(snapshot.ref);
+  return downloadUrl;
+}

@@ -1,9 +1,10 @@
 "use client";
 
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useState, useMemo, useRef } from "react";
 import useMediaQuery from "@mui/material/useMediaQuery";
 import { useAuth } from "@/context/AuthContext";
 import { db } from "@/lib/firebase";
+import { uploadLandStorageImage } from "@/lib/storage";
 import { LandStorageEntry, User } from "@/lib/types";
 import {
   collection,
@@ -89,6 +90,9 @@ function LandStorageContent() {
   const [editLng, setEditLng] = useState<number | undefined>(undefined);
   const [saving, setSaving] = useState(false);
   const [successMsg, setSuccessMsg] = useState("");
+  const [editImageUrl, setEditImageUrl] = useState<string | undefined>(undefined);
+  const [editImageFile, setEditImageFile] = useState<File | null>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
 
   // Fetch all land storage entries
   useEffect(() => {
@@ -155,6 +159,8 @@ function LandStorageContent() {
     setSelectedUserId(entry.occupantId || null);
     setEditLat(entry.lat);
     setEditLng(entry.lng);
+    setEditImageUrl(entry.imageUrl);
+    setEditImageFile(null);
 
     // Fetch users list if not loaded yet
     if (allUsers.length === 0) {
@@ -172,6 +178,13 @@ function LandStorageContent() {
     setSaving(true);
     try {
       const isOccupied = editForm.firstName.trim().length > 0;
+
+      // Upload image if a new file was selected
+      let imageUrl = editImageUrl;
+      if (editImageFile) {
+        imageUrl = await uploadLandStorageImage(editImageFile, editEntry.code);
+      }
+
       await updateDoc(doc(db, "landStorage", editEntry.code), {
         firstName: editForm.firstName.trim(),
         lastName: editForm.lastName.trim(),
@@ -182,6 +195,7 @@ function LandStorageContent() {
         occupantId: selectedUserId || null,
         lat: editLat ?? null,
         lng: editLng ?? null,
+        imageUrl: imageUrl ?? null,
         updatedAt: Timestamp.now(),
       });
       // Update local state
@@ -195,6 +209,7 @@ function LandStorageContent() {
                 occupantId: selectedUserId || undefined,
                 lat: editLat,
                 lng: editLng,
+                imageUrl: imageUrl,
               }
             : e
         )
@@ -587,6 +602,49 @@ function LandStorageContent() {
               />
             </Grid>
           </Grid>
+
+          {/* Photo upload */}
+          <Typography variant="subtitle2" sx={{ mt: 2, mb: 0.5, fontWeight: 700 }}>
+            Photo
+          </Typography>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1 }}>
+            {(editImageFile || editImageUrl) && (
+              <Box
+                component="img"
+                src={editImageFile ? URL.createObjectURL(editImageFile) : editImageUrl}
+                alt="Land storage photo"
+                sx={{ width: 120, height: 80, objectFit: 'cover', borderRadius: 1, border: '1px solid rgba(79,195,247,0.2)' }}
+              />
+            )}
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+              <Button
+                size="small"
+                variant="outlined"
+                onClick={() => imageInputRef.current?.click()}
+              >
+                {editImageUrl || editImageFile ? 'Change photo' : 'Upload photo'}
+              </Button>
+              {(editImageUrl || editImageFile) && (
+                <Button
+                  size="small"
+                  color="error"
+                  onClick={() => { setEditImageUrl(undefined); setEditImageFile(null); }}
+                >
+                  Remove
+                </Button>
+              )}
+            </Box>
+            <input
+              ref={imageInputRef}
+              type="file"
+              accept="image/*"
+              hidden
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) setEditImageFile(file);
+              }}
+            />
+          </Box>
 
           {/* Map location picker */}
           <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mt: 2, mb: 0.5 }}>
