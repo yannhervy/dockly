@@ -10,6 +10,7 @@ import InfoIcon from "@mui/icons-material/Info";
 import GroupsIcon from "@mui/icons-material/Groups";
 import ForestIcon from "@mui/icons-material/Forest";
 import LocalParkingIcon from "@mui/icons-material/LocalParking";
+import ConstructionIcon from "@mui/icons-material/Construction";
 
 const subPages = [
   {
@@ -31,6 +32,13 @@ const subPages = [
     description:
       "Parkeringskort, Parakey-appen, regler och betalningsinformation.",
     href: "/info/parkering",
+  },
+  {
+    icon: <ConstructionIcon sx={{ fontSize: 40, color: "#90CAF9" }} />,
+    title: "Båtuppläggning",
+    description:
+      "Vinter- och sommaruppläggning, uppläggningsnummer och betalning.",
+    href: "/info/upplagning",
   },
 ];
 
