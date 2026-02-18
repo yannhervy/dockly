@@ -38,11 +38,7 @@ import AddPhotoAlternateIcon from "@mui/icons-material/AddPhotoAlternate";
 import CloseIcon from "@mui/icons-material/Close";
 
 function formatDate(ts: Timestamp): string {
-  return ts.toDate().toLocaleDateString("sv-SE", {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-  });
+  return ts.toDate().toLocaleDateString("sv-SE");
 }
 
 export default function NewsPage() {

@@ -49,21 +49,11 @@ import DialogActions from "@mui/material/DialogActions";
 
 // ─── Helpers ──────────────────────────────────────────────
 function formatDate(ts: Timestamp): string {
-  return ts.toDate().toLocaleDateString("sv-SE", {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-  });
+  return ts.toDate().toLocaleDateString("sv-SE");
 }
 
 function formatDateTime(ts: Timestamp): string {
-  return ts.toDate().toLocaleString("sv-SE", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  return ts.toDate().toLocaleString("sv-SE");
 }
 
 const statusLabel = (s: string) =>

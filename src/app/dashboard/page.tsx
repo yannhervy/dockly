@@ -737,7 +737,7 @@ function DashboardContent() {
                     <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: "block" }}>
                       From {msg.authorName}
                       {msg.sentAsSms && " · Sent as SMS"}
-                      {msg.createdAt && " · " + msg.createdAt.toDate().toLocaleDateString()}
+                      {msg.createdAt && " · " + msg.createdAt.toDate().toLocaleDateString("sv-SE")}
                     </Typography>
                   </Box>
                 ))}

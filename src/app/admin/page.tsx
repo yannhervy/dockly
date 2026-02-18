@@ -2351,13 +2351,7 @@ function InterestsTab() {
     ts.toDate().toLocaleDateString("sv-SE");
 
   const formatDateTime = (ts: Timestamp) =>
-    ts.toDate().toLocaleString("sv-SE", {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
+    ts.toDate().toLocaleString("sv-SE");
 
   const statusColor = (status: string): "warning" | "info" | "success" =>
     status === "Pending" ? "warning" : status === "Contacted" ? "info" : "success";
