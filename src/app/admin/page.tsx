@@ -3,7 +3,7 @@
 import React, { useEffect, useState, useRef } from "react";
 import { db } from "@/lib/firebase";
 import { useAuth } from "@/context/AuthContext";
-import { User, Dock, Resource, BerthInterest, InterestReply, Berth, SeaHut, LandStorageEntry, UserMessage } from "@/lib/types";
+import { User, Dock, Resource, BerthInterest, InterestReply, Berth, SeaHut, LandStorageEntry, UserMessage, AbandonedObject, AbandonedObjectType } from "@/lib/types";
 import { normalizePhone } from "@/lib/phoneUtils";
 import { sendSms } from "@/lib/sms";
 import {
@@ -21,11 +21,11 @@ import {
   deleteField,
 } from "firebase/firestore";
 import ProtectedRoute from "@/components/ProtectedRoute";
-import { uploadDockImage, uploadBoatImage } from "@/lib/storage";
+import { uploadDockImage, uploadBoatImage, uploadAbandonedObjectImage } from "@/lib/storage";
 import Checkbox from "@mui/material/Checkbox";
 import Divider from "@mui/material/Divider";
 import { computeRectCorners, computeBoatHull, HARBOR_CENTER } from "@/lib/mapUtils";
-import { APIProvider, Map as GMap, useMap, useMapsLibrary } from "@vis.gl/react-google-maps";
+import { APIProvider, Map as GMap, useMap, useMapsLibrary, AdvancedMarker } from "@vis.gl/react-google-maps";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 import Card from "@mui/material/Card";
@@ -70,6 +70,8 @@ import LinkIcon from "@mui/icons-material/Link";
 import SaveIcon from "@mui/icons-material/Save";
 import SmsIcon from "@mui/icons-material/Sms";
 import SendIcon from "@mui/icons-material/Send";
+import DangerousIcon from "@mui/icons-material/Dangerous";
+import CloseIcon from "@mui/icons-material/Close";
 import InputAdornment from "@mui/material/InputAdornment";
 import SearchIcon from "@mui/icons-material/Search";
 import ToggleButton from "@mui/material/ToggleButton";
@@ -112,12 +114,14 @@ function AdminContent() {
         {isSuperadmin && <Tab value={1} icon={<AnchorIcon />} label="Docks" iconPosition="start" />}
         {isSuperadmin && <Tab value={2} icon={<DirectionsBoatIcon />} label="Resources" iconPosition="start" />}
         <Tab value={3} icon={<SailingIcon />} label="Intresseanmälningar" iconPosition="start" />
+        {isSuperadmin && <Tab value={4} icon={<DangerousIcon />} label="Övergivna" iconPosition="start" />}
       </Tabs>
 
       {tabIndex === 0 && isSuperadmin && <UsersTab />}
       {tabIndex === 1 && isSuperadmin && <DocksTab />}
       {tabIndex === 2 && isSuperadmin && <ResourcesTab />}
       {tabIndex === 3 && <InterestsTab />}
+      {tabIndex === 4 && isSuperadmin && <AbandonedObjectsTab />}
     </Box>
   );
 }
@@ -2711,3 +2715,402 @@ function InterestsTab() {
     </Box>
   );
 }
+
+// ─── Abandoned Objects Tab ────────────────────────────────
+const ABANDONED_OBJECT_TYPES: { value: AbandonedObjectType; label: string }[] = [
+  { value: "Boat", label: "Båt" },
+  { value: "SeaHut", label: "Sjöbod" },
+  { value: "Box", label: "Låda" },
+  { value: "Other", label: "Övrigt" },
+];
+
+function AbandonedObjectsTab() {
+  const [entries, setEntries] = useState<AbandonedObject[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [successMsg, setSuccessMsg] = useState("");
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [editEntry, setEditEntry] = useState<AbandonedObject | null>(null);
+  const [saving, setSaving] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
+
+  const [form, setForm] = useState({
+    objectType: "Boat" as AbandonedObjectType,
+    lat: "",
+    lng: "",
+    abandonedSince: "",
+    comment: "",
+  });
+
+  useEffect(() => {
+    fetchEntries();
+  }, []);
+
+  async function fetchEntries() {
+    setLoading(true);
+    try {
+      const snap = await getDocs(collection(db, "abandonedObjects"));
+      const data = snap.docs
+        .map((d) => ({ id: d.id, ...d.data() }) as AbandonedObject)
+        .sort((a, b) => a.abandonedId - b.abandonedId);
+      setEntries(data);
+    } catch (err) {
+      console.error("Error fetching abandoned objects:", err);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function getNextId(): number {
+    if (entries.length === 0) return 1;
+    return Math.max(...entries.map((e) => e.abandonedId)) + 1;
+  }
+
+  function openAdd() {
+    setEditEntry(null);
+    setForm({ objectType: "Boat", lat: "", lng: "", abandonedSince: new Date().toISOString().slice(0, 10), comment: "" });
+    setPhotoFile(null);
+    setPhotoPreview(null);
+    setDialogOpen(true);
+  }
+
+  function openEdit(entry: AbandonedObject) {
+    setEditEntry(entry);
+    const d = entry.abandonedSince?.toDate?.() ?? new Date();
+    setForm({
+      objectType: entry.objectType || "Boat",
+      lat: String(entry.lat),
+      lng: String(entry.lng),
+      abandonedSince: d.toISOString().slice(0, 10),
+      comment: entry.comment || "",
+    });
+    setPhotoFile(null);
+    setPhotoPreview(entry.imageUrl || null);
+    setDialogOpen(true);
+  }
+
+  async function handleSave() {
+    setSaving(true);
+    try {
+      const lat = parseFloat(form.lat);
+      const lng = parseFloat(form.lng);
+      if (isNaN(lat) || isNaN(lng)) {
+        alert("Latitude and longitude must be valid numbers.");
+        setSaving(false);
+        return;
+      }
+
+      const docId = editEntry ? editEntry.id : `abandoned-${getNextId()}`;
+      let imageUrl = editEntry?.imageUrl || "";
+
+      if (photoFile) {
+        imageUrl = await uploadAbandonedObjectImage(photoFile, docId);
+      }
+
+      const data: Record<string, unknown> = {
+        abandonedId: editEntry?.abandonedId ?? getNextId(),
+        objectType: form.objectType,
+        lat,
+        lng,
+        imageUrl,
+        abandonedSince: Timestamp.fromDate(new Date(form.abandonedSince)),
+        comment: form.comment.trim(),
+      };
+
+      await setDoc(doc(db, "abandonedObjects", docId), data, { merge: true });
+
+      setDialogOpen(false);
+      setSuccessMsg(editEntry ? "Uppdaterad!" : "Skapad!");
+      setTimeout(() => setSuccessMsg(""), 3000);
+      fetchEntries();
+    } catch (err) {
+      console.error("Error saving abandoned object:", err);
+      alert("Failed to save. See console.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleDelete(id: string) {
+    if (!confirm("Är du säker på att du vill ta bort detta objekt?")) return;
+    try {
+      await deleteDoc(doc(db, "abandonedObjects", id));
+      setSuccessMsg("Borttagen!");
+      setTimeout(() => setSuccessMsg(""), 3000);
+      fetchEntries();
+    } catch (err) {
+      console.error("Error deleting abandoned object:", err);
+    }
+  }
+
+  function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (file) {
+      setPhotoFile(file);
+      setPhotoPreview(URL.createObjectURL(file));
+    }
+  }
+
+  function formatDate(ts: Timestamp | undefined): string {
+    if (!ts?.toDate) return "—";
+    return ts.toDate().toLocaleDateString("sv-SE");
+  }
+
+  const objectTypeLabel = (t: string) => ABANDONED_OBJECT_TYPES.find((o) => o.value === t)?.label || t;
+
+  return (
+    <Box>
+      {successMsg && (
+        <Alert severity="success" sx={{ mb: 2 }}>
+          {successMsg}
+        </Alert>
+      )}
+
+      <Box sx={{ display: "flex", justifyContent: "flex-end", mb: 2 }}>
+        <Button variant="contained" startIcon={<AddIcon />} onClick={openAdd}>
+          Lägg till
+        </Button>
+      </Box>
+
+      {loading ? (
+        <Box sx={{ display: "flex", justifyContent: "center", py: 4 }}>
+          <CircularProgress />
+        </Box>
+      ) : (
+        <TableContainer component={Paper} sx={{ bgcolor: "background.paper", backgroundImage: "none" }}>
+          <Table>
+            <TableHead>
+              <TableRow>
+                <TableCell>ID</TableCell>
+                <TableCell>Typ</TableCell>
+                <TableCell>Foto</TableCell>
+                <TableCell>Ägare</TableCell>
+                <TableCell>Köpes</TableCell>
+                <TableCell>Position</TableCell>
+                <TableCell>Övergiven sedan</TableCell>
+                <TableCell>Kommentar</TableCell>
+                <TableCell align="right">Åtgärder</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {entries.map((entry) => (
+                <TableRow key={entry.id} hover>
+                  <TableCell sx={{ fontWeight: 700, whiteSpace: "nowrap" }}>☠️ {entry.abandonedId}</TableCell>
+                  <TableCell>{objectTypeLabel(entry.objectType)}</TableCell>
+                  <TableCell>
+                    {entry.imageUrl ? (
+                      <Box
+                        component="img"
+                        src={entry.imageUrl}
+                        alt={`#${entry.abandonedId}`}
+                        sx={{ width: 56, height: 42, objectFit: "contain", borderRadius: 0.5, border: "1px solid rgba(79,195,247,0.15)", cursor: "pointer" }}
+                        onClick={() => setLightboxUrl(entry.imageUrl)}
+                      />
+                    ) : (
+                      "—"
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    {entry.claimedByName ? (
+                      <Box>
+                        <Typography variant="body2" sx={{ fontWeight: 600, color: "#66BB6A" }}>{entry.claimedByName}</Typography>
+                        {entry.claimedByPhone && <Typography variant="caption" color="text.secondary">{entry.claimedByPhone}</Typography>}
+                      </Box>
+                    ) : (
+                      <Typography variant="body2" color="text.secondary">—</Typography>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    {entry.purchaseListingId ? (
+                      <Chip label="Köpes" size="small" sx={{ bgcolor: "rgba(79,195,247,0.2)", color: "#4FC3F7", fontWeight: 600 }} />
+                    ) : (
+                      <Typography variant="body2" color="text.secondary">—</Typography>
+                    )}
+                  </TableCell>
+                  <TableCell sx={{ fontSize: "0.8rem" }}>
+                    {entry.lat?.toFixed(5)}, {entry.lng?.toFixed(5)}
+                  </TableCell>
+                  <TableCell>{formatDate(entry.abandonedSince)}</TableCell>
+                  <TableCell sx={{ maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {entry.comment || "—"}
+                  </TableCell>
+                  <TableCell align="right">
+                    <IconButton size="small" onClick={() => openEdit(entry)} sx={{ mr: 0.5 }}>
+                      <EditIcon fontSize="small" />
+                    </IconButton>
+                    <IconButton size="small" color="error" onClick={() => handleDelete(entry.id)}>
+                      <DeleteIcon fontSize="small" />
+                    </IconButton>
+                  </TableCell>
+                </TableRow>
+              ))}
+              {entries.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={9} align="center" sx={{ py: 4, color: "text.secondary" }}>
+                    Inga övergivna objekt registrerade.
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      )}
+
+      {/* Add / Edit Dialog */}
+      <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>{editEntry ? `Redigera ☠️ #${editEntry.abandonedId}` : "Lägg till övergivet objekt"}</DialogTitle>
+        <DialogContent>
+          <FormControl fullWidth sx={{ mb: 2, mt: 1 }}>
+            <InputLabel>Typ</InputLabel>
+            <Select
+              value={form.objectType}
+              label="Typ"
+              onChange={(e: SelectChangeEvent) => setForm({ ...form, objectType: e.target.value as AbandonedObjectType })}
+            >
+              {ABANDONED_OBJECT_TYPES.map((t) => (
+                <MenuItem key={t.value} value={t.value}>{t.label}</MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+
+          <Typography variant="subtitle2" sx={{ mt: 1, mb: 0.5, fontWeight: 700 }}>
+            Position — klicka på kartan för att placera
+          </Typography>
+          <Box sx={{ height: 300, border: '1px solid rgba(79,195,247,0.15)', borderRadius: 1, overflow: 'hidden', mb: 1 }}>
+            <APIProvider apiKey={process.env.NEXT_PUBLIC_GOOGLE_MAPS_KEY || ""}>
+              <GMap
+                defaultCenter={form.lat && form.lng ? { lat: parseFloat(form.lat), lng: parseFloat(form.lng) } : HARBOR_CENTER}
+                defaultZoom={18}
+                mapId="edit-abandoned-map"
+                mapTypeId="satellite"
+                style={{ width: '100%', height: '100%' }}
+                gestureHandling="greedy"
+                disableDefaultUI
+                zoomControl
+                onClick={(e) => {
+                  const ll = e.detail?.latLng;
+                  if (ll) setForm({ ...form, lat: String(ll.lat), lng: String(ll.lng) });
+                }}
+              >
+                {/* Show all other abandoned objects as context markers */}
+                {entries
+                  .filter((e) => e.id !== editEntry?.id && e.lat && e.lng)
+                  .map((e) => (
+                    <AdvancedMarker key={e.id} position={{ lat: e.lat, lng: e.lng }}>
+                      <Box sx={{ display: "flex", alignItems: "center", opacity: 0.5 }}>
+                        <DangerousIcon sx={{ fontSize: 20, color: '#999' }} />
+                        <Typography sx={{ fontSize: 8, fontWeight: 800, color: '#999', ml: '1px' }}>{e.abandonedId}</Typography>
+                      </Box>
+                    </AdvancedMarker>
+                  ))
+                }
+                {/* Current position marker (bright red) */}
+                {form.lat && form.lng && !isNaN(parseFloat(form.lat)) && !isNaN(parseFloat(form.lng)) && (
+                  <AdvancedMarker position={{ lat: parseFloat(form.lat), lng: parseFloat(form.lng) }}>
+                    <DangerousIcon sx={{ fontSize: 32, color: '#f44336', filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.6))' }} />
+                  </AdvancedMarker>
+                )}
+              </GMap>
+            </APIProvider>
+          </Box>
+          <Box sx={{ display: 'flex', gap: 2, mb: 2 }}>
+            <TextField
+              label="Latitud" type="number" size="small"
+              value={form.lat}
+              onChange={(e) => setForm({ ...form, lat: e.target.value })}
+              inputProps={{ step: "0.000001" }}
+              sx={{ flex: 1 }}
+            />
+            <TextField
+              label="Longitud" type="number" size="small"
+              value={form.lng}
+              onChange={(e) => setForm({ ...form, lng: e.target.value })}
+              inputProps={{ step: "0.000001" }}
+              sx={{ flex: 1 }}
+            />
+          </Box>
+          <TextField
+            fullWidth
+            label="Övergiven sedan"
+            type="date"
+            value={form.abandonedSince}
+            onChange={(e) => setForm({ ...form, abandonedSince: e.target.value })}
+            sx={{ mb: 2 }}
+            slotProps={{ inputLabel: { shrink: true } }}
+          />
+          <TextField
+            fullWidth
+            label="Kommentar"
+            multiline
+            rows={2}
+            value={form.comment}
+            onChange={(e) => setForm({ ...form, comment: e.target.value })}
+            sx={{ mb: 2 }}
+          />
+
+          {/* Photo upload */}
+          <Box sx={{ mb: 1 }}>
+            <Button variant="outlined" size="small" onClick={() => fileRef.current?.click()}>
+              {photoPreview ? "Byt foto" : "Välj foto"}
+            </Button>
+            <input ref={fileRef} type="file" accept="image/*" hidden onChange={handlePhotoChange} />
+          </Box>
+          {photoPreview && (
+            <Box
+              component="img"
+              src={photoPreview}
+              alt="Preview"
+              sx={{ width: "100%", maxHeight: 300, objectFit: "contain", borderRadius: 1, border: "1px solid rgba(79,195,247,0.15)", mt: 1, cursor: "pointer" }}
+              onClick={() => setLightboxUrl(photoPreview)}
+            />
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDialogOpen(false)}>Avbryt</Button>
+          <Button
+            variant="contained"
+            onClick={handleSave}
+            disabled={saving || !form.lat || !form.lng}
+            startIcon={saving ? <CircularProgress size={18} /> : <SaveIcon />}
+          >
+            {saving ? "Sparar..." : "Spara"}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Image Lightbox */}
+      <Dialog
+        open={!!lightboxUrl}
+        onClose={() => setLightboxUrl(null)}
+        maxWidth={false}
+        PaperProps={{
+          sx: {
+            bgcolor: "rgba(0,0,0,0.95)",
+            maxWidth: "95vw",
+            maxHeight: "95vh",
+            overflow: "auto",
+            p: 1,
+          },
+        }}
+      >
+        <IconButton
+          onClick={() => setLightboxUrl(null)}
+          sx={{ position: "sticky", top: 0, float: "right", color: "#fff", zIndex: 1 }}
+        >
+          <CloseIcon />
+        </IconButton>
+        {lightboxUrl && (
+          <Box
+            component="img"
+            src={lightboxUrl}
+            alt="Full size"
+            sx={{ display: "block" }}
+          />
+        )}
+      </Dialog>
+    </Box>
+  );
+}
+

@@ -170,6 +170,7 @@ export interface MarketplaceListing {
   createdAt: Timestamp;
   expiresAt: Timestamp; // Auto-removed after 6 months
   status: ListingStatus;
+  abandonedObjectId?: string;  // Links listing to an abandoned object
 }
 
 // ─── News ─────────────────────────────────────────────────
@@ -218,5 +219,24 @@ export interface InterestReply {
   authorPhone: string;
   message: string;
   createdAt: Timestamp;
+}
+
+// ─── Abandoned Objects ────────────────────────────────────
+export type AbandonedObjectType = "Boat" | "SeaHut" | "Box" | "Other";
+
+export interface AbandonedObject {
+  id: string;
+  abandonedId: number;                   // Auto-incremented display ID
+  objectType: AbandonedObjectType;       // What kind of object (default: "Boat")
+  lat: number;                           // GPS latitude
+  lng: number;                           // GPS longitude
+  imageUrl: string;                      // Photo URL
+  abandonedSince: Timestamp;             // Abandoned since date
+  comment?: string;                      // Optional notes
+  claimedByUid?: string;                 // Firebase UID of the owner who claimed it
+  claimedByName?: string;                // Display name of the claimer
+  claimedByPhone?: string;               // Phone of the claimer (for admin to contact)
+  claimedAt?: Timestamp;                 // When ownership was claimed
+  purchaseListingId?: string;            // Linked marketplace listing ID
 }
 

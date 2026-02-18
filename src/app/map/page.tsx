@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { collection, getDocs } from "firebase/firestore";
+import { collection, getDocs, doc, updateDoc, addDoc, Timestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useAuth } from "@/context/AuthContext";
-import type { Berth, Dock, Resource, LandStorageEntry, SeaHut, Box as BoxType } from "@/lib/types";
+import type { Berth, Dock, Resource, LandStorageEntry, SeaHut, Box as BoxType, AbandonedObject } from "@/lib/types";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 import Chip from "@mui/material/Chip";
@@ -13,10 +13,15 @@ import CircularProgress from "@mui/material/CircularProgress";
 import IconButton from "@mui/material/IconButton";
 import Button from "@mui/material/Button";
 import Divider from "@mui/material/Divider";
+import Snackbar from "@mui/material/Snackbar";
+import Alert from "@mui/material/Alert";
+import PersonIcon from "@mui/icons-material/Person";
+import ShoppingCartIcon from "@mui/icons-material/ShoppingCart";
 import CloseIcon from "@mui/icons-material/Close";
 import MapIcon from "@mui/icons-material/Map";
 import HomeIcon from "@mui/icons-material/Home";
 import SmsIcon from "@mui/icons-material/Sms";
+import DangerousIcon from "@mui/icons-material/Dangerous";
 import {
   APIProvider,
   Map,
@@ -33,7 +38,8 @@ const DEFAULT_ZOOM = 18;
 type SelectedObject =
   | { kind: "berth"; data: Berth }
   | { kind: "resource"; data: Resource }
-  | { kind: "landStorage"; data: LandStorageEntry };
+  | { kind: "landStorage"; data: LandStorageEntry }
+  | { kind: "abandonedObject"; data: AbandonedObject };
 
 // Check if a normalized phone number is a valid Swedish mobile (07x)
 function isMobileNumber(phone: string): boolean {
@@ -348,24 +354,73 @@ function LandStorageMarkers({ entries, currentUid, onSelect }: { entries: LandSt
   return null;
 }
 
+// Component that draws abandoned objects as skull emoji markers
+function AbandonedObjectMarkers({ entries, onSelect }: { entries: AbandonedObject[]; onSelect: (e: AbandonedObject) => void }) {
+  const map = useMap();
+  const markerLib = useMapsLibrary("marker");
+
+  useEffect(() => {
+    if (!map || !markerLib) return;
+
+    const cleanups: (() => void)[] = [];
+
+    entries.forEach((entry) => {
+      if (!entry.lat || !entry.lng) return;
+
+      const fillColor = entry.claimedByUid ? "#66BB6A" : "#fff";
+      const el = document.createElement("div");
+      el.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="${fillColor}"><path d="M15.73 3H8.27L3 8.27v7.46L8.27 21h7.46L21 15.73V8.27zM17 15.74 15.74 17 12 13.26 8.26 17 7 15.74 10.74 12 7 8.26 8.26 7 12 10.74 15.74 7 17 8.26 13.26 12z"/></svg><span style="font-size:8px;font-weight:800;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,0.8);margin-left:1px;">${entry.abandonedId}</span>`;
+      el.style.cssText = `
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 1px;
+        cursor: pointer;
+        transition: transform 0.15s;
+        filter: drop-shadow(0 2px 4px rgba(0,0,0,0.6));
+      `;
+      el.addEventListener("mouseenter", () => { el.style.transform = "scale(1.3)"; });
+      el.addEventListener("mouseleave", () => { el.style.transform = "scale(1)"; });
+      el.addEventListener("click", () => onSelect(entry));
+
+      const marker = new google.maps.marker.AdvancedMarkerElement({
+        position: { lat: entry.lat, lng: entry.lng },
+        map,
+        content: el,
+        title: `#${entry.abandonedId} — Övergiven`,
+        zIndex: 5,
+      });
+
+      cleanups.push(() => { marker.map = null; });
+    });
+
+    return () => { cleanups.forEach((fn) => fn()); };
+  }, [map, markerLib, entries, onSelect]);
+
+  return null;
+}
+
 export default function MapPage() {
-  const { firebaseUser, isSuperadmin, isDockManager } = useAuth();
+  const { firebaseUser, profile, isSuperadmin, isDockManager } = useAuth();
   const currentUid = firebaseUser?.uid;
   const isManager = isSuperadmin || isDockManager;
   const [berths, setBerths] = useState<Berth[]>([]);
   const [otherResources, setOtherResources] = useState<Resource[]>([]);
   const [docks, setDocks] = useState<Dock[]>([]);
   const [landEntries, setLandEntries] = useState<LandStorageEntry[]>([]);
+  const [abandonedObjects, setAbandonedObjects] = useState<AbandonedObject[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedObject, setSelectedObject] = useState<SelectedObject | null>(null);
+  const [snackMsg, setSnackMsg] = useState("");
 
   useEffect(() => {
     async function fetchData() {
       try {
-        const [rSnap, dSnap, lSnap] = await Promise.all([
+        const [rSnap, dSnap, lSnap, aSnap] = await Promise.all([
           getDocs(collection(db, "resources")),
           getDocs(collection(db, "docks")),
           getDocs(collection(db, "landStorage")),
+          getDocs(collection(db, "abandonedObjects")),
         ]);
 
         const allResources = rSnap.docs.map(
@@ -385,6 +440,9 @@ export default function MapPage() {
         );
         setLandEntries(
           lSnap.docs.map((d) => ({ id: d.id, ...d.data() }) as LandStorageEntry)
+        );
+        setAbandonedObjects(
+          aSnap.docs.map((d) => ({ id: d.id, ...d.data() }) as AbandonedObject)
         );
       } catch (err) {
         console.error("Error fetching map data:", err);
@@ -409,6 +467,10 @@ export default function MapPage() {
 
   const handleSelectLandStorage = useCallback((e: LandStorageEntry) => {
     setSelectedObject({ kind: "landStorage", data: e });
+  }, []);
+
+  const handleSelectAbandoned = useCallback((e: AbandonedObject) => {
+    setSelectedObject({ kind: "abandonedObject", data: e });
   }, []);
 
   const berthsWithCoords = berths.filter((b) => b.lat && b.lng);
@@ -460,6 +522,12 @@ export default function MapPage() {
             sx={{ bgcolor: "#F57C00", color: "#fff", fontWeight: 600 }}
             label="Markförvaring"
           />
+          <Chip
+            size="small"
+            sx={{ bgcolor: "#424242", color: "#fff", fontWeight: 600 }}
+            icon={<DangerousIcon sx={{ fontSize: 16, color: "#fff !important" }} />}
+            label="Övergiven"
+          />
         </Box>
       </Box>
 
@@ -499,14 +567,200 @@ export default function MapPage() {
               <DockPolygons docks={docks} />
               <ResourceMarkers resources={otherResources} currentUid={currentUid} onSelect={handleSelectResource} />
               <LandStorageMarkers entries={landEntries} currentUid={currentUid} onSelect={handleSelectLandStorage} />
+              <AbandonedObjectMarkers entries={abandonedObjects} onSelect={handleSelectAbandoned} />
             </Map>
           </APIProvider>
+        )}
+
+        {/* Abandoned objects info banner */}
+        {!selectedObject && abandonedObjects.length > 0 && (
+          <Paper
+            elevation={4}
+            sx={{
+              position: "absolute",
+              bottom: 24,
+              left: 24,
+              p: 2,
+              maxWidth: 360,
+              bgcolor: "rgba(13, 33, 55, 0.95)",
+              backdropFilter: "blur(12px)",
+              border: "1px solid rgba(255,167,38,0.3)",
+              borderRadius: 2,
+              zIndex: 5,
+            }}
+          >
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
+              <DangerousIcon sx={{ color: "#FFA726" }} />
+              <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+                Övergivna objekt ({abandonedObjects.length} st)
+              </Typography>
+            </Box>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 1, lineHeight: 1.6 }}>
+              Klicka på ett ☠️-märke på kartan för att se detaljer. Objekt utan ägare kommer att <strong>säljas eller destrueras</strong>.
+            </Typography>
+            {firebaseUser ? (
+              <Typography variant="caption" color="text.secondary">
+                Du kan göra anspråk som ägare eller anmäla köpintresse.
+              </Typography>
+            ) : (
+              <Typography variant="caption" sx={{ color: "#FFA726" }}>
+                Logga in för att göra anspråk på en övergiven båt.
+              </Typography>
+            )}
+          </Paper>
         )}
 
         {/* Unified Info panel */}
         {selectedObject && (() => {
           // Extract common display data based on selected object kind
           const obj = selectedObject;
+
+          // ─── Abandoned object info panel ─────────────────────────
+          if (obj.kind === "abandonedObject") {
+            const d = obj.data;
+            const objectTypeLabels: Record<string, string> = { Boat: "Båt", SeaHut: "Sjöbod", Box: "Låda", Other: "Övrigt" };
+            const abandonedDate = d.abandonedSince?.toDate?.() ?? new Date();
+            const isClaimed = !!d.claimedByUid;
+
+            const handleClaimOwnership = async () => {
+              if (!firebaseUser || !profile) return;
+              try {
+                await updateDoc(doc(db, "abandonedObjects", d.id), {
+                  claimedByUid: firebaseUser.uid,
+                  claimedByName: profile.name || firebaseUser.displayName || firebaseUser.email || "Okänd",
+                  claimedByPhone: profile.phone || "",
+                  claimedAt: Timestamp.now(),
+                });
+                // Update local state
+                setAbandonedObjects((prev) => prev.map((a) => a.id === d.id ? { ...a, claimedByUid: firebaseUser.uid, claimedByName: profile.name || firebaseUser.displayName || "Okänd", claimedByPhone: profile.phone || "", claimedAt: Timestamp.now() } : a));
+                setSelectedObject({ ...obj, data: { ...d, claimedByUid: firebaseUser.uid, claimedByName: profile.name || "Okänd", claimedByPhone: profile.phone || "" } });
+                setSnackMsg("Du har registrerats som ägare!");
+              } catch (err) {
+                console.error("Error claiming ownership:", err);
+              }
+            };
+
+            const handleWantToBuy = async () => {
+              if (!firebaseUser || !profile) return;
+              try {
+                const typeLabel = objectTypeLabels[d.objectType] || d.objectType;
+                const expiresAt = new Date();
+                expiresAt.setMonth(expiresAt.getMonth() + 6);
+                const listingRef = await addDoc(collection(db, "marketplace"), {
+                  title: `Övergiven ${typeLabel.toLowerCase()} #${d.abandonedId} — köpes`,
+                  description: `Jag vill köpa denna övergivna ${typeLabel.toLowerCase()} (ID #${d.abandonedId}). Kontakta mig om du är intresserad.`,
+                  price: 0,
+                  category: "WantedToBuy",
+                  imageUrl: d.imageUrl || null,
+                  contactEmail: profile.email || firebaseUser.email || "",
+                  contactPhone: profile.phone || "",
+                  createdBy: firebaseUser.uid,
+                  createdAt: Timestamp.now(),
+                  expiresAt: Timestamp.fromDate(expiresAt),
+                  status: "Active",
+                  abandonedObjectId: d.id,
+                });
+                await updateDoc(doc(db, "abandonedObjects", d.id), { purchaseListingId: listingRef.id });
+                setAbandonedObjects((prev) => prev.map((a) => a.id === d.id ? { ...a, purchaseListingId: listingRef.id } : a));
+                setSelectedObject({ ...obj, data: { ...d, purchaseListingId: listingRef.id } });
+                setSnackMsg("Köpesannons skapad på marknadsplatsen!");
+              } catch (err) {
+                console.error("Error creating purchase listing:", err);
+              }
+            };
+
+            return (
+              <Paper
+                elevation={8}
+                sx={{
+                  position: "absolute",
+                  bottom: 24,
+                  left: 24,
+                  p: 2.5,
+                  minWidth: 300,
+                  maxWidth: 380,
+                  maxHeight: "calc(100% - 48px)",
+                  overflowY: "auto",
+                  bgcolor: "rgba(13, 33, 55, 0.95)",
+                  backdropFilter: "blur(12px)",
+                  border: "1px solid rgba(79,195,247,0.15)",
+                  borderRadius: 2,
+                  zIndex: 5,
+                }}
+              >
+                <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", mb: 1 }}>
+                  <Box>
+                    <Typography variant="h6" sx={{ fontWeight: 700, display: "flex", alignItems: "center", gap: 0.5 }}><DangerousIcon fontSize="small" /> #{d.abandonedId}</Typography>
+                    <Typography variant="caption" color="text.secondary">Övergiven {objectTypeLabels[d.objectType] || d.objectType}</Typography>
+                  </Box>
+                  <IconButton size="small" onClick={() => setSelectedObject(null)}>
+                    <CloseIcon fontSize="small" />
+                  </IconButton>
+                </Box>
+
+                <Box sx={{ display: "flex", gap: 1, mb: 1.5, flexWrap: "wrap" }}>
+                  <Chip label={objectTypeLabels[d.objectType] || d.objectType} size="small" sx={{ bgcolor: "#424242", color: "#fff", fontWeight: 600 }} />
+                  {isClaimed ? (
+                    <Chip icon={<PersonIcon />} label={`Ägare: ${d.claimedByName}`} size="small" sx={{ bgcolor: "rgba(102,187,106,0.2)", color: "#66BB6A", fontWeight: 600 }} />
+                  ) : (
+                    <Chip label="Ingen ägare" size="small" sx={{ bgcolor: "rgba(255,167,38,0.2)", color: "#FFA726", fontWeight: 600 }} />
+                  )}
+                  {d.purchaseListingId && (
+                    <Chip icon={<ShoppingCartIcon />} label="Köpesannons" size="small" sx={{ bgcolor: "rgba(79,195,247,0.2)", color: "#4FC3F7", fontWeight: 600 }} />
+                  )}
+                </Box>
+
+                {d.imageUrl && (
+                  <Box
+                    component="img"
+                    src={d.imageUrl}
+                    alt={`Abandoned #${d.abandonedId}`}
+                    sx={{ width: "100%", borderRadius: 1, mb: 1.5, border: "1px solid rgba(79,195,247,0.1)" }}
+                  />
+                )}
+
+                <Typography variant="body2" color="text.secondary">
+                  <strong>Övergiven sedan:</strong> {abandonedDate.toLocaleDateString("sv-SE")}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  <strong>Position:</strong> {d.lat.toFixed(6)}, {d.lng.toFixed(6)}
+                </Typography>
+                {d.comment && (
+                  <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, fontStyle: "italic" }}>{d.comment}</Typography>
+                )}
+
+                {/* Action buttons for logged-in users */}
+                {firebaseUser && (
+                  <Box sx={{ display: "flex", gap: 1, mt: 2, flexWrap: "wrap" }}>
+                    {!isClaimed && (
+                      <Button
+                        variant="contained"
+                        size="small"
+                        startIcon={<PersonIcon />}
+                        onClick={handleClaimOwnership}
+                        sx={{ textTransform: "none", bgcolor: "#66BB6A", "&:hover": { bgcolor: "#4CAF50" } }}
+                      >
+                        Jag är ägare
+                      </Button>
+                    )}
+                    {!d.purchaseListingId && (
+                      <Button
+                        variant="outlined"
+                        size="small"
+                        startIcon={<ShoppingCartIcon />}
+                        onClick={handleWantToBuy}
+                        sx={{ textTransform: "none" }}
+                      >
+                        Jag vill köpa
+                      </Button>
+                    )}
+                  </Box>
+                )}
+              </Paper>
+            );
+          }
+
+          // ─── Standard object info panel ──────────────────────────
           const label =
             obj.kind === "berth" ? obj.data.markingCode
             : obj.kind === "resource" ? obj.data.markingCode
@@ -620,7 +874,7 @@ export default function MapPage() {
                   component="img"
                   src={imageUrl}
                   alt={label}
-                  sx={{ width: "100%", maxHeight: 180, objectFit: "cover", borderRadius: 1, mb: 1.5, border: "1px solid rgba(79,195,247,0.1)" }}
+                  sx={{ width: "100%", borderRadius: 1, mb: 1.5, border: "1px solid rgba(79,195,247,0.1)" }}
                 />
               )}
 
@@ -692,6 +946,10 @@ export default function MapPage() {
         {!loading && (
           <Paper
             sx={{
+              display: "flex",
+              alignItems: "center",
+              gap: 1,
+              flexWrap: "wrap",
               position: "absolute",
               top: 12,
               right: 12,
@@ -708,24 +966,46 @@ export default function MapPage() {
               {berthsWithCoords.length} / {berths.length} båtplatser
             </Typography>
             {seaHuts.length > 0 && (
-              <Typography variant="caption" color="text.secondary">
-                {seaHuts.length} sjöbodar
-              </Typography>
+              <>
+                <Typography variant="caption" color="text.secondary" sx={{ opacity: 0.4 }}>{"•"}</Typography>
+                <Typography variant="caption" color="text.secondary">
+                  {seaHuts.length} sjöbodar
+                </Typography>
+              </>
             )}
             {boxes.length > 0 && (
-              <Typography variant="caption" color="text.secondary">
-                {boxes.length} lådor
-              </Typography>
+              <>
+                <Typography variant="caption" color="text.secondary" sx={{ opacity: 0.4 }}>{"•"}</Typography>
+                <Typography variant="caption" color="text.secondary">
+                  {boxes.length} lådor
+                </Typography>
+              </>
             )}
             {landEntries.length > 0 && (
-              <Typography variant="caption" color="text.secondary">
-                {landWithCoords.length} / {landEntries.length} markplatser
-              </Typography>
+              <>
+                <Typography variant="caption" color="text.secondary" sx={{ opacity: 0.4 }}>{"•"}</Typography>
+                <Typography variant="caption" color="text.secondary">
+                  {landWithCoords.length} / {landEntries.length} markplatser
+                </Typography>
+              </>
+            )}
+            {abandonedObjects.length > 0 && (
+              <>
+                <Typography variant="caption" color="text.secondary" sx={{ opacity: 0.4 }}>{"•"}</Typography>
+                <Typography variant="caption" color="text.secondary" sx={{ display: "flex", alignItems: "center", gap: 0.3 }}>
+                  <DangerousIcon sx={{ fontSize: 14 }} /> {abandonedObjects.length} övergivna
+                </Typography>
+              </>
             )}
           </Paper>
         )}
       </Box>
     </Box>
+
+    {/* Success snackbar */}
+    <Snackbar open={!!snackMsg} autoHideDuration={4000} onClose={() => setSnackMsg("")} anchorOrigin={{ vertical: "bottom", horizontal: "center" }}>
+      <Alert severity="success" onClose={() => setSnackMsg("")} sx={{ width: "100%" }}>{snackMsg}</Alert>
+    </Snackbar>
     </ProtectedRoute>
   );
 }

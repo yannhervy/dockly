@@ -132,3 +132,23 @@ export async function uploadLandStorageImage(
   const downloadUrl = await getDownloadURL(snapshot.ref);
   return downloadUrl;
 }
+
+/**
+ * Upload an abandoned object image to Firebase Storage and return the download URL.
+ * Images are resized to max 1200px and compressed as JPEG.
+ * Stored at `abandoned-object-images/{entryId}/{filename}`.
+ */
+export async function uploadAbandonedObjectImage(
+  file: File,
+  entryId: string
+): Promise<string> {
+  const resizedBlob = await resizeImage(file);
+  const baseName = file.name.replace(/\.[^.]+$/, "");
+  const fileName = `${baseName}.jpg`;
+  const storageRef = ref(storage, `abandoned-object-images/${entryId}/${fileName}`);
+  const snapshot = await uploadBytes(storageRef, resizedBlob, {
+    contentType: "image/jpeg",
+  });
+  const downloadUrl = await getDownloadURL(snapshot.ref);
+  return downloadUrl;
+}

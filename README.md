@@ -1,36 +1,134 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# ⛵ Dockly — Stegerholmens Hamn
 
-## Getting Started
+A modern web application for managing a small-boat marina — berths, docks, land storage, marketplace, news and more. Built with **Next.js 16**, **Firebase** (Auth, Firestore, Storage) and **Material UI**.
 
-First, run the development server:
+---
+
+## ✨ Features
+
+### 🏠 Public Pages
+| Page | Description |
+|------|-------------|
+| **Home** | Hero with harbour photo, quick-links to docks / info / marketplace and a Google Maps embed |
+| **Docks** | Browse all docks, see manager contact info, association vs. private status |
+| **Info** | About the association, berth rules, seasons and environmental regulations |
+| **FAQ** | Accordion with common questions (berth application, parking, pricing, etc.) |
+| **News** | News feed with multi-image posts and emoji reactions (👍❤️😂🎉⚓) |
+| **Marketplace** | Buy, sell, sublet & wanted listings with categories, images, contact info |
+
+### 🔐 Logged-in Features
+| Feature | Description |
+|---------|-------------|
+| **Login** | Firebase Authentication (email / password) with profile creation on first login |
+| **Dashboard** | Personal profile editing, boat image uploads, berth & payment overview, unread messages, privacy toggle |
+| **Berth Interest** | Submit a berth application with boat dimensions, preferred dock, phone and optional boat photo. Track status & receive replies from managers |
+| **Directory** | Browse all berths with role-based privacy: managers see full contact info + SMS, tenants see limited data |
+
+### 🗺️ Interactive Map
+| Feature | Description |
+|---------|-------------|
+| **Berth Polygons** | Berths drawn as oriented rectangles sized to boat dimensions |
+| **Dock Polygons** | Dock outlines on the map |
+| **Resource Markers** | Sea huts, boxes and other resources with click-to-view details |
+| **Land Storage Markers** | Winter storage positions |
+| **Abandoned Objects** | ☠️ markers for abandoned boats/objects with EXIF-based positioning |
+| **Info Panel** | Click any marker to see full details, images and owner info |
+| **Claim Ownership** | Logged-in users can claim ownership of an abandoned object |
+| **Purchase Interest** | Create a "Köpes" marketplace listing directly from an abandoned object |
+| **Stats Overlay** | Live count of berths, land plots and abandoned objects |
+
+### 👔 Management
+| Feature | Description |
+|---------|-------------|
+| **Manager Panel** | Dock managers can toggle payment and status for berths on their docks |
+| **SMS** | Managers can send SMS directly to tenants from the directory and map panels |
+
+### ⚙️ Admin Panel
+Full CRUD for the entire system, accessible to superadmins:
+
+- **Users** — roles, profile data, account management
+- **Docks** — name, type, manager assignment, images, map positioning
+- **Resources** — berths, sea huts, boxes with owner, pricing, dimensions
+- **Land Storage** — winter berth entries with map coordinates
+- **News** — create/edit posts
+- **Marketplace** — manage all listings
+- **Interest Applications** — review, reply and update status
+- **Abandoned Objects** — register, edit, position on map, view claim & purchase status
+- **Image Lightbox** — click any admin thumbnail for a full-size preview
+
+---
+
+## 🛠️ Tech Stack
+
+| Layer | Technology |
+|-------|------------|
+| Framework | Next.js 16 (App Router, Turbopack) |
+| UI | Material UI (MUI) v6 |
+| Auth | Firebase Authentication |
+| Database | Cloud Firestore |
+| Storage | Firebase Storage |
+| Maps | Google Maps (`@vis.gl/react-google-maps`) |
+| SMS | 46elks API |
+| Hosting | Vercel-ready |
+
+---
+
+## 🚀 Getting Started
 
 ```bash
+# Install dependencies
+npm install
+
+# Create .env.local with your keys
+cp .env.example .env.local   # then fill in values
+
+# Run dev server
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000) to view the app.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### Required Environment Variables
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+| Variable | Description |
+|----------|-------------|
+| `NEXT_PUBLIC_FIREBASE_*` | Firebase project config |
+| `NEXT_PUBLIC_GOOGLE_MAPS_KEY` | Google Maps JavaScript API key |
+| `ELKS_API_USER` / `ELKS_API_PASSWORD` | 46elks SMS credentials |
 
-## Learn More
+---
 
-To learn more about Next.js, take a look at the following resources:
+## 📁 Project Structure
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```
+src/
+├── app/              # Next.js App Router pages
+│   ├── admin/        # Superadmin CRUD panel
+│   ├── dashboard/    # User profile & berth info
+│   ├── directory/    # Berth directory with privacy
+│   ├── docks/        # Public dock listing
+│   ├── faq/          # Frequently asked questions
+│   ├── info/         # About the harbour
+│   ├── interest/     # Berth application form
+│   ├── land-storage/ # Land storage management
+│   ├── login/        # Authentication
+│   ├── manager/      # Dock manager tools
+│   ├── map/          # Interactive harbour map
+│   ├── marketplace/  # Buy & sell listings
+│   ├── news/         # News feed with reactions
+│   └── setup/        # Initial setup wizard
+├── components/       # Shared components (Navbar, ProtectedRoute)
+├── context/          # AuthContext with role-based access
+└── lib/              # Firebase config, types, utilities
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+---
 
-## Deploy on Vercel
+## 👥 User Roles
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+| Role | Access |
+|------|--------|
+| **Superadmin** | Full admin panel, all data, SMS, user management |
+| **Dock Manager** | Manage their assigned docks, view tenant details, send SMS |
+| **Tenant** | Dashboard, interest applications, marketplace, directory (limited) |
+| **Guest** | Public pages: home, docks, info, FAQ, news, marketplace (read-only) |
