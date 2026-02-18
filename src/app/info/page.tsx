@@ -11,6 +11,7 @@ import GroupsIcon from "@mui/icons-material/Groups";
 import ForestIcon from "@mui/icons-material/Forest";
 import LocalParkingIcon from "@mui/icons-material/LocalParking";
 import ConstructionIcon from "@mui/icons-material/Construction";
+import AnchorIcon from "@mui/icons-material/Anchor";
 
 const subPages = [
   {
@@ -39,6 +40,13 @@ const subPages = [
     description:
       "Vinter- och sommaruppläggning, uppläggningsnummer och betalning.",
     href: "/info/upplagning",
+  },
+  {
+    icon: <AnchorIcon sx={{ fontSize: 40, color: "#CE93D8" }} />,
+    title: "Förtöjning",
+    description:
+      "Akterförtöjning, bojregler, kätting, ryckdämpare och hamnsimulator.",
+    href: "/info/fortojning",
   },
 ];
 
