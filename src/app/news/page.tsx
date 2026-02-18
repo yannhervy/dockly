@@ -1,6 +1,13 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
+import dynamic from "next/dynamic";
+
+const MDEditor = dynamic(() => import("@uiw/react-md-editor"), { ssr: false });
+const MDPreview = dynamic(
+  () => import("@uiw/react-md-editor").then((mod) => mod.default.Markdown),
+  { ssr: false }
+);
 import {
   collection,
   getDocs,
@@ -248,13 +255,19 @@ export default function NewsPage() {
               </Typography>
 
               {/* Body */}
-              <Typography
-                variant="body1"
-                color="text.secondary"
-                sx={{ lineHeight: 1.8, mb: 2, whiteSpace: "pre-wrap" }}
+              <Box
+                sx={{
+                  lineHeight: 1.8,
+                  mb: 2,
+                  "& p": { color: "text.secondary", my: 0.5 },
+                  "& a": { color: "primary.main" },
+                  "& strong": { color: "text.primary" },
+                  "& ul, & ol": { color: "text.secondary", pl: 2 },
+                  "& li": { mb: 0.3 },
+                }}
               >
-                {post.body}
-              </Typography>
+                <MDPreview source={post.body} style={{ background: "transparent", color: "inherit" }} />
+              </Box>
 
               {/* Images gallery */}
               {post.imageUrls && post.imageUrls.length > 0 && (
@@ -358,15 +371,14 @@ export default function NewsPage() {
             sx={{ mt: 1, mb: 2 }}
           />
 
-          <TextField
-            fullWidth
-            label="Innehåll"
-            value={form.body}
-            onChange={(e) => setForm({ ...form, body: e.target.value })}
-            multiline
-            rows={5}
-            sx={{ mb: 2 }}
-          />
+          <Box data-color-mode="dark" sx={{ mb: 2 }}>
+            <MDEditor
+              value={form.body}
+              onChange={(val) => setForm({ ...form, body: val || "" })}
+              height={250}
+              preview="edit"
+            />
+          </Box>
 
           {/* Multi-image upload */}
           <Box sx={{ mb: 2 }}>
