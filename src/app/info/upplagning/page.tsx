@@ -329,6 +329,13 @@ export default function UpplagningPage() {
             </Typography>
           </Box>
         </Box>
+
+        <Alert severity="warning" sx={{ mt: 2 }}>
+          Det är båtägarens ansvar att fortlöpande swisha för varje säsong
+          man nyttjar landuppställning. Kontroller sker löpande. Vid utebliven
+          betalning sker efterdebitering och rätten till vidare
+          landuppställning kan dras in.
+        </Alert>
       </InfoCard>
 
       {/* ─── Viktigt att tänka på ─────────────────────────── */}
