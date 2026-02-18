@@ -72,6 +72,7 @@ import SmsIcon from "@mui/icons-material/Sms";
 import SendIcon from "@mui/icons-material/Send";
 import DangerousIcon from "@mui/icons-material/Dangerous";
 import CloseIcon from "@mui/icons-material/Close";
+import InsertPhotoIcon from "@mui/icons-material/InsertPhoto";
 import InputAdornment from "@mui/material/InputAdornment";
 import SearchIcon from "@mui/icons-material/Search";
 import ToggleButton from "@mui/material/ToggleButton";
@@ -2397,16 +2398,10 @@ function InterestsTab() {
                   <TableCell sx={{ fontWeight: 600 }}>{interest.userName}</TableCell>
                   <TableCell>
                     {interest.imageUrl ? (
-                      <Box
-                        component="img"
-                        src={interest.imageUrl}
-                        alt="Båt"
-                        sx={{
-                          width: 48,
-                          height: 48,
-                          objectFit: "cover",
-                          borderRadius: 1,
-                        }}
+                      <InsertPhotoIcon
+                        sx={{ color: "#4FC3F7", cursor: "pointer", fontSize: 28 }}
+                        titleAccess="Visa bild"
+                        onClick={() => window.open(interest.imageUrl!, "_blank")}
                       />
                     ) : (
                       <Typography variant="caption" color="text.secondary">—</Typography>
@@ -2895,11 +2890,9 @@ function AbandonedObjectsTab() {
                   <TableCell>{objectTypeLabel(entry.objectType)}</TableCell>
                   <TableCell>
                     {entry.imageUrl ? (
-                      <Box
-                        component="img"
-                        src={entry.imageUrl}
-                        alt={`#${entry.abandonedId}`}
-                        sx={{ width: 56, height: 42, objectFit: "contain", borderRadius: 0.5, border: "1px solid rgba(79,195,247,0.15)", cursor: "pointer" }}
+                      <InsertPhotoIcon
+                        sx={{ color: "#4FC3F7", cursor: "pointer", fontSize: 28 }}
+                        titleAccess="Visa bild"
                         onClick={() => setLightboxUrl(entry.imageUrl)}
                       />
                     ) : (
