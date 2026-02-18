@@ -260,7 +260,7 @@ export default function UpplagningPage() {
             borderRadius: 2,
             bgcolor: "rgba(79,195,247,0.06)",
             border: "1px solid rgba(79,195,247,0.1)",
-            mb: 1.5,
+            mb: 2,
           }}
         >
           <Typography variant="body1" sx={{ fontWeight: 600, mb: 0.5 }}>
@@ -269,6 +269,65 @@ export default function UpplagningPage() {
           <Typography variant="body2" color="text.secondary">
             Mottagare: Stegerholmens Bryggförening
           </Typography>
+        </Box>
+
+        {/* Swish QR codes */}
+        <Typography
+          variant="subtitle2"
+          sx={{ fontWeight: 700, color: "primary.light", mb: 1.5 }}
+        >
+          Skanna QR-kod för att swisha direkt:
+        </Typography>
+        <Box
+          sx={{
+            display: "flex",
+            gap: 3,
+            flexWrap: "wrap",
+            justifyContent: "center",
+          }}
+        >
+          <Box sx={{ textAlign: "center" }}>
+            <Box
+              component="img"
+              src="/swish-QR-small-vinter.png"
+              alt="Swish QR-kod vinteruppläggning"
+              sx={{
+                width: 180,
+                height: "auto",
+                borderRadius: 2,
+                bgcolor: "white",
+                p: 1,
+              }}
+            />
+            <Typography
+              variant="caption"
+              color="text.secondary"
+              sx={{ display: "block", mt: 1 }}
+            >
+              Vinteruppläggning
+            </Typography>
+          </Box>
+          <Box sx={{ textAlign: "center" }}>
+            <Box
+              component="img"
+              src="/swish-QR-small-sommar.png"
+              alt="Swish QR-kod sommaruppläggning"
+              sx={{
+                width: 180,
+                height: "auto",
+                borderRadius: 2,
+                bgcolor: "white",
+                p: 1,
+              }}
+            />
+            <Typography
+              variant="caption"
+              color="text.secondary"
+              sx={{ display: "block", mt: 1 }}
+            >
+              Sommaruppläggning
+            </Typography>
+          </Box>
         </Box>
       </InfoCard>
 
