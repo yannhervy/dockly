@@ -29,8 +29,8 @@ export default function LayoutRouter({ children }: { children: React.ReactNode }
     return <>{children}</>;
   }
 
-  // Public pages — top navbar + footer
-  if (PUBLIC_PATHS.includes(pathname)) {
+  // Public pages — top navbar + footer (also matches sub-paths like /info/miljo)
+  if (PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(p + "/"))) {
     return <PublicLayout>{children}</PublicLayout>;
   }
 
