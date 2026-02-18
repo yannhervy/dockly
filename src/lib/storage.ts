@@ -177,3 +177,24 @@ export async function uploadAbandonedObjectImage(
   const downloadUrl = await getDownloadURL(snapshot.ref);
   return downloadUrl;
 }
+
+/**
+ * Upload a POI image to Firebase Storage.
+ * Path: poi-images/{poiId}/{fileName}
+ */
+export async function uploadPOIImage(
+  file: File,
+  poiId: string
+): Promise<string> {
+  const resizedBlob = await resizeImage(file);
+  const isTransparent = ["image/png", "image/webp", "image/gif"].includes(file.type);
+  const ext = isTransparent ? "png" : "jpg";
+  const baseName = file.name.replace(/\.[^.]+$/, "");
+  const fileName = `${baseName}.${ext}`;
+  const storageRef = ref(storage, `poi-images/${poiId}/${fileName}`);
+  const snapshot = await uploadBytes(storageRef, resizedBlob, {
+    contentType: resizedBlob.type || "image/jpeg",
+  });
+  const downloadUrl = await getDownloadURL(snapshot.ref);
+  return downloadUrl;
+}

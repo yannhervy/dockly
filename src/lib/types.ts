@@ -242,3 +242,12 @@ export interface AbandonedObject {
   purchaseListingId?: string;            // Linked marketplace listing ID
 }
 
+// ─── Points of Interest ───────────────────────────────────
+
+export interface POI {
+  id: string;              // Document ID = the POI name
+  comment?: string;        // Description displayed on click
+  imageUrl?: string;       // Optional photo
+  lat: number;             // GPS latitude
+  lng: number;             // GPS longitude
+}

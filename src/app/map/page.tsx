@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { collection, getDocs, doc, updateDoc, addDoc, Timestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useAuth } from "@/context/AuthContext";
-import type { Berth, Dock, Resource, LandStorageEntry, SeaHut, Box as BoxType, AbandonedObject } from "@/lib/types";
+import type { Berth, Dock, Resource, LandStorageEntry, SeaHut, Box as BoxType, AbandonedObject, POI } from "@/lib/types";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 import Chip from "@mui/material/Chip";
@@ -43,7 +43,8 @@ type SelectedObject =
   | { kind: "berth"; data: Berth }
   | { kind: "resource"; data: Resource }
   | { kind: "landStorage"; data: LandStorageEntry }
-  | { kind: "abandonedObject"; data: AbandonedObject };
+  | { kind: "abandonedObject"; data: AbandonedObject }
+  | { kind: "poi"; data: POI };
 
 // Check if a normalized phone number is a valid Swedish mobile (07x)
 function isMobileNumber(phone: string): boolean {
@@ -266,13 +267,13 @@ function ResourceMarkers({ resources, currentUid, onSelect }: { resources: Resou
         display: flex;
         align-items: center;
         justify-content: center;
-        width: 28px;
-        height: 28px;
+        width: 34px;
+        height: 34px;
         border-radius: 50%;
         background: ${isMine ? "#00E5FF" : colors.bg};
         border: 2px solid ${isMine ? "#00B8D4" : colors.border};
         color: ${isMine ? "#000" : "#fff"};
-        font-size: 7px;
+        font-size: 10px;
         font-weight: 800;
         cursor: pointer;
         box-shadow: ${isMine ? "0 0 10px 3px rgba(0,229,255,0.6)" : "0 2px 6px rgba(0,0,0,0.5)"};
@@ -324,13 +325,13 @@ function LandStorageMarkers({ entries, currentUid, onSelect }: { entries: LandSt
         display: flex;
         align-items: center;
         justify-content: center;
-        width: 28px;
-        height: 28px;
+        width: 34px;
+        height: 34px;
         border-radius: 50%;
         background: ${isMine ? "#00E5FF" : isOccupied ? "#F57C00" : "#66BB6A"};
         border: 2px solid ${isMine ? "#00B8D4" : isOccupied ? "#E65100" : "#388E3C"};
         color: ${isMine ? "#000" : "#fff"};
-        font-size: 8px;
+        font-size: 10px;
         font-weight: 800;
         cursor: pointer;
         box-shadow: ${isMine ? "0 0 10px 3px rgba(0,229,255,0.6)" : "0 2px 6px rgba(0,0,0,0.5)"};
@@ -404,6 +405,59 @@ function AbandonedObjectMarkers({ entries, onSelect }: { entries: AbandonedObjec
   return null;
 }
 
+// Component that draws POI markers as pill-shaped purple labels
+function POIMarkers({ pois, onSelect }: { pois: POI[]; onSelect: (p: POI) => void }) {
+  const map = useMap();
+  const markerLib = useMapsLibrary("marker");
+
+  useEffect(() => {
+    if (!map || !markerLib) return;
+
+    const cleanups: (() => void)[] = [];
+
+    pois.forEach((poi) => {
+      if (!poi.lat || !poi.lng) return;
+
+      const el = document.createElement("div");
+      el.innerHTML = `<span>${poi.id}</span>`;
+      el.style.cssText = `
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 4px 10px;
+        border-radius: 12px;
+        background: #7C4DFF;
+        border: 2px solid #651FFF;
+        color: #fff;
+        font-size: 10px;
+        font-weight: 800;
+        cursor: pointer;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.5);
+        text-shadow: 0 1px 2px rgba(0,0,0,0.6);
+        transition: transform 0.15s;
+        white-space: nowrap;
+      `;
+      el.addEventListener("mouseenter", () => { el.style.transform = "scale(1.15)"; });
+      el.addEventListener("mouseleave", () => { el.style.transform = "scale(1)"; });
+      el.addEventListener("click", () => onSelect(poi));
+
+      const marker = new google.maps.marker.AdvancedMarkerElement({
+        position: { lat: poi.lat, lng: poi.lng },
+        map,
+        content: el,
+        title: poi.id,
+        zIndex: 5,
+      });
+
+      cleanups.push(() => { marker.map = null; });
+    });
+
+    return () => { cleanups.forEach((fn) => fn()); };
+  }, [map, markerLib, pois, onSelect]);
+
+  return null;
+}
+
 export default function MapPage() {
   const { firebaseUser, profile, isSuperadmin, isDockManager } = useAuth();
   const currentUid = firebaseUser?.uid;
@@ -413,6 +467,7 @@ export default function MapPage() {
   const [docks, setDocks] = useState<Dock[]>([]);
   const [landEntries, setLandEntries] = useState<LandStorageEntry[]>([]);
   const [abandonedObjects, setAbandonedObjects] = useState<AbandonedObject[]>([]);
+  const [pois, setPois] = useState<POI[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedObject, setSelectedObject] = useState<SelectedObject | null>(null);
   const [snackMsg, setSnackMsg] = useState("");
@@ -422,11 +477,12 @@ export default function MapPage() {
   useEffect(() => {
     async function fetchData() {
       try {
-        const [rSnap, dSnap, lSnap, aSnap] = await Promise.all([
+        const [rSnap, dSnap, lSnap, aSnap, pSnap] = await Promise.all([
           getDocs(collection(db, "resources")),
           getDocs(collection(db, "docks")),
           getDocs(collection(db, "landStorage")),
           getDocs(collection(db, "abandonedObjects")),
+          getDocs(collection(db, "pois")),
         ]);
 
         const allResources = rSnap.docs.map(
@@ -449,6 +505,9 @@ export default function MapPage() {
         );
         setAbandonedObjects(
           aSnap.docs.map((d) => ({ id: d.id, ...d.data() }) as AbandonedObject)
+        );
+        setPois(
+          pSnap.docs.map((d) => ({ id: d.id, ...d.data() }) as POI)
         );
 
         // Load SMS preferences for all users
@@ -486,6 +545,10 @@ export default function MapPage() {
 
   const handleSelectAbandoned = useCallback((e: AbandonedObject) => {
     setSelectedObject({ kind: "abandonedObject", data: e });
+  }, []);
+
+  const handleSelectPOI = useCallback((p: POI) => {
+    setSelectedObject({ kind: "poi", data: p });
   }, []);
 
   const berthsWithCoords = berths.filter((b) => b.lat && b.lng);
@@ -543,6 +606,11 @@ export default function MapPage() {
             icon={<DangerousIcon sx={{ fontSize: 16, color: "#fff !important" }} />}
             label="Övergiven"
           />
+          <Chip
+            size="small"
+            sx={{ bgcolor: "#7C4DFF", color: "#fff", fontWeight: 600 }}
+            label="POI"
+          />
         </Box>
       </Box>
 
@@ -583,6 +651,7 @@ export default function MapPage() {
               <ResourceMarkers resources={otherResources} currentUid={currentUid} onSelect={handleSelectResource} />
               <LandStorageMarkers entries={landEntries} currentUid={currentUid} onSelect={handleSelectLandStorage} />
               <AbandonedObjectMarkers entries={abandonedObjects} onSelect={handleSelectAbandoned} />
+              <POIMarkers pois={pois} onSelect={handleSelectPOI} />
             </Map>
           </APIProvider>
         )}
@@ -794,6 +863,55 @@ export default function MapPage() {
                     </Button>
                   </DialogActions>
                 </Dialog>
+              </Paper>
+            );
+          }
+
+          // ─── POI info panel ───────────────────────────────────
+          if (obj.kind === "poi") {
+            const p = obj.data;
+            return (
+              <Paper
+                elevation={6}
+                sx={{
+                  position: "absolute",
+                  top: 16,
+                  right: 16,
+                  width: 340,
+                  maxHeight: "calc(100vh - 120px)",
+                  overflow: "auto",
+                  bgcolor: "rgba(13, 33, 55, 0.97)",
+                  backdropFilter: "blur(12px)",
+                  border: "1px solid rgba(124,77,255,0.2)",
+                  p: 2.5,
+                  borderRadius: 2,
+                }}
+              >
+                <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", mb: 1.5 }}>
+                  <Box>
+                    <Typography variant="h6" sx={{ fontWeight: 700 }}>{p.id}</Typography>
+                  </Box>
+                  <IconButton size="small" onClick={() => setSelectedObject(null)}>
+                    <CloseIcon fontSize="small" />
+                  </IconButton>
+                </Box>
+
+                {p.imageUrl && (
+                  <Box
+                    component="img"
+                    src={p.imageUrl}
+                    alt={p.id}
+                    sx={{ width: "100%", borderRadius: 1, mb: 1.5, border: "1px solid rgba(124,77,255,0.1)" }}
+                  />
+                )}
+
+                {p.comment && (
+                  <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.6 }}>{p.comment}</Typography>
+                )}
+
+                <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 1 }}>
+                  {p.lat.toFixed(6)}, {p.lng.toFixed(6)}
+                </Typography>
               </Paper>
             );
           }

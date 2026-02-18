@@ -3,7 +3,7 @@
 import React, { useEffect, useState, useRef } from "react";
 import { db } from "@/lib/firebase";
 import { useAuth } from "@/context/AuthContext";
-import { User, Dock, Resource, BerthInterest, InterestReply, Berth, SeaHut, LandStorageEntry, UserMessage, AbandonedObject, AbandonedObjectType } from "@/lib/types";
+import { User, Dock, Resource, BerthInterest, InterestReply, Berth, SeaHut, LandStorageEntry, UserMessage, AbandonedObject, AbandonedObjectType, POI } from "@/lib/types";
 import { normalizePhone } from "@/lib/phoneUtils";
 import { sendSms } from "@/lib/sms";
 import {
@@ -21,7 +21,7 @@ import {
   deleteField,
 } from "firebase/firestore";
 import ProtectedRoute from "@/components/ProtectedRoute";
-import { uploadBoatImage, uploadDockImage, uploadLandStorageImage, uploadAbandonedObjectImage, deleteStorageFile } from "@/lib/storage";
+import { uploadBoatImage, uploadDockImage, uploadLandStorageImage, uploadAbandonedObjectImage, uploadPOIImage, deleteStorageFile } from "@/lib/storage";
 import Checkbox from "@mui/material/Checkbox";
 import Divider from "@mui/material/Divider";
 import { computeRectCorners, computeBoatHull, HARBOR_CENTER } from "@/lib/mapUtils";
@@ -75,6 +75,7 @@ import SendIcon from "@mui/icons-material/Send";
 import DangerousIcon from "@mui/icons-material/Dangerous";
 import CloseIcon from "@mui/icons-material/Close";
 import InsertPhotoIcon from "@mui/icons-material/InsertPhoto";
+import PlaceIcon from "@mui/icons-material/Place";
 import InputAdornment from "@mui/material/InputAdornment";
 import SearchIcon from "@mui/icons-material/Search";
 import ToggleButton from "@mui/material/ToggleButton";
@@ -118,6 +119,7 @@ function AdminContent() {
         {isSuperadmin && <Tab value={2} icon={<DirectionsBoatIcon />} label="Resources" iconPosition="start" />}
         <Tab value={3} icon={<SailingIcon />} label="Intresseanmälningar" iconPosition="start" />
         {isSuperadmin && <Tab value={4} icon={<DangerousIcon />} label="Övergivna" iconPosition="start" />}
+        {isSuperadmin && <Tab value={5} icon={<PlaceIcon />} label="POI" iconPosition="start" />}
       </Tabs>
 
       {tabIndex === 0 && isSuperadmin && <UsersTab />}
@@ -125,6 +127,7 @@ function AdminContent() {
       {tabIndex === 2 && isSuperadmin && <ResourcesTab />}
       {tabIndex === 3 && <InterestsTab />}
       {tabIndex === 4 && isSuperadmin && <AbandonedObjectsTab />}
+      {tabIndex === 5 && isSuperadmin && <POITab />}
     </Box>
   );
 }
@@ -3134,3 +3137,347 @@ function AbandonedObjectsTab() {
   );
 }
 
+
+// ─── POI Tab ──────────────────────────────────────────────
+function POITab() {
+  const [entries, setEntries] = useState<POI[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [successMsg, setSuccessMsg] = useState("");
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [editEntry, setEditEntry] = useState<POI | null>(null);
+  const [saving, setSaving] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
+
+  const [form, setForm] = useState({
+    name: "",
+    lat: "",
+    lng: "",
+    comment: "",
+  });
+
+  useEffect(() => {
+    fetchEntries();
+  }, []);
+
+  async function fetchEntries() {
+    setLoading(true);
+    try {
+      const snap = await getDocs(collection(db, "pois"));
+      const data = snap.docs
+        .map((d) => ({ id: d.id, ...d.data() }) as POI)
+        .sort((a, b) => a.id.localeCompare(b.id));
+      setEntries(data);
+    } catch (err) {
+      console.error("Error fetching POIs:", err);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function openAdd() {
+    setEditEntry(null);
+    setForm({ name: "", lat: "", lng: "", comment: "" });
+    setPhotoFile(null);
+    setPhotoPreview(null);
+    setDialogOpen(true);
+  }
+
+  function openEdit(entry: POI) {
+    setEditEntry(entry);
+    setForm({
+      name: entry.id,
+      lat: String(entry.lat),
+      lng: String(entry.lng),
+      comment: entry.comment || "",
+    });
+    setPhotoFile(null);
+    setPhotoPreview(entry.imageUrl || null);
+    setDialogOpen(true);
+  }
+
+  async function handleSave() {
+    setSaving(true);
+    try {
+      const lat = parseFloat(form.lat);
+      const lng = parseFloat(form.lng);
+      if (isNaN(lat) || isNaN(lng)) {
+        alert("Latitude and longitude must be valid numbers.");
+        setSaving(false);
+        return;
+      }
+      if (!form.name.trim()) {
+        alert("Name is required.");
+        setSaving(false);
+        return;
+      }
+
+      const docId = form.name.trim();
+      let imageUrl = editEntry?.imageUrl || "";
+
+      if (photoFile) {
+        imageUrl = await uploadPOIImage(photoFile, docId);
+      }
+
+      const data: Record<string, unknown> = {
+        lat,
+        lng,
+        comment: form.comment.trim(),
+        ...(imageUrl ? { imageUrl } : {}),
+      };
+
+      // If renaming (name changed), delete old doc
+      if (editEntry && editEntry.id !== docId) {
+        await deleteDoc(doc(db, "pois", editEntry.id));
+      }
+
+      await setDoc(doc(db, "pois", docId), data, { merge: true });
+
+      setDialogOpen(false);
+      setSuccessMsg(editEntry ? "POI uppdaterad!" : "POI skapad!");
+      setTimeout(() => setSuccessMsg(""), 3000);
+      fetchEntries();
+    } catch (err) {
+      console.error("Error saving POI:", err);
+      alert("Failed to save. See console.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleDelete(id: string) {
+    if (!confirm("Är du säker på att du vill ta bort denna POI?")) return;
+    try {
+      const entry = entries.find((e) => e.id === id);
+      if (entry?.imageUrl) await deleteStorageFile(entry.imageUrl);
+      await deleteDoc(doc(db, "pois", id));
+      setSuccessMsg("POI borttagen!");
+      setTimeout(() => setSuccessMsg(""), 3000);
+      fetchEntries();
+    } catch (err) {
+      console.error("Error deleting POI:", err);
+    }
+  }
+
+  const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    if (f) {
+      setPhotoFile(f);
+      setPhotoPreview(URL.createObjectURL(f));
+    }
+  };
+
+
+
+
+  return (
+    <Box>
+      {successMsg && (
+        <Alert severity="success" sx={{ mb: 2 }}>
+          {successMsg}
+        </Alert>
+      )}
+
+      <Box sx={{ display: "flex", justifyContent: "flex-end", mb: 2 }}>
+        <Button variant="contained" startIcon={<AddIcon />} onClick={openAdd}>
+          Lägg till POI
+        </Button>
+      </Box>
+
+      {loading ? (
+        <Box sx={{ display: "flex", justifyContent: "center", py: 4 }}>
+          <CircularProgress />
+        </Box>
+      ) : (
+        <TableContainer component={Paper} sx={{ bgcolor: "background.paper", backgroundImage: "none" }}>
+          <Table>
+            <TableHead>
+              <TableRow>
+                <TableCell>Namn</TableCell>
+                <TableCell>Foto</TableCell>
+                <TableCell>Position</TableCell>
+                <TableCell>Kommentar</TableCell>
+                <TableCell align="right">Åtgärder</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {entries.map((entry) => (
+                <TableRow key={entry.id} hover>
+                  <TableCell sx={{ fontWeight: 700 }}>{entry.id}</TableCell>
+                  <TableCell>
+                    {entry.imageUrl ? (
+                      <InsertPhotoIcon
+                        sx={{ color: "#4FC3F7", cursor: "pointer", fontSize: 28 }}
+                        titleAccess="Visa bild"
+                        onClick={() => setLightboxUrl(entry.imageUrl!)}
+                      />
+                    ) : (
+                      "—"
+                    )}
+                  </TableCell>
+                  <TableCell sx={{ fontSize: "0.8rem" }}>
+                    {entry.lat?.toFixed(5)}, {entry.lng?.toFixed(5)}
+                  </TableCell>
+                  <TableCell sx={{ maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {entry.comment || "—"}
+                  </TableCell>
+                  <TableCell align="right">
+                    <IconButton size="small" onClick={() => openEdit(entry)} sx={{ mr: 0.5 }}>
+                      <EditIcon fontSize="small" />
+                    </IconButton>
+                    <IconButton size="small" color="error" onClick={() => handleDelete(entry.id)}>
+                      <DeleteIcon fontSize="small" />
+                    </IconButton>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      )}
+
+      {/* Add / Edit Dialog */}
+      <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>{editEntry ? `Redigera ${editEntry.id}` : "Ny POI"}</DialogTitle>
+        <DialogContent>
+          <TextField
+            fullWidth
+            label="Namn (blir ID)"
+            value={form.name}
+            onChange={(e) => setForm({ ...form, name: e.target.value })}
+            disabled={!!editEntry}
+            sx={{ mt: 1, mb: 2 }}
+            helperText={editEntry ? "Namn kan inte ändras" : "T.ex. \"Toalett Brygga A\""}
+          />
+
+          <Typography variant="subtitle2" sx={{ mt: 1, mb: 0.5, fontWeight: 700 }}>
+            Position — klicka på kartan för att placera
+          </Typography>
+          <Box sx={{ height: 300, border: '1px solid rgba(79,195,247,0.15)', borderRadius: 1, overflow: 'hidden', mb: 1 }}>
+            <APIProvider apiKey={process.env.NEXT_PUBLIC_GOOGLE_MAPS_KEY || ""}>
+              <GMap
+                defaultCenter={form.lat && form.lng ? { lat: parseFloat(form.lat), lng: parseFloat(form.lng) } : HARBOR_CENTER}
+                defaultZoom={18}
+                mapId="edit-poi-map"
+                mapTypeId="satellite"
+                style={{ width: '100%', height: '100%' }}
+                gestureHandling="greedy"
+                disableDefaultUI
+                zoomControl
+                onClick={(e) => {
+                  const ll = e.detail?.latLng;
+                  if (ll) setForm({ ...form, lat: String(ll.lat), lng: String(ll.lng) });
+                }}
+              >
+                {/* Show all other POIs as context markers */}
+                {entries
+                  .filter((e) => e.id !== editEntry?.id && e.lat && e.lng)
+                  .map((e) => (
+                    <AdvancedMarker key={e.id} position={{ lat: e.lat, lng: e.lng }}>
+                      <Box sx={{ display: "flex", alignItems: "center", opacity: 0.5 }}>
+                        <PlaceIcon sx={{ fontSize: 20, color: '#999' }} />
+                        <Typography sx={{ fontSize: 8, fontWeight: 800, color: '#999', ml: '1px' }}>{e.id}</Typography>
+                      </Box>
+                    </AdvancedMarker>
+                  ))
+                }
+                {/* Current position marker */}
+                {form.lat && form.lng && !isNaN(parseFloat(form.lat)) && !isNaN(parseFloat(form.lng)) && (
+                  <AdvancedMarker position={{ lat: parseFloat(form.lat), lng: parseFloat(form.lng) }}>
+                    <PlaceIcon sx={{ fontSize: 32, color: '#7C4DFF', filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.6))' }} />
+                  </AdvancedMarker>
+                )}
+              </GMap>
+            </APIProvider>
+          </Box>
+          <Box sx={{ display: 'flex', gap: 2, mb: 2 }}>
+            <TextField
+              label="Latitud" type="number" size="small"
+              value={form.lat}
+              onChange={(e) => setForm({ ...form, lat: e.target.value })}
+              inputProps={{ step: "0.000001" }}
+              sx={{ flex: 1 }}
+            />
+            <TextField
+              label="Longitud" type="number" size="small"
+              value={form.lng}
+              onChange={(e) => setForm({ ...form, lng: e.target.value })}
+              inputProps={{ step: "0.000001" }}
+              sx={{ flex: 1 }}
+            />
+          </Box>
+          <TextField
+            fullWidth
+            label="Kommentar"
+            multiline
+            rows={2}
+            value={form.comment}
+            onChange={(e) => setForm({ ...form, comment: e.target.value })}
+            sx={{ mb: 2 }}
+          />
+
+          {/* Photo upload */}
+          <Box sx={{ mb: 1 }}>
+            <Button variant="outlined" size="small" onClick={() => fileRef.current?.click()}>
+              {photoPreview ? "Byt foto" : "Välj foto"}
+            </Button>
+            <input ref={fileRef} type="file" accept="image/*" hidden onChange={handlePhotoChange} />
+          </Box>
+          {photoPreview && (
+            <Box
+              component="img"
+              src={photoPreview}
+              alt="Preview"
+              sx={{ width: "100%", maxHeight: 300, objectFit: "contain", borderRadius: 1, border: "1px solid rgba(79,195,247,0.15)", mt: 1, cursor: "pointer" }}
+              onClick={() => setLightboxUrl(photoPreview)}
+            />
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDialogOpen(false)}>Avbryt</Button>
+          <Button
+            variant="contained"
+            onClick={handleSave}
+            disabled={saving || !form.lat || !form.lng || !form.name.trim()}
+            startIcon={saving ? <CircularProgress size={18} /> : <SaveIcon />}
+          >
+            {saving ? "Sparar..." : "Spara"}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Image Lightbox */}
+      <Dialog
+        open={!!lightboxUrl}
+        onClose={() => setLightboxUrl(null)}
+        maxWidth={false}
+        PaperProps={{
+          sx: {
+            bgcolor: "rgba(0,0,0,0.95)",
+            maxWidth: "95vw",
+            maxHeight: "95vh",
+            overflow: "auto",
+            p: 1,
+          },
+        }}
+      >
+        <IconButton
+          onClick={() => setLightboxUrl(null)}
+          sx={{ position: "sticky", top: 0, float: "right", color: "#fff", zIndex: 1 }}
+        >
+          <CloseIcon />
+        </IconButton>
+        {lightboxUrl && (
+          <Box
+            component="img"
+            src={lightboxUrl}
+            alt="Full size"
+            sx={{ display: "block" }}
+          />
+        )}
+      </Dialog>
+    </Box>
+  );
+}
