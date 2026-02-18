@@ -15,6 +15,7 @@ import {
 } from "firebase/firestore";
 import { db, storage } from "@/lib/firebase";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { resizeImage } from "@/lib/storage";
 import { useAuth } from "@/context/AuthContext";
 import type { Dock, BerthInterest, InterestReply } from "@/lib/types";
 import Box from "@mui/material/Box";
@@ -164,7 +165,8 @@ export default function InterestPage() {
         const ext = imageFile.name.split(".").pop() || "jpg";
         const fileName = `interest_${Date.now()}.${ext}`;
         const storageRef = ref(storage, `interests/${fileName}`);
-        await uploadBytes(storageRef, imageFile);
+        const resizedBlob = await resizeImage(imageFile);
+        await uploadBytes(storageRef, resizedBlob, { contentType: "image/jpeg" });
         imageUrl = await getDownloadURL(storageRef);
       }
 

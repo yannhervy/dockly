@@ -14,6 +14,7 @@ import {
   Timestamp,
 } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { resizeImage } from "@/lib/storage";
 import { db, storage } from "@/lib/firebase";
 import { useAuth } from "@/context/AuthContext";
 import type { MarketplaceListing } from "@/lib/types";
@@ -244,7 +245,8 @@ export default function MarketplacePage() {
       if (imageFile) {
         const fileName = buildImageFileName(imageFile.name);
         const storageRef = ref(storage, `marketplace/${fileName}`);
-        await uploadBytes(storageRef, imageFile);
+        const resizedBlob = await resizeImage(imageFile);
+        await uploadBytes(storageRef, resizedBlob, { contentType: "image/jpeg" });
         imageUrl = await getDownloadURL(storageRef);
       }
 

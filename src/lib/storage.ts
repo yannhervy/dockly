@@ -8,20 +8,20 @@ const JPEG_QUALITY = 0.8;
  * Resize an image file so neither width nor height exceeds MAX_DIMENSION.
  * Returns a compressed JPEG Blob.
  */
-function resizeImage(file: File): Promise<Blob> {
+export function resizeImage(file: File, maxDimension = MAX_DIMENSION): Promise<Blob> {
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.onload = () => {
       let { width, height } = img;
 
       // Only resize if the image exceeds the max dimension
-      if (width > MAX_DIMENSION || height > MAX_DIMENSION) {
+      if (width > maxDimension || height > maxDimension) {
         if (width > height) {
-          height = Math.round((height * MAX_DIMENSION) / width);
-          width = MAX_DIMENSION;
+          height = Math.round((height * maxDimension) / width);
+          width = maxDimension;
         } else {
-          width = Math.round((width * MAX_DIMENSION) / height);
-          height = MAX_DIMENSION;
+          width = Math.round((width * maxDimension) / height);
+          height = maxDimension;
         }
       }
 

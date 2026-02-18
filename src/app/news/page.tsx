@@ -12,6 +12,7 @@ import {
   Timestamp,
 } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { resizeImage } from "@/lib/storage";
 import { db, storage } from "@/lib/firebase";
 import { useAuth } from "@/context/AuthContext";
 import type { NewsPost, ReactionMap } from "@/lib/types";
@@ -112,7 +113,8 @@ export default function NewsPage() {
         const ext = file.name.split(".").pop() || "jpg";
         const fileName = `news_${today}_${Date.now()}.${ext}`;
         const storageRef = ref(storage, `news/${fileName}`);
-        await uploadBytes(storageRef, file);
+        const resizedBlob = await resizeImage(file);
+        await uploadBytes(storageRef, resizedBlob, { contentType: "image/jpeg" });
         const url = await getDownloadURL(storageRef);
         imageUrls.push(url);
       }
