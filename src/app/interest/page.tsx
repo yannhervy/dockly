@@ -15,7 +15,7 @@ import {
 } from "firebase/firestore";
 import { db, storage } from "@/lib/firebase";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
-import { resizeImage } from "@/lib/storage";
+import { resizeImage, deleteStorageFile } from "@/lib/storage";
 import { useAuth } from "@/context/AuthContext";
 import type { Dock, BerthInterest, InterestReply } from "@/lib/types";
 import Box from "@mui/material/Box";
@@ -479,6 +479,8 @@ export default function InterestPage() {
                 interest={interest}
                 docks={docks}
                 onDelete={async (id) => {
+                  const interest = myInterests.find((i) => i.id === id);
+                  if (interest?.imageUrl) await deleteStorageFile(interest.imageUrl);
                   await deleteDoc(doc(db, "interests", id));
                   setMyInterests((prev) => prev.filter((i) => i.id !== id));
                 }}

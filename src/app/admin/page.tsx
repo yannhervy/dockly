@@ -21,7 +21,7 @@ import {
   deleteField,
 } from "firebase/firestore";
 import ProtectedRoute from "@/components/ProtectedRoute";
-import { uploadDockImage, uploadBoatImage, uploadAbandonedObjectImage } from "@/lib/storage";
+import { uploadBoatImage, uploadDockImage, uploadLandStorageImage, uploadAbandonedObjectImage, deleteStorageFile } from "@/lib/storage";
 import Checkbox from "@mui/material/Checkbox";
 import Divider from "@mui/material/Divider";
 import { computeRectCorners, computeBoatHull, HARBOR_CENTER } from "@/lib/mapUtils";
@@ -829,6 +829,8 @@ function DocksTab() {
 
   const handleRemoveDockImage = async (dockId: string) => {
     try {
+      const dock = docks.find((d) => d.id === dockId);
+      if (dock?.imageUrl) await deleteStorageFile(dock.imageUrl);
       await updateDoc(doc(db, "docks", dockId), { imageUrl: "" });
       setDocks((prev) =>
         prev.map((d) => (d.id === dockId ? { ...d, imageUrl: "" } : d))
@@ -1640,6 +1642,7 @@ function ResourcesTab() {
       if (editImageFile) {
         data.objectImageUrl = await uploadBoatImage(editImageFile, id);
       } else if (removeImage) {
+        if (editResource.objectImageUrl) await deleteStorageFile(editResource.objectImageUrl);
         data.objectImageUrl = "";
       }
 
@@ -2470,6 +2473,8 @@ function InterestsTab() {
             onClick={async () => {
               if (!deleteConfirmId) return;
               try {
+                const interest = interests.find((i) => i.id === deleteConfirmId);
+                if (interest?.imageUrl) await deleteStorageFile(interest.imageUrl);
                 await deleteDoc(doc(db, "interests", deleteConfirmId));
                 setInterests((prev) => prev.filter((i) => i.id !== deleteConfirmId));
                 setSuccessMsg("Intresseanmälan borttagen.");
@@ -2825,6 +2830,8 @@ function AbandonedObjectsTab() {
   async function handleDelete(id: string) {
     if (!confirm("Är du säker på att du vill ta bort detta objekt?")) return;
     try {
+      const entry = entries.find((e) => e.id === id);
+      if (entry?.imageUrl) await deleteStorageFile(entry.imageUrl);
       await deleteDoc(doc(db, "abandonedObjects", id));
       setSuccessMsg("Borttagen!");
       setTimeout(() => setSuccessMsg(""), 3000);

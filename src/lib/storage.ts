@@ -1,5 +1,24 @@
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
 import { storage } from "./firebase";
+
+/**
+ * Delete a file from Firebase Storage given its download URL.
+ * Silently ignores errors (e.g. file already deleted or invalid URL).
+ */
+export async function deleteStorageFile(downloadUrl: string): Promise<void> {
+  if (!downloadUrl) return;
+  try {
+    // Firebase download URLs contain the path after /o/ and before ?
+    const match = decodeURIComponent(downloadUrl).match(/\/o\/(.+?)(\?|$)/);
+    if (!match) return;
+    const storagePath = match[1];
+    const fileRef = ref(storage, storagePath);
+    await deleteObject(fileRef);
+  } catch (err) {
+    // File may already be deleted or URL may be invalid — log but don't throw
+    console.warn("Could not delete storage file:", err);
+  }
+}
 
 const MAX_DIMENSION = 1200;
 const JPEG_QUALITY = 0.8;

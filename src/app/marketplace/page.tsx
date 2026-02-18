@@ -14,7 +14,7 @@ import {
   Timestamp,
 } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
-import { resizeImage } from "@/lib/storage";
+import { resizeImage, deleteStorageFile } from "@/lib/storage";
 import { db, storage } from "@/lib/firebase";
 import { useAuth } from "@/context/AuthContext";
 import type { MarketplaceListing } from "@/lib/types";
@@ -296,6 +296,8 @@ export default function MarketplacePage() {
 
   const handleDelete = async (listingId: string) => {
     try {
+      const listing = listings.find((l) => l.id === listingId);
+      if (listing?.imageUrl) await deleteStorageFile(listing.imageUrl);
       await deleteDoc(doc(db, "marketplace", listingId));
       setSuccess("Annons borttagen!");
       setTimeout(() => setSuccess(""), 3000);
