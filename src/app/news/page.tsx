@@ -464,7 +464,54 @@ export default function NewsPage() {
               Lägg till bilder ({imageFiles.length} valda)
             </Button>
 
-            {/* Image previews */}
+            {/* Existing images (edit mode) */}
+            {editingPost && editingPost.imageUrls && editingPost.imageUrls.length > 0 && (
+              <Box sx={{ mt: 1 }}>
+                <Typography variant="caption" color="text.secondary" sx={{ mb: 0.5, display: "block" }}>
+                  Befintliga bilder:
+                </Typography>
+                <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
+                  {editingPost.imageUrls.map((url, i) => (
+                    <Box key={url} sx={{ position: "relative", width: 100, height: 80 }}>
+                      <Box
+                        component="img"
+                        src={url}
+                        alt={`Existing ${i + 1}`}
+                        sx={{
+                          width: "100%",
+                          height: "100%",
+                          objectFit: "cover",
+                          borderRadius: 1,
+                        }}
+                      />
+                      <IconButton
+                        size="small"
+                        onClick={async () => {
+                          await deleteStorageFile(url);
+                          setEditingPost((prev) =>
+                            prev ? { ...prev, imageUrls: prev.imageUrls.filter((u) => u !== url) } : null
+                          );
+                        }}
+                        sx={{
+                          position: "absolute",
+                          top: -6,
+                          right: -6,
+                          bgcolor: "error.main",
+                          color: "#fff",
+                          width: 20,
+                          height: 20,
+                          "&:hover": { bgcolor: "error.dark" },
+                        }}
+                      >
+                        <CloseIcon sx={{ fontSize: 14 }} />
+                      </IconButton>
+                    </Box>
+                  ))}
+                </Box>
+              </Box>
+            )}
+
+            {/* New image previews */}
             {imagePreviews.length > 0 && (
               <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", mt: 1 }}>
                 {imagePreviews.map((preview, i) => (
