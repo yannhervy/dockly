@@ -7,6 +7,7 @@ import CardContent from "@mui/material/CardContent";
 import Divider from "@mui/material/Divider";
 import Button from "@mui/material/Button";
 import MuiLink from "@mui/material/Link";
+import Alert from "@mui/material/Alert";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import ForestIcon from "@mui/icons-material/Forest";
 import RecyclingIcon from "@mui/icons-material/Recycling";
@@ -133,6 +134,11 @@ export default function MiljoPage() {
             },
           ]}
         />
+        <Alert severity="error" sx={{ mt: 2 }}>
+          Vi har haft återkommande problem med dumpning av skräp och avfall på
+          hamnområdet. Detta medför onödiga kostnader som slår mot oss alla.
+          Framöver kommer <strong>all dumpning att polisanmälas</strong>.
+        </Alert>
       </InfoCard>
 
       {/* ─── Båtunderhåll ─────────────────────────────────── */}
