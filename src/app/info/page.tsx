@@ -9,6 +9,7 @@ import CardActionArea from "@mui/material/CardActionArea";
 import InfoIcon from "@mui/icons-material/Info";
 import GroupsIcon from "@mui/icons-material/Groups";
 import ForestIcon from "@mui/icons-material/Forest";
+import LocalParkingIcon from "@mui/icons-material/LocalParking";
 
 const subPages = [
   {
@@ -23,6 +24,13 @@ const subPages = [
     description:
       "Avfallshantering, båtunderhåll, båttyper, motorer och trivselregler.",
     href: "/info/miljo",
+  },
+  {
+    icon: <LocalParkingIcon sx={{ fontSize: 40, color: "#FFB74D" }} />,
+    title: "Parkering",
+    description:
+      "Parkeringskort, Parakey-appen, regler och betalningsinformation.",
+    href: "/info/parkering",
   },
 ];
 
