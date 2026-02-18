@@ -87,6 +87,7 @@ export interface Berth extends Resource {
   price2026?: number;
   allowSecondHand?: boolean; // Allow tenant to sublet this berth
   invoiceSecondHandTenantDirectly?: boolean; // Invoice the second-hand tenant directly (only relevant if allowSecondHand is true)
+  secondHandTenantId?: string; // UID of the second-hand tenant (if any)
   occupantFirstName?: string;
   occupantLastName?: string;
   occupantPhone?: string;

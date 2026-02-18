@@ -23,6 +23,7 @@ import AnchorIcon from "@mui/icons-material/Anchor";
 import LoginIcon from "@mui/icons-material/Login";
 import DashboardIcon from "@mui/icons-material/Dashboard";
 import LogoutIcon from "@mui/icons-material/Logout";
+import AdminPanelSettingsIcon from "@mui/icons-material/AdminPanelSettings";
 
 const PUBLIC_NAV = [
   { label: "Hem", path: "/" },
@@ -151,6 +152,17 @@ export default function PublicNavbar() {
                   <DashboardIcon fontSize="small" sx={{ mr: 1 }} />
                   Mina sidor
                 </MenuItem>
+                {profile && (profile.role === "Superadmin" || profile.role === "Dock Manager") && (
+                  <MenuItem
+                    onClick={() => {
+                      handleUserMenuClose();
+                      router.push("/admin");
+                    }}
+                  >
+                    <AdminPanelSettingsIcon fontSize="small" sx={{ mr: 1 }} />
+                    Administration
+                  </MenuItem>
+                )}
                 <Divider />
                 <MenuItem
                   onClick={() => {
@@ -224,6 +236,13 @@ export default function PublicNavbar() {
                   <ListItemText primary="Mina sidor" />
                 </ListItemButton>
               </ListItem>
+              {profile && (profile.role === "Superadmin" || profile.role === "Dock Manager") && (
+                <ListItem disablePadding>
+                  <ListItemButton onClick={() => handleNav("/admin")} sx={{ borderRadius: 1, mx: 1 }}>
+                    <ListItemText primary="Administration" />
+                  </ListItemButton>
+                </ListItem>
+              )}
               <ListItem disablePadding>
                 <ListItemButton
                   onClick={() => {

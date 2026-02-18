@@ -39,11 +39,11 @@ interface NavItem {
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { label: "Harbor Directory", path: "/directory", icon: <PublicIcon /> },
-  { label: "Land Storage", path: "/land-storage", icon: <ConstructionIcon />, roles: ["Superadmin", "Dock Manager"] },
+  { label: "Harbor Directory", path: "/admin/directory", icon: <PublicIcon /> },
+  { label: "Land Storage", path: "/admin/land-storage", icon: <ConstructionIcon />, roles: ["Superadmin", "Dock Manager"] },
   {
     label: "Dock Manager",
-    path: "/manager",
+    path: "/admin/manager",
     icon: <ManageAccountsIcon />,
     roles: ["Superadmin", "Dock Manager"],
   },
@@ -64,6 +64,12 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   // Don't show the shell on the login or setup pages
   if (pathname === "/login" || pathname === "/setup") {
     return <>{children}</>;
+  }
+
+  // Block tenants from accessing admin pages
+  if (profile && profile.role === "Tenant") {
+    router.replace("/dashboard");
+    return null;
   }
 
   const visibleItems = NAV_ITEMS.filter((item) => {
@@ -111,7 +117,11 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           <ListItem key={item.path} disablePadding sx={{ mb: 0.5 }}>
             <ListItemButton
               onClick={() => handleNav(item.path)}
-              selected={pathname === item.path}
+              selected={
+                item.path === "/admin"
+                  ? pathname === "/admin"
+                  : pathname.startsWith(item.path)
+              }
               sx={{
                 borderRadius: 2,
                 "&.Mui-selected": {

@@ -13,9 +13,11 @@ import {
   getDocs,
   doc,
   updateDoc,
+  getDoc,
   arrayUnion,
   orderBy,
   writeBatch,
+  deleteField,
 } from "firebase/firestore";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import Box from "@mui/material/Box";
@@ -39,6 +41,10 @@ import Paper from "@mui/material/Paper";
 import TextField from "@mui/material/TextField";
 import CircularProgress from "@mui/material/CircularProgress";
 import Dialog from "@mui/material/Dialog";
+import DialogTitle from "@mui/material/DialogTitle";
+import DialogContent from "@mui/material/DialogContent";
+import DialogActions from "@mui/material/DialogActions";
+import IconButton from "@mui/material/IconButton";
 import DashboardIcon from "@mui/icons-material/Dashboard";
 import PersonIcon from "@mui/icons-material/Person";
 import PhotoCameraIcon from "@mui/icons-material/PhotoCamera";
@@ -51,6 +57,8 @@ import SaveIcon from "@mui/icons-material/Save";
 import CloseIcon from "@mui/icons-material/Close";
 import SmsIcon from "@mui/icons-material/Sms";
 import MarkEmailReadIcon from "@mui/icons-material/MarkEmailRead";
+import PersonRemoveIcon from "@mui/icons-material/PersonRemove";
+import PersonAddIcon from "@mui/icons-material/PersonAdd";
 
 export default function DashboardPage() {
   return (
@@ -83,6 +91,13 @@ function DashboardContent() {
   // Profile picture upload
   const profileInputRef = useRef<HTMLInputElement>(null);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
+
+  // Second-hand tenant lookup
+  const [secondHandNames, setSecondHandNames] = useState<Record<string, string>>({});
+  const [lookupBerthId, setLookupBerthId] = useState<string | null>(null);
+  const [lookupInput, setLookupInput] = useState("");
+  const [lookupError, setLookupError] = useState("");
+  const [lookupLoading, setLookupLoading] = useState(false);
 
   useEffect(() => {
     if (profile) {
@@ -142,6 +157,19 @@ function DashboardContent() {
       setResources(
         myResSnap.docs.map((d) => ({ id: d.id, ...d.data() }) as Resource)
       );
+
+      // Resolve second-hand tenant names
+      const names: Record<string, string> = {};
+      for (const d of myResSnap.docs) {
+        const data = d.data() as Berth;
+        if (data.secondHandTenantId) {
+          const tenantDoc = await getDoc(doc(db, "users", data.secondHandTenantId));
+          if (tenantDoc.exists()) {
+            names[d.id] = tenantDoc.data().name || tenantDoc.data().email || "Unknown";
+          }
+        }
+      }
+      setSecondHandNames(names);
 
       // ── 2. Match & fetch Land Storage entries ──
       const allLandSnap = await getDocs(collection(db, "landStorage"));
@@ -347,11 +375,74 @@ function DashboardContent() {
     }
   };
 
+  // ── Second-hand tenant lookup ──
+  const handleLookupTenant = async () => {
+    if (!lookupBerthId || !lookupInput.trim()) return;
+    setLookupLoading(true);
+    setLookupError("");
+    try {
+      const input = lookupInput.trim();
+      let foundUid = "";
+      let foundName = "";
+
+      // Try phone lookup first
+      const normalized = normalizePhone(input);
+      if (normalized) {
+        const phoneSnap = await getDocs(
+          query(collection(db, "users"), where("phone", "==", normalized))
+        );
+        if (!phoneSnap.empty) {
+          const userData = phoneSnap.docs[0].data();
+          foundUid = phoneSnap.docs[0].id;
+          foundName = userData.name || userData.email || "Unknown";
+        }
+      }
+
+      // Try email lookup if phone didn't match
+      if (!foundUid && input.includes("@")) {
+        const emailSnap = await getDocs(
+          query(collection(db, "users"), where("email", "==", input.toLowerCase()))
+        );
+        if (!emailSnap.empty) {
+          const userData = emailSnap.docs[0].data();
+          foundUid = emailSnap.docs[0].id;
+          foundName = userData.name || userData.email || "Unknown";
+        }
+      }
+
+      if (!foundUid) {
+        setLookupError(
+          "No registered user found with that phone/email. Ask them to create an account first."
+        );
+        return;
+      }
+
+      // Save the tenant on the berth
+      await updateDoc(doc(db, "resources", lookupBerthId), {
+        secondHandTenantId: foundUid,
+      });
+      setResources((prev) =>
+        prev.map((x) =>
+          x.id === lookupBerthId
+            ? { ...x, secondHandTenantId: foundUid } as Resource
+            : x
+        )
+      );
+      setSecondHandNames((prev) => ({ ...prev, [lookupBerthId]: foundName }));
+      setLookupBerthId(null);
+    } catch (err) {
+      console.error("Tenant lookup error:", err);
+      setLookupError("An error occurred. Please try again.");
+    } finally {
+      setLookupLoading(false);
+    }
+  };
+
   const paymentColor = (status: string) =>
     status === "Paid" ? "success" : "error";
 
   return (
-    <Box>
+    <Box sx={{ maxWidth: 1100, mx: "auto", px: 3, py: 5 }}>
       {/* Page header */}
       <Box sx={{ mb: 4 }}>
         <Typography
@@ -657,35 +748,87 @@ function DashboardContent() {
                           {/* Subletting toggles — only for Berths */}
                           <TableCell>
                             {r.type === "Berth" ? (
-                              <Box sx={{ display: "flex", flexDirection: "column", alignItems: "flex-start" }}>
+                              <Box sx={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 0.5 }}>
                                 <Switch
                                   size="small"
                                   checked={(r as Berth).allowSecondHand ?? false}
                                   onChange={async (e) => {
                                     const val = e.target.checked;
-                                    await updateDoc(doc(db, "resources", r.id), { allowSecondHand: val });
+                                    const updates: Record<string, unknown> = { allowSecondHand: val };
+                                    if (!val) {
+                                      updates.secondHandTenantId = deleteField();
+                                      updates.invoiceSecondHandTenantDirectly = false;
+                                    }
+                                    await updateDoc(doc(db, "resources", r.id), updates);
                                     setResources((prev) =>
-                                      prev.map((x) => x.id === r.id ? { ...x, allowSecondHand: val } as Resource : x)
+                                      prev.map((x) => x.id === r.id
+                                        ? { ...x, allowSecondHand: val, ...(!val ? { secondHandTenantId: undefined, invoiceSecondHandTenantDirectly: false } : {}) } as Resource
+                                        : x
+                                      )
                                     );
                                   }}
                                 />
                                 {(r as Berth).allowSecondHand && (
-                                  <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, ml: 0.5 }}>
-                                    <Typography variant="caption" color="text.secondary" sx={{ whiteSpace: "nowrap" }}>
-                                      Fakturera direkt
-                                    </Typography>
-                                    <Switch
-                                      size="small"
-                                      checked={(r as Berth).invoiceSecondHandTenantDirectly ?? false}
-                                      onChange={async (e) => {
-                                        const val = e.target.checked;
-                                        await updateDoc(doc(db, "resources", r.id), { invoiceSecondHandTenantDirectly: val });
-                                        setResources((prev) =>
-                                          prev.map((x) => x.id === r.id ? { ...x, invoiceSecondHandTenantDirectly: val } as Resource : x)
-                                        );
-                                      }}
-                                    />
-                                  </Box>
+                                  <>
+                                    <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, ml: 0.5 }}>
+                                      <Typography variant="caption" color="text.secondary" sx={{ whiteSpace: "nowrap" }}>
+                                        Fakturera direkt
+                                      </Typography>
+                                      <Switch
+                                        size="small"
+                                        checked={(r as Berth).invoiceSecondHandTenantDirectly ?? false}
+                                        onChange={async (e) => {
+                                          const val = e.target.checked;
+                                          await updateDoc(doc(db, "resources", r.id), { invoiceSecondHandTenantDirectly: val });
+                                          setResources((prev) =>
+                                            prev.map((x) => x.id === r.id ? { ...x, invoiceSecondHandTenantDirectly: val } as Resource : x)
+                                          );
+                                        }}
+                                      />
+                                    </Box>
+                                    {/* Second-hand tenant display */}
+                                    {(r as Berth).secondHandTenantId ? (
+                                      <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, ml: 0.5 }}>
+                                        <Chip
+                                          label={secondHandNames[r.id] || "Loading..."}
+                                          size="small"
+                                          color="info"
+                                          variant="outlined"
+                                        />
+                                        <IconButton
+                                          size="small"
+                                          color="error"
+                                          onClick={async () => {
+                                            await updateDoc(doc(db, "resources", r.id), { secondHandTenantId: deleteField() });
+                                            setResources((prev) =>
+                                              prev.map((x) => x.id === r.id ? { ...x, secondHandTenantId: undefined } as Resource : x)
+                                            );
+                                            setSecondHandNames((prev) => {
+                                              const copy = { ...prev };
+                                              delete copy[r.id];
+                                              return copy;
+                                            });
+                                          }}
+                                        >
+                                          <PersonRemoveIcon fontSize="small" />
+                                        </IconButton>
+                                      </Box>
+                                    ) : (
+                                      <Button
+                                        size="small"
+                                        variant="outlined"
+                                        startIcon={<PersonAddIcon />}
+                                        onClick={() => {
+                                          setLookupBerthId(r.id);
+                                          setLookupInput("");
+                                          setLookupError("");
+                                        }}
+                                        sx={{ ml: 0.5, textTransform: "none" }}
+                                      >
+                                        Add tenant
+                                      </Button>
+                                    )}
+                                  </>
                                 )}
                               </Box>
                             ) : (
@@ -875,6 +1018,43 @@ function DashboardContent() {
         style={{ display: "none" }}
         onChange={handleProfilePictureChange}
       />
+      {/* Second-hand tenant lookup dialog */}
+      <Dialog
+        open={!!lookupBerthId}
+        onClose={() => setLookupBerthId(null)}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle>Find second-hand tenant</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Enter the tenant&apos;s phone number or email address to look them up.
+          </Typography>
+          <TextField
+            fullWidth
+            label="Phone or email"
+            value={lookupInput}
+            onChange={(e) => { setLookupInput(e.target.value); setLookupError(""); }}
+            onKeyDown={(e) => { if (e.key === "Enter") handleLookupTenant(); }}
+            autoFocus
+          />
+          {lookupError && (
+            <Alert severity="warning" sx={{ mt: 2 }}>{lookupError}</Alert>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setLookupBerthId(null)}>Cancel</Button>
+          <Button
+            variant="contained"
+            onClick={handleLookupTenant}
+            disabled={lookupLoading || !lookupInput.trim()}
+            startIcon={lookupLoading ? <CircularProgress size={16} /> : undefined}
+          >
+            Search
+          </Button>
+        </DialogActions>
+      </Dialog>
+
     </Box>
   );
 }
