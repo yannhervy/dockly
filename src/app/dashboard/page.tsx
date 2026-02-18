@@ -625,6 +625,7 @@ function DashboardContent() {
                         <TableCell>Marking Code</TableCell>
                         <TableCell>Status</TableCell>
                         <TableCell>Payment</TableCell>
+                        <TableCell>2:a-hand</TableCell>
                         <TableCell>Boat Image</TableCell>
                       </TableRow>
                     </TableHead>
@@ -652,6 +653,44 @@ function DashboardContent() {
                               size="small"
                               color={paymentColor(r.paymentStatus)}
                             />
+                          </TableCell>
+                          {/* Subletting toggles — only for Berths */}
+                          <TableCell>
+                            {r.type === "Berth" ? (
+                              <Box sx={{ display: "flex", flexDirection: "column", alignItems: "flex-start" }}>
+                                <Switch
+                                  size="small"
+                                  checked={(r as Berth).allowSecondHand ?? false}
+                                  onChange={async (e) => {
+                                    const val = e.target.checked;
+                                    await updateDoc(doc(db, "resources", r.id), { allowSecondHand: val });
+                                    setResources((prev) =>
+                                      prev.map((x) => x.id === r.id ? { ...x, allowSecondHand: val } as Resource : x)
+                                    );
+                                  }}
+                                />
+                                {(r as Berth).allowSecondHand && (
+                                  <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, ml: 0.5 }}>
+                                    <Typography variant="caption" color="text.secondary" sx={{ whiteSpace: "nowrap" }}>
+                                      Fakturera direkt
+                                    </Typography>
+                                    <Switch
+                                      size="small"
+                                      checked={(r as Berth).invoiceSecondHandTenantDirectly ?? false}
+                                      onChange={async (e) => {
+                                        const val = e.target.checked;
+                                        await updateDoc(doc(db, "resources", r.id), { invoiceSecondHandTenantDirectly: val });
+                                        setResources((prev) =>
+                                          prev.map((x) => x.id === r.id ? { ...x, invoiceSecondHandTenantDirectly: val } as Resource : x)
+                                        );
+                                      }}
+                                    />
+                                  </Box>
+                                )}
+                              </Box>
+                            ) : (
+                              <Typography variant="caption" color="text.secondary">—</Typography>
+                            )}
                           </TableCell>
                           <TableCell>
                             <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>

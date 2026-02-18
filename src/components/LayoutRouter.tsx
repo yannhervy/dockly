@@ -7,7 +7,7 @@ import PublicLayout from "./PublicLayout";
 import AppShell from "./AppShell";
 
 // Pages that get the public layout (no sidebar)
-const PUBLIC_PATHS = ["/", "/docks", "/info", "/faq", "/marketplace", "/interest", "/news"];
+const PUBLIC_PATHS = ["/", "/docks", "/info", "/faq", "/marketplace", "/interest", "/news", "/dashboard"];
 
 // Pages that get NO layout wrapper at all (login, setup)
 const BARE_PATHS = ["/login", "/setup", "/map"];

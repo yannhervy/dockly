@@ -55,6 +55,8 @@ import Alert from "@mui/material/Alert";
 import Autocomplete from "@mui/material/Autocomplete";
 import CircularProgress from "@mui/material/CircularProgress";
 import Grid from "@mui/material/Grid";
+import Switch from "@mui/material/Switch";
+import FormControlLabel from "@mui/material/FormControlLabel";
 import AdminPanelSettingsIcon from "@mui/icons-material/AdminPanelSettings";
 import AddIcon from "@mui/icons-material/Add";
 import DeleteIcon from "@mui/icons-material/Delete";
@@ -1994,6 +1996,30 @@ function ResourcesTab() {
                       </Select>
                     </FormControl>
                   </Grid>
+                  <Grid size={{ xs: 6, md: 3 }}>
+                    <FormControlLabel
+                      control={
+                        <Switch
+                          checked={editResource.allowSecondHand ?? false}
+                          onChange={(e) => setEditResource({ ...editResource, allowSecondHand: e.target.checked })}
+                        />
+                      }
+                      label="Allow Subletting"
+                    />
+                  </Grid>
+                  {editResource.allowSecondHand && (
+                    <Grid size={{ xs: 6, md: 3 }}>
+                      <FormControlLabel
+                        control={
+                          <Switch
+                            checked={editResource.invoiceSecondHandTenantDirectly ?? false}
+                            onChange={(e) => setEditResource({ ...editResource, invoiceSecondHandTenantDirectly: e.target.checked })}
+                          />
+                        }
+                        label="Invoice 2nd-hand Tenant"
+                      />
+                    </Grid>
+                  )}
                 </>
               )}
 
