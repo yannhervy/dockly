@@ -25,7 +25,7 @@ const JPEG_QUALITY = 0.8;
 
 /**
  * Resize an image file so neither width nor height exceeds MAX_DIMENSION.
- * Returns a compressed JPEG Blob.
+ * Preserves PNG format for transparent images; others get JPEG compression.
  */
 export function resizeImage(file: File, maxDimension = MAX_DIMENSION): Promise<Blob> {
   return new Promise((resolve, reject) => {
@@ -56,13 +56,19 @@ export function resizeImage(file: File, maxDimension = MAX_DIMENSION): Promise<B
 
       ctx.drawImage(img, 0, 0, width, height);
 
+      // Preserve PNG for formats that support transparency
+      const transparentTypes = ["image/png", "image/webp", "image/gif"];
+      const isTransparent = transparentTypes.includes(file.type);
+      const outputType = isTransparent ? "image/png" : "image/jpeg";
+      const quality = isTransparent ? undefined : JPEG_QUALITY;
+
       canvas.toBlob(
         (blob) => {
           if (blob) resolve(blob);
           else reject(new Error("Canvas toBlob failed"));
         },
-        "image/jpeg",
-        JPEG_QUALITY
+        outputType,
+        quality
       );
     };
     img.onerror = () => reject(new Error("Failed to load image"));

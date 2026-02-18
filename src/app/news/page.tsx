@@ -127,7 +127,7 @@ export default function NewsPage() {
         const fileName = `news_${today}_${Date.now()}.${ext}`;
         const storageRef = ref(storage, `news/${fileName}`);
         const resizedBlob = await resizeImage(file);
-        await uploadBytes(storageRef, resizedBlob, { contentType: "image/jpeg" });
+        await uploadBytes(storageRef, resizedBlob, { contentType: resizedBlob.type || "image/jpeg" });
         const url = await getDownloadURL(storageRef);
         imageUrls.push(url);
       }
