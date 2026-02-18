@@ -1,10 +1,23 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useAuth } from "@/context/AuthContext";
-import { doc, setDoc, getDoc, Timestamp } from "firebase/firestore";
+import {
+  doc,
+  setDoc,
+  getDoc,
+  getDocs,
+  updateDoc,
+  collection,
+  query,
+  where,
+  arrayUnion,
+  Timestamp,
+} from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useRouter } from "next/navigation";
+import type { Resource, Berth, LandStorageEntry } from "@/lib/types";
+import { normalizePhone } from "@/lib/phoneUtils";
 import Box from "@mui/material/Box";
 import Card from "@mui/material/Card";
 import CardContent from "@mui/material/CardContent";
@@ -24,6 +37,9 @@ import FormControlLabel from "@mui/material/FormControlLabel";
 /**
  * Profile setup page shown after first login when the user
  * has no Firestore profile yet. Requires name and phone number.
+ *
+ * On mount, searches existing resources and land storage entries
+ * by email to pre-fill phone number and name when available.
  */
 export default function ProfileSetupPage() {
   const { firebaseUser } = useAuth();
@@ -34,6 +50,79 @@ export default function ProfileSetupPage() {
   const [allowMapSms, setAllowMapSms] = useState(true);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  const [prefilled, setPrefilled] = useState(false);
+
+  // Ids of matching resources/landStorage to link on submit
+  const [matchedResourceIds, setMatchedResourceIds] = useState<string[]>([]);
+  const [matchedLandIds, setMatchedLandIds] = useState<string[]>([]);
+
+  // Try to pre-fill phone and name from existing resources
+  useEffect(() => {
+    if (!firebaseUser?.email) return;
+    const email = firebaseUser.email.trim().toLowerCase();
+
+    async function prefillFromResources() {
+      let foundPhone = "";
+      let foundName = "";
+      const resIds: string[] = [];
+      const landIds: string[] = [];
+
+      try {
+        // Search resources (berths, sea huts, boxes)
+        const resSnap = await getDocs(collection(db, "resources"));
+        for (const d of resSnap.docs) {
+          const data = d.data() as Resource;
+          const berth = data as Berth;
+          if (
+            berth.occupantEmail &&
+            berth.occupantEmail.trim().toLowerCase() === email
+          ) {
+            resIds.push(d.id);
+            if (!foundPhone && berth.occupantPhone) {
+              foundPhone = berth.occupantPhone;
+            }
+            if (!foundName && berth.occupantFirstName) {
+              foundName = [berth.occupantFirstName, berth.occupantLastName]
+                .filter(Boolean)
+                .join(" ");
+            }
+          }
+        }
+
+        // Search land storage
+        const landSnap = await getDocs(collection(db, "landStorage"));
+        for (const d of landSnap.docs) {
+          const data = d.data() as LandStorageEntry;
+          if (data.email && data.email.trim().toLowerCase() === email) {
+            landIds.push(d.id);
+            if (!foundPhone && data.phone) {
+              foundPhone = data.phone;
+            }
+            if (!foundName && data.firstName) {
+              foundName = [data.firstName, data.lastName]
+                .filter(Boolean)
+                .join(" ");
+            }
+          }
+        }
+      } catch (err) {
+        console.warn("Could not pre-fill from resources:", err);
+      }
+
+      if (foundPhone) {
+        setPhone(foundPhone);
+        setPrefilled(true);
+      }
+      if (foundName && !name) {
+        setName(foundName);
+      }
+      setMatchedResourceIds(resIds);
+      setMatchedLandIds(landIds);
+    }
+
+    prefillFromResources();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [firebaseUser?.email]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -77,6 +166,20 @@ export default function ProfileSetupPage() {
       }
 
       await setDoc(userRef, profileData, { merge: true });
+
+      // Link matching resources to this user
+      const uid = firebaseUser.uid;
+      for (const resId of matchedResourceIds) {
+        await updateDoc(doc(db, "resources", resId), {
+          occupantIds: arrayUnion(uid),
+        });
+      }
+      for (const landId of matchedLandIds) {
+        await updateDoc(doc(db, "landStorage", landId), {
+          occupantId: uid,
+        });
+      }
+
       // Force reload to pick up the new profile
       window.location.href = "/dashboard";
     } catch (err) {
@@ -162,7 +265,11 @@ export default function ProfileSetupPage() {
                   ),
                 },
               }}
-              helperText="Required for harbor association communication"
+              helperText={
+                prefilled
+                  ? "Ifyllt automatiskt från befintliga hamnuppgifter"
+                  : "Required for harbor association communication"
+              }
             />
 
             <Box
