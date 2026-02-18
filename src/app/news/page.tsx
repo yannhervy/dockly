@@ -14,12 +14,13 @@ import {
   addDoc,
   doc,
   updateDoc,
+  deleteDoc,
   query,
   orderBy,
   Timestamp,
 } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
-import { resizeImage } from "@/lib/storage";
+import { resizeImage, deleteStorageFile } from "@/lib/storage";
 import { db, storage } from "@/lib/firebase";
 import { useAuth } from "@/context/AuthContext";
 import type { NewsPost, ReactionMap } from "@/lib/types";
@@ -44,6 +45,8 @@ import NewspaperIcon from "@mui/icons-material/Newspaper";
 import AddIcon from "@mui/icons-material/Add";
 import AddPhotoAlternateIcon from "@mui/icons-material/AddPhotoAlternate";
 import CloseIcon from "@mui/icons-material/Close";
+import EditIcon from "@mui/icons-material/Edit";
+import DeleteIcon from "@mui/icons-material/Delete";
 
 function formatDate(ts: Timestamp): string {
   return ts.toDate().toLocaleDateString("sv-SE");
@@ -61,8 +64,11 @@ export default function NewsPage() {
   const [form, setForm] = useState({ title: "", body: "" });
   const [imageFiles, setImageFiles] = useState<File[]>([]);
   const [imagePreviews, setImagePreviews] = useState<string[]>([]);
+  const [editingPost, setEditingPost] = useState<NewsPost | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
-  const canCreate =
+  const canManage =
     profile?.role === "Superadmin" || profile?.role === "Dock Manager";
 
   useEffect(() => {
@@ -109,11 +115,11 @@ export default function NewsPage() {
   };
 
   const handleCreate = async () => {
-    if (!firebaseUser || !profile || !canCreate) return;
+    if (!firebaseUser || !profile || !canManage) return;
     setUploading(true);
 
     try {
-      // Upload all images
+      // Upload new images
       const imageUrls: string[] = [];
       for (const file of imageFiles) {
         const today = new Date().toISOString().slice(0, 10).replace(/-/g, "");
@@ -126,23 +132,36 @@ export default function NewsPage() {
         imageUrls.push(url);
       }
 
-      await addDoc(collection(db, "news"), {
-        title: form.title,
-        body: form.body,
-        imageUrls,
-        authorId: firebaseUser.uid,
-        authorName: profile.name,
-        createdAt: Timestamp.now(),
-        reactions: {},
-      });
+      if (editingPost) {
+        // Update existing post
+        const allImages = [...(editingPost.imageUrls || []), ...imageUrls];
+        await updateDoc(doc(db, "news", editingPost.id), {
+          title: form.title,
+          body: form.body,
+          imageUrls: allImages,
+        });
+        setSuccess("Nyhet uppdaterad!");
+      } else {
+        // Create new post
+        await addDoc(collection(db, "news"), {
+          title: form.title,
+          body: form.body,
+          imageUrls,
+          authorId: firebaseUser.uid,
+          authorName: profile.name,
+          createdAt: Timestamp.now(),
+          reactions: {},
+        });
+        setSuccess("Nyhet publicerad!");
+      }
 
       setDialogOpen(false);
+      setEditingPost(null);
       resetForm();
-      setSuccess("Nyhet publicerad!");
       setTimeout(() => setSuccess(""), 3000);
       fetchPosts();
     } catch (err) {
-      console.error("Error creating news:", err);
+      console.error("Error saving news:", err);
     } finally {
       setUploading(false);
     }
@@ -152,6 +171,36 @@ export default function NewsPage() {
     setForm({ title: "", body: "" });
     setImageFiles([]);
     setImagePreviews([]);
+  };
+
+  const openEditDialog = (post: NewsPost) => {
+    setEditingPost(post);
+    setForm({ title: post.title, body: post.body });
+    setImageFiles([]);
+    setImagePreviews([]);
+    setDialogOpen(true);
+  };
+
+  const handleDelete = async (postId: string) => {
+    setDeleting(true);
+    try {
+      const post = posts.find((p) => p.id === postId);
+      // Delete all images from storage
+      if (post?.imageUrls) {
+        for (const url of post.imageUrls) {
+          await deleteStorageFile(url);
+        }
+      }
+      await deleteDoc(doc(db, "news", postId));
+      setConfirmDeleteId(null);
+      setSuccess("Nyhet raderad!");
+      setTimeout(() => setSuccess(""), 3000);
+      fetchPosts();
+    } catch (err) {
+      console.error("Error deleting news:", err);
+    } finally {
+      setDeleting(false);
+    }
   };
 
   const handleReaction = async (postId: string, emoji: string) => {
@@ -203,11 +252,11 @@ export default function NewsPage() {
             Nyheter
           </Typography>
         </Box>
-        {canCreate && (
+        {canManage && (
           <Button
             variant="contained"
             startIcon={<AddIcon />}
-            onClick={() => setDialogOpen(true)}
+            onClick={() => { setEditingPost(null); resetForm(); setDialogOpen(true); }}
             sx={{ textTransform: "none", borderRadius: 2 }}
           >
             Skapa nyhet
@@ -246,13 +295,27 @@ export default function NewsPage() {
             }}
           >
             <CardContent sx={{ p: 3 }}>
-              {/* Title & meta */}
-              <Typography variant="h5" sx={{ fontWeight: 700, mb: 0.5 }}>
-                {post.title}
-              </Typography>
-              <Typography variant="caption" color="text.secondary" sx={{ mb: 2, display: "block" }}>
-                {post.authorName} · {formatDate(post.createdAt)}
-              </Typography>
+              {/* Title & meta + admin actions */}
+              <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                <Box>
+                  <Typography variant="h5" sx={{ fontWeight: 700, mb: 0.5 }}>
+                    {post.title}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary" sx={{ mb: 2, display: "block" }}>
+                    {post.authorName} · {formatDate(post.createdAt)}
+                  </Typography>
+                </Box>
+                {canManage && (
+                  <Box sx={{ display: "flex", gap: 0.5 }}>
+                    <IconButton size="small" onClick={() => openEditDialog(post)}>
+                      <EditIcon fontSize="small" />
+                    </IconButton>
+                    <IconButton size="small" color="error" onClick={() => setConfirmDeleteId(post.id)}>
+                      <DeleteIcon fontSize="small" />
+                    </IconButton>
+                  </Box>
+                )}
+              </Box>
 
               {/* Body */}
               <Box
@@ -354,12 +417,13 @@ export default function NewsPage() {
         open={dialogOpen}
         onClose={() => {
           setDialogOpen(false);
+          setEditingPost(null);
           resetForm();
         }}
         maxWidth="sm"
         fullWidth
       >
-        <DialogTitle>Skapa nyhet</DialogTitle>
+        <DialogTitle>{editingPost ? "Redigera nyhet" : "Ny nyhet"}</DialogTitle>
         <DialogContent>
           {uploading && <LinearProgress sx={{ mb: 2 }} />}
 
@@ -439,7 +503,7 @@ export default function NewsPage() {
           </Box>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => { setDialogOpen(false); resetForm(); }}>
+          <Button onClick={() => { setDialogOpen(false); setEditingPost(null); resetForm(); }}>
             Avbryt
           </Button>
           <Button
@@ -447,7 +511,34 @@ export default function NewsPage() {
             onClick={handleCreate}
             disabled={!form.title.trim() || !form.body.trim() || uploading}
           >
-            {uploading ? "Laddar upp..." : "Publicera"}
+            {uploading ? "Sparar..." : editingPost ? "Uppdatera" : "Publicera"}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Confirm delete dialog */}
+      <Dialog
+        open={!!confirmDeleteId}
+        onClose={() => setConfirmDeleteId(null)}
+        maxWidth="xs"
+      >
+        <DialogTitle>Radera nyhet?</DialogTitle>
+        <DialogContent>
+          <Typography color="text.secondary">
+            Är du säker? Nyheten och alla tillhörande bilder tas bort permanent.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setConfirmDeleteId(null)} disabled={deleting}>
+            Avbryt
+          </Button>
+          <Button
+            variant="contained"
+            color="error"
+            onClick={() => confirmDeleteId && handleDelete(confirmDeleteId)}
+            disabled={deleting}
+          >
+            {deleting ? "Raderar..." : "Radera"}
           </Button>
         </DialogActions>
       </Dialog>
