@@ -63,6 +63,7 @@ export default function DashboardPage() {
 function DashboardContent() {
   const { profile, firebaseUser, refreshProfile } = useAuth();
   const [isPublic, setIsPublic] = useState(profile?.isPublic ?? false);
+  const [allowMapSms, setAllowMapSms] = useState(profile?.allowMapSms ?? true);
   const [resources, setResources] = useState<Resource[]>([]);
   const [landEntries, setLandEntries] = useState<LandStorageEntry[]>([]);
   const [messages, setMessages] = useState<UserMessage[]>([]);
@@ -86,6 +87,7 @@ function DashboardContent() {
   useEffect(() => {
     if (profile) {
       setIsPublic(profile.isPublic);
+      setAllowMapSms(profile.allowMapSms ?? true);
       setEditName(profile.name);
       setEditPhone(profile.phone);
     }
@@ -238,6 +240,27 @@ function DashboardContent() {
     } catch (err) {
       console.error("Error updating privacy:", err);
       setIsPublic(!newVal); // Revert on error
+    }
+  };
+
+  // Toggle SMS from map
+  const handleSmsToggle = async () => {
+    if (!firebaseUser) return;
+    const newVal = !allowMapSms;
+    setAllowMapSms(newVal);
+    try {
+      await updateDoc(doc(db, "users", firebaseUser.uid), {
+        allowMapSms: newVal,
+      });
+      setSuccessMsg(
+        newVal
+          ? "Bryggförvaltare kan nu kontakta dig via SMS från kartan."
+          : "SMS-kontakt från kartan är nu avstängd."
+      );
+      setTimeout(() => setSuccessMsg(""), 4000);
+    } catch (err) {
+      console.error("Error updating SMS preference:", err);
+      setAllowMapSms(!newVal);
     }
   };
 
@@ -526,6 +549,37 @@ function DashboardContent() {
                 <Switch
                   checked={isPublic}
                   onChange={handlePrivacyToggle}
+                  color="primary"
+                />
+              </Box>
+
+              {/* SMS from map toggle */}
+              <Box
+                sx={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  p: 1.5,
+                  borderRadius: 2,
+                  bgcolor: "rgba(79, 195, 247, 0.05)",
+                }}
+              >
+                <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                  <SmsIcon fontSize="small" color={allowMapSms ? "primary" : "disabled"} />
+                  <Box>
+                    <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                      SMS-kontakt från kartan
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      {allowMapSms
+                        ? "Bryggförvaltare kan kontakta dig via SMS vid oväntade händelser"
+                        : "SMS-kontakt från kartan är avstängd"}
+                    </Typography>
+                  </Box>
+                </Box>
+                <Switch
+                  checked={allowMapSms}
+                  onChange={handleSmsToggle}
                   color="primary"
                 />
               </Box>

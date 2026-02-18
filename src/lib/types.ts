@@ -9,6 +9,7 @@ export interface User {
   name: string;
   role: UserRole;
   isPublic: boolean; // Privacy setting for directory
+  allowMapSms?: boolean; // Allow managers to send SMS from map (default true)
   phone: string;
   photoURL?: string; // Profile picture URL
   internalComment?: string; // Internal note visible only to managers/superadmin

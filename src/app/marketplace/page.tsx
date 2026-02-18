@@ -773,6 +773,11 @@ export default function MarketplacePage() {
               (utgår {getExpiryDate().toLocaleDateString("sv-SE")}).
             </Alert>
           )}
+          <Alert severity="warning" sx={{ mt: 1 }}>
+            Genom att publicera denna annons visas ditt namn, e-postadress och
+            telefonnummer för alla inloggade medlemmar, oavsett dina
+            sekretessinställningar.
+          </Alert>
         </DialogContent>
         <DialogActions>
           <Button

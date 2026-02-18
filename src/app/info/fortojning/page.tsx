@@ -178,7 +178,7 @@ export default function FortojningPage() {
         </Typography>
         <Button
           variant="contained"
-          href="https://yannhervy.github.io/harbor-sim/"
+          href="https://hamnsimulator.web.app/"
           target="_blank"
           rel="noopener noreferrer"
           sx={{ textTransform: "none" }}

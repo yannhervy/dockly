@@ -15,6 +15,10 @@ import Button from "@mui/material/Button";
 import Divider from "@mui/material/Divider";
 import Snackbar from "@mui/material/Snackbar";
 import Alert from "@mui/material/Alert";
+import Dialog from "@mui/material/Dialog";
+import DialogTitle from "@mui/material/DialogTitle";
+import DialogContent from "@mui/material/DialogContent";
+import DialogActions from "@mui/material/DialogActions";
 import PersonIcon from "@mui/icons-material/Person";
 import ShoppingCartIcon from "@mui/icons-material/ShoppingCart";
 import CloseIcon from "@mui/icons-material/Close";
@@ -412,6 +416,8 @@ export default function MapPage() {
   const [loading, setLoading] = useState(true);
   const [selectedObject, setSelectedObject] = useState<SelectedObject | null>(null);
   const [snackMsg, setSnackMsg] = useState("");
+  const [userSmsPrefs, setUserSmsPrefs] = useState<globalThis.Map<string, boolean>>(new globalThis.Map());
+  const [buyConfirmOpen, setBuyConfirmOpen] = useState(false);
 
   useEffect(() => {
     async function fetchData() {
@@ -444,6 +450,15 @@ export default function MapPage() {
         setAbandonedObjects(
           aSnap.docs.map((d) => ({ id: d.id, ...d.data() }) as AbandonedObject)
         );
+
+        // Load SMS preferences for all users
+        const uSnap = await getDocs(collection(db, "users"));
+        const prefs = new globalThis.Map<string, boolean>();
+        uSnap.docs.forEach((d) => {
+          const data = d.data();
+          prefs.set(d.id, data.allowMapSms ?? true);
+        });
+        setUserSmsPrefs(prefs);
       } catch (err) {
         console.error("Error fetching map data:", err);
       } finally {
@@ -748,7 +763,7 @@ export default function MapPage() {
                         variant="outlined"
                         size="small"
                         startIcon={<ShoppingCartIcon />}
-                        onClick={handleWantToBuy}
+                        onClick={() => setBuyConfirmOpen(true)}
                         sx={{ textTransform: "none" }}
                       >
                         Jag vill köpa
@@ -756,6 +771,29 @@ export default function MapPage() {
                     )}
                   </Box>
                 )}
+
+                {/* Purchase listing confirmation dialog */}
+                <Dialog open={buyConfirmOpen} onClose={() => setBuyConfirmOpen(false)}>
+                  <DialogTitle>Bekräfta köpesannons</DialogTitle>
+                  <DialogContent>
+                    <Alert severity="warning" sx={{ mt: 1 }}>
+                      Genom att skapa en köpesannons publiceras ditt namn, e-postadress
+                      och telefonnummer för alla inloggade medlemmar.
+                    </Alert>
+                  </DialogContent>
+                  <DialogActions>
+                    <Button onClick={() => setBuyConfirmOpen(false)}>Avbryt</Button>
+                    <Button
+                      variant="contained"
+                      onClick={() => {
+                        setBuyConfirmOpen(false);
+                        handleWantToBuy();
+                      }}
+                    >
+                      Skapa annons
+                    </Button>
+                  </DialogActions>
+                </Dialog>
               </Paper>
             );
           }
@@ -924,18 +962,26 @@ export default function MapPage() {
                     <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, fontStyle: "italic" }}>{comment}</Typography>
                   )}
 
-                  {/* SMS button for managers when valid mobile */}
-                  {occupantPhone && isMobileNumber(occupantPhone) && (
-                    <Button
-                      variant="outlined"
-                      size="small"
-                      startIcon={<SmsIcon />}
-                      href={toSmsHref(occupantPhone)}
-                      sx={{ mt: 1.5 }}
-                    >
-                      Skicka SMS
-                    </Button>
-                  )}
+                  {/* SMS button for managers when valid mobile and user allows it */}
+                  {occupantPhone && isMobileNumber(occupantPhone) && (() => {
+                    // Check if occupant has opted out of map SMS
+                    const occupantId =
+                      obj.kind === "berth" ? obj.data.occupantIds?.[0]
+                      : obj.kind === "resource" ? (obj.data as Resource).occupantIds?.[0]
+                      : (obj.data as LandStorageEntry).occupantId;
+                    const smsAllowed = occupantId ? (userSmsPrefs.get(occupantId) ?? true) : true;
+                    return smsAllowed ? (
+                      <Button
+                        variant="outlined"
+                        size="small"
+                        startIcon={<SmsIcon />}
+                        href={toSmsHref(occupantPhone)}
+                        sx={{ mt: 1.5 }}
+                      >
+                        Skicka SMS
+                      </Button>
+                    ) : null;
+                  })()}
                 </>
               )}
             </Paper>

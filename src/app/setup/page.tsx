@@ -17,6 +17,9 @@ import AnchorIcon from "@mui/icons-material/Anchor";
 import PersonIcon from "@mui/icons-material/Person";
 import PhoneIcon from "@mui/icons-material/Phone";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
+import SmsIcon from "@mui/icons-material/Sms";
+import Switch from "@mui/material/Switch";
+import FormControlLabel from "@mui/material/FormControlLabel";
 
 /**
  * Profile setup page shown after first login when the user
@@ -28,6 +31,7 @@ export default function ProfileSetupPage() {
 
   const [name, setName] = useState(firebaseUser?.displayName || "");
   const [phone, setPhone] = useState("");
+  const [allowMapSms, setAllowMapSms] = useState(true);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
 
@@ -62,6 +66,7 @@ export default function ProfileSetupPage() {
         email: firebaseUser.email || "",
         name: name.trim(),
         isPublic: true,
+        allowMapSms,
         phone: phone.trim(),
       };
 
@@ -159,6 +164,42 @@ export default function ProfileSetupPage() {
               }}
               helperText="Required for harbor association communication"
             />
+
+            <Box
+              sx={{
+                display: "flex",
+                alignItems: "center",
+                gap: 1,
+                p: 1.5,
+                mb: 2,
+                borderRadius: 2,
+                bgcolor: "rgba(79, 195, 247, 0.05)",
+                border: "1px solid rgba(79,195,247,0.08)",
+              }}
+            >
+              <SmsIcon fontSize="small" color="primary" />
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={allowMapSms}
+                    onChange={(e) => setAllowMapSms(e.target.checked)}
+                    color="primary"
+                  />
+                }
+                label={
+                  <Box>
+                    <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                      SMS-kontakt från kartan
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      Bryggförvaltare kan kontakta dig via SMS vid oväntade
+                      händelser (inga personuppgifter publiceras)
+                    </Typography>
+                  </Box>
+                }
+                sx={{ m: 0 }}
+              />
+            </Box>
 
             <Button
               type="submit"
