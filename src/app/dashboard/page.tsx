@@ -6,6 +6,9 @@ import { db } from "@/lib/firebase";
 import { uploadBoatImage, uploadProfileImage } from "@/lib/storage";
 import { Resource, Berth, LandStorageEntry, UserMessage } from "@/lib/types";
 import { normalizePhone } from "@/lib/phoneUtils";
+import { APIProvider, Map as GMap, AdvancedMarker } from "@vis.gl/react-google-maps";
+import { HARBOR_CENTER } from "@/lib/mapUtils";
+import useMediaQuery from "@mui/material/useMediaQuery";
 import {
   collection,
   query,
@@ -45,6 +48,7 @@ import DialogTitle from "@mui/material/DialogTitle";
 import DialogContent from "@mui/material/DialogContent";
 import DialogActions from "@mui/material/DialogActions";
 import IconButton from "@mui/material/IconButton";
+import Tooltip from "@mui/material/Tooltip";
 import DashboardIcon from "@mui/icons-material/Dashboard";
 import PersonIcon from "@mui/icons-material/Person";
 import PhotoCameraIcon from "@mui/icons-material/PhotoCamera";
@@ -59,6 +63,9 @@ import SmsIcon from "@mui/icons-material/Sms";
 import MarkEmailReadIcon from "@mui/icons-material/MarkEmailRead";
 import PersonRemoveIcon from "@mui/icons-material/PersonRemove";
 import PersonAddIcon from "@mui/icons-material/PersonAdd";
+import PlaceIcon from "@mui/icons-material/Place";
+import MyLocationIcon from "@mui/icons-material/MyLocation";
+import WarningAmberIcon from "@mui/icons-material/WarningAmber";
 
 export default function DashboardPage() {
   return (
@@ -98,6 +105,13 @@ function DashboardContent() {
   const [lookupInput, setLookupInput] = useState("");
   const [lookupError, setLookupError] = useState("");
   const [lookupLoading, setLookupLoading] = useState(false);
+
+  // GPS editing state
+  const isTouchDevice = useMediaQuery("(pointer: coarse)");
+  const [gpsEditResource, setGpsEditResource] = useState<Resource | null>(null);
+  const [gpsLat, setGpsLat] = useState<number | undefined>(undefined);
+  const [gpsLng, setGpsLng] = useState<number | undefined>(undefined);
+  const [gpsSaving, setGpsSaving] = useState(false);
 
   useEffect(() => {
     if (profile) {
@@ -679,7 +693,7 @@ function DashboardContent() {
         </Grid>
 
         {/* Leases table */}
-        <Grid size={{ xs: 12, md: 8 }}>
+        <Grid size={{ xs: 12 }}>
           <Card>
             <CardContent sx={{ p: 3 }}>
               <Typography
@@ -716,6 +730,7 @@ function DashboardContent() {
                         <TableCell>Marking Code</TableCell>
                         <TableCell>Status</TableCell>
                         <TableCell>Payment</TableCell>
+                        <TableCell>GPS</TableCell>
                         <TableCell>2:a-hand</TableCell>
                         <TableCell>Boat Image</TableCell>
                       </TableRow>
@@ -744,6 +759,42 @@ function DashboardContent() {
                               size="small"
                               color={paymentColor(r.paymentStatus)}
                             />
+                          </TableCell>
+                          {/* GPS position indicator */}
+                          <TableCell>
+                            {r.type !== "Berth" ? (
+                              r.lat && r.lng ? (
+                                <Tooltip title="GPS position set — click to edit">
+                                  <IconButton
+                                    size="small"
+                                    onClick={() => {
+                                      setGpsEditResource(r);
+                                      setGpsLat(r.lat);
+                                      setGpsLng(r.lng);
+                                    }}
+                                    sx={{ color: "success.main" }}
+                                  >
+                                    <PlaceIcon fontSize="small" />
+                                  </IconButton>
+                                </Tooltip>
+                              ) : (
+                                <Tooltip title="GPS position missing — click to set">
+                                  <IconButton
+                                    size="small"
+                                    onClick={() => {
+                                      setGpsEditResource(r);
+                                      setGpsLat(r.lat);
+                                      setGpsLng(r.lng);
+                                    }}
+                                    sx={{ color: "warning.main" }}
+                                  >
+                                    <WarningAmberIcon fontSize="small" />
+                                  </IconButton>
+                                </Tooltip>
+                              )
+                            ) : (
+                              <Typography variant="caption" color="text.secondary">—</Typography>
+                            )}
                           </TableCell>
                           {/* Subletting toggles — only for Berths */}
                           <TableCell>
@@ -1051,6 +1102,113 @@ function DashboardContent() {
             startIcon={lookupLoading ? <CircularProgress size={16} /> : undefined}
           >
             Search
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* GPS editing dialog */}
+      <Dialog
+        open={!!gpsEditResource}
+        onClose={() => setGpsEditResource(null)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+          <PlaceIcon color="primary" />
+          Ange GPS-position
+        </DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Klicka på kartan för att placera din markering, eller använd din GPS-position.
+          </Typography>
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+            <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+              <PlaceIcon sx={{ fontSize: 18, verticalAlign: "text-bottom", mr: 0.5 }} />
+              {gpsEditResource?.markingCode} — {gpsEditResource?.type}
+            </Typography>
+            {isTouchDevice && (
+              <Button
+                size="small"
+                startIcon={<MyLocationIcon />}
+                onClick={() => {
+                  if (!navigator.geolocation) return;
+                  navigator.geolocation.getCurrentPosition(
+                    (pos) => {
+                      setGpsLat(pos.coords.latitude);
+                      setGpsLng(pos.coords.longitude);
+                    },
+                    (err) => console.error("GPS error:", err),
+                    { enableHighAccuracy: true }
+                  );
+                }}
+              >
+                Använd min GPS
+              </Button>
+            )}
+          </Box>
+          <Box sx={{ height: 300, border: '1px solid rgba(79,195,247,0.15)', borderRadius: 1, overflow: 'hidden', mb: 1 }}>
+            <APIProvider apiKey={process.env.NEXT_PUBLIC_GOOGLE_MAPS_KEY || ""}>
+              <GMap
+                defaultCenter={gpsLat && gpsLng ? { lat: gpsLat, lng: gpsLng } : HARBOR_CENTER}
+                defaultZoom={18}
+                mapId="edit-resource-gps-map"
+                mapTypeId="satellite"
+                style={{ width: '100%', height: '100%' }}
+                gestureHandling="greedy"
+                disableDefaultUI
+                zoomControl
+                onClick={(e) => {
+                  const ll = e.detail?.latLng;
+                  if (ll) {
+                    setGpsLat(ll.lat);
+                    setGpsLng(ll.lng);
+                  }
+                }}
+              >
+                {gpsLat && gpsLng && (
+                  <AdvancedMarker position={{ lat: gpsLat, lng: gpsLng }} />
+                )}
+              </GMap>
+            </APIProvider>
+          </Box>
+          {gpsLat && gpsLng && (
+            <Typography variant="caption" color="text.secondary">
+              Lat: {gpsLat.toFixed(6)}, Lng: {gpsLng.toFixed(6)}
+            </Typography>
+          )}
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button onClick={() => setGpsEditResource(null)}>Avbryt</Button>
+          <Button
+            variant="contained"
+            disabled={gpsSaving || !gpsLat || !gpsLng}
+            startIcon={gpsSaving ? <CircularProgress size={16} /> : <SaveIcon />}
+            onClick={async () => {
+              if (!gpsEditResource || !gpsLat || !gpsLng) return;
+              setGpsSaving(true);
+              try {
+                await updateDoc(doc(db, "resources", gpsEditResource.id), {
+                  lat: gpsLat,
+                  lng: gpsLng,
+                });
+                setResources((prev) =>
+                  prev.map((x) =>
+                    x.id === gpsEditResource.id
+                      ? { ...x, lat: gpsLat, lng: gpsLng }
+                      : x
+                  ) as Resource[]
+                );
+                setSuccessMsg("GPS-position sparad!");
+                setTimeout(() => setSuccessMsg(""), 3000);
+                setGpsEditResource(null);
+              } catch (err) {
+                console.error("Error saving GPS:", err);
+              } finally {
+                setGpsSaving(false);
+              }
+            }}
+          >
+            {gpsSaving ? "Sparar..." : "Spara"}
           </Button>
         </DialogActions>
       </Dialog>
