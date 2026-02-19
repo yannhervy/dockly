@@ -122,4 +122,4 @@ export function computeBoatHull(
 }
 
 // Harbor center coordinates
-export const HARBOR_CENTER = { lat: 57.6138617, lng: 11.8797606 };
+export const HARBOR_CENTER = { lat: 57.6138645, lng: 11.8797606 };

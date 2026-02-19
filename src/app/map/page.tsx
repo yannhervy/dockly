@@ -36,7 +36,7 @@ import { computeRectCorners, computeBoatHull, HARBOR_CENTER } from "@/lib/mapUti
 import { normalizePhone } from "@/lib/phoneUtils";
 import ProtectedRoute from "@/components/ProtectedRoute";
 
-const DEFAULT_ZOOM = 18;
+const DEFAULT_ZOOM = 17;
 
 // Discriminated union for any clickable map object
 type SelectedObject =
@@ -579,7 +579,7 @@ export default function MapPage() {
         <Typography variant="h6" sx={{ fontWeight: 700, flexGrow: 1 }}>
           Hamnkarta
         </Typography>
-        <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
+        <Box sx={{ display: { xs: "none", md: "flex" }, gap: 1, flexWrap: "wrap" }}>
           <Chip
             size="small"
             sx={{ bgcolor: "#4CAF50", color: "#fff", fontWeight: 600 }}
@@ -749,11 +749,12 @@ export default function MapPage() {
                 elevation={8}
                 sx={{
                   position: "absolute",
-                  bottom: 24,
-                  left: 24,
-                  p: 2.5,
-                  minWidth: 300,
-                  maxWidth: 380,
+                  bottom: { xs: 8, sm: 24 },
+                  left: { xs: 8, sm: 24 },
+                  right: { xs: 8, sm: "auto" },
+                  p: { xs: 1.5, sm: 2.5 },
+                  minWidth: { xs: 0, sm: 300 },
+                  maxWidth: { xs: "none", sm: 380 },
                   maxHeight: "calc(100% - 48px)",
                   overflowY: "auto",
                   bgcolor: "rgba(13, 33, 55, 0.95)",
@@ -866,15 +867,16 @@ export default function MapPage() {
                 elevation={6}
                 sx={{
                   position: "absolute",
-                  top: 16,
-                  right: 16,
-                  width: 340,
-                  maxHeight: "calc(100vh - 120px)",
+                  bottom: { xs: 8, sm: 24 },
+                  left: { xs: 8, sm: 24 },
+                  right: { xs: 8, sm: "auto" },
+                  width: { sm: 340 },
+                  maxHeight: "calc(100% - 48px)",
                   overflow: "auto",
                   bgcolor: "rgba(13, 33, 55, 0.97)",
                   backdropFilter: "blur(12px)",
                   border: "1px solid rgba(124,77,255,0.2)",
-                  p: 2.5,
+                  p: { xs: 1.5, sm: 2.5 },
                   borderRadius: 2,
                 }}
               >
@@ -979,11 +981,12 @@ export default function MapPage() {
               elevation={8}
               sx={{
                 position: "absolute",
-                bottom: 24,
-                left: 24,
-                p: 2.5,
-                minWidth: 300,
-                maxWidth: 380,
+                bottom: { xs: 8, sm: 24 },
+                left: { xs: 8, sm: 24 },
+                right: { xs: 8, sm: "auto" },
+                p: { xs: 1.5, sm: 2.5 },
+                minWidth: { xs: 0, sm: 300 },
+                maxWidth: { xs: "none", sm: 380 },
                 maxHeight: "calc(100% - 48px)",
                 overflowY: "auto",
                 bgcolor: "rgba(13, 33, 55, 0.95)",
