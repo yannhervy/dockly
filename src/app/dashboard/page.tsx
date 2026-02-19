@@ -253,6 +253,12 @@ function DashboardContent() {
   const [gpsLng, setGpsLng] = useState<number | undefined>(undefined);
   const [gpsSaving, setGpsSaving] = useState(false);
 
+  // GPS editing state for land storage
+  const [gpsEditLandEntry, setGpsEditLandEntry] = useState<LandStorageEntry | null>(null);
+  const [gpsLandLat, setGpsLandLat] = useState<number | undefined>(undefined);
+  const [gpsLandLng, setGpsLandLng] = useState<number | undefined>(undefined);
+  const [gpsLandSaving, setGpsLandSaving] = useState(false);
+
   useEffect(() => {
     if (profile) {
       setIsPublic(profile.isPublic);
@@ -1145,6 +1151,7 @@ function DashboardContent() {
                         <TableCell>Code</TableCell>
                         <TableCell>Season</TableCell>
                         <TableCell>Payment</TableCell>
+                        <TableCell>GPS</TableCell>
                         <TableCell>Comment</TableCell>
                       </TableRow>
                     </TableHead>
@@ -1167,6 +1174,37 @@ function DashboardContent() {
                               size="small"
                               color={entry.paymentStatus === "Paid" ? "success" : "error"}
                             />
+                          </TableCell>
+                          <TableCell>
+                            {entry.lat && entry.lng ? (
+                              <Tooltip title="GPS position set — click to edit">
+                                <IconButton
+                                  size="small"
+                                  onClick={() => {
+                                    setGpsEditLandEntry(entry);
+                                    setGpsLandLat(entry.lat);
+                                    setGpsLandLng(entry.lng);
+                                  }}
+                                  sx={{ color: "success.main" }}
+                                >
+                                  <PlaceIcon fontSize="small" />
+                                </IconButton>
+                              </Tooltip>
+                            ) : (
+                              <Tooltip title="GPS-position saknas — klicka för att ange">
+                                <IconButton
+                                  size="small"
+                                  onClick={() => {
+                                    setGpsEditLandEntry(entry);
+                                    setGpsLandLat(entry.lat);
+                                    setGpsLandLng(entry.lng);
+                                  }}
+                                  sx={{ color: "warning.main" }}
+                                >
+                                  <WarningAmberIcon fontSize="small" />
+                                </IconButton>
+                              </Tooltip>
+                            )}
                           </TableCell>
                           <TableCell>
                             {entry.comment || "—"}
@@ -1404,6 +1442,113 @@ function DashboardContent() {
             }}
           >
             {gpsSaving ? "Sparar..." : "Spara"}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* GPS editing dialog for Land Storage */}
+      <Dialog
+        open={!!gpsEditLandEntry}
+        onClose={() => setGpsEditLandEntry(null)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+          <PlaceIcon color="primary" />
+          Ange GPS-position
+        </DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Klicka p&aring; kartan f&ouml;r att placera din markering, eller anv&auml;nd din GPS-position.
+          </Typography>
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+            <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+              <PlaceIcon sx={{ fontSize: 18, verticalAlign: "text-bottom", mr: 0.5 }} />
+              {gpsEditLandEntry?.code} &mdash; Markf&ouml;rvaring
+            </Typography>
+            {isTouchDevice && (
+              <Button
+                size="small"
+                startIcon={<MyLocationIcon />}
+                onClick={() => {
+                  if (!navigator.geolocation) return;
+                  navigator.geolocation.getCurrentPosition(
+                    (pos) => {
+                      setGpsLandLat(pos.coords.latitude);
+                      setGpsLandLng(pos.coords.longitude);
+                    },
+                    (err) => console.error("GPS error:", err),
+                    { enableHighAccuracy: true }
+                  );
+                }}
+              >
+                Anv&auml;nd min GPS
+              </Button>
+            )}
+          </Box>
+          <Box sx={{ height: 300, border: '1px solid rgba(79,195,247,0.15)', borderRadius: 1, overflow: 'hidden', mb: 1 }}>
+            <APIProvider apiKey={process.env.NEXT_PUBLIC_GOOGLE_MAPS_KEY || ""}>
+              <GMap
+                defaultCenter={gpsLandLat && gpsLandLng ? { lat: gpsLandLat, lng: gpsLandLng } : HARBOR_CENTER}
+                defaultZoom={18}
+                mapId="edit-land-gps-map"
+                mapTypeId="satellite"
+                style={{ width: '100%', height: '100%' }}
+                gestureHandling="greedy"
+                disableDefaultUI
+                zoomControl
+                onClick={(e) => {
+                  const ll = e.detail?.latLng;
+                  if (ll) {
+                    setGpsLandLat(ll.lat);
+                    setGpsLandLng(ll.lng);
+                  }
+                }}
+              >
+                {gpsLandLat && gpsLandLng && (
+                  <AdvancedMarker position={{ lat: gpsLandLat, lng: gpsLandLng }} />
+                )}
+              </GMap>
+            </APIProvider>
+          </Box>
+          {gpsLandLat && gpsLandLng && (
+            <Typography variant="caption" color="text.secondary">
+              Lat: {gpsLandLat.toFixed(6)}, Lng: {gpsLandLng.toFixed(6)}
+            </Typography>
+          )}
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button onClick={() => setGpsEditLandEntry(null)}>Avbryt</Button>
+          <Button
+            variant="contained"
+            disabled={gpsLandSaving || !gpsLandLat || !gpsLandLng}
+            startIcon={gpsLandSaving ? <CircularProgress size={16} /> : <SaveIcon />}
+            onClick={async () => {
+              if (!gpsEditLandEntry || !gpsLandLat || !gpsLandLng) return;
+              setGpsLandSaving(true);
+              try {
+                await updateDoc(doc(db, "landStorage", gpsEditLandEntry.id), {
+                  lat: gpsLandLat,
+                  lng: gpsLandLng,
+                });
+                setLandEntries((prev) =>
+                  prev.map((x) =>
+                    x.id === gpsEditLandEntry.id
+                      ? { ...x, lat: gpsLandLat, lng: gpsLandLng }
+                      : x
+                  )
+                );
+                setSuccessMsg("GPS-position sparad!");
+                setTimeout(() => setSuccessMsg(""), 3000);
+                setGpsEditLandEntry(null);
+              } catch (err) {
+                console.error("Error saving GPS:", err);
+              } finally {
+                setGpsLandSaving(false);
+              }
+            }}
+          >
+            {gpsLandSaving ? "Sparar..." : "Spara"}
           </Button>
         </DialogActions>
       </Dialog>
