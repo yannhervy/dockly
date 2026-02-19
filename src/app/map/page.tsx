@@ -579,7 +579,7 @@ export default function MapPage() {
         <Typography variant="h6" sx={{ fontWeight: 700, flexGrow: 1 }}>
           Hamnkarta
         </Typography>
-        <Box sx={{ display: "flex", gap: 1 }}>
+        <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
           <Chip
             size="small"
             sx={{ bgcolor: "#4CAF50", color: "#fff", fontWeight: 600 }}
@@ -593,12 +593,12 @@ export default function MapPage() {
           <Chip
             size="small"
             sx={{ bgcolor: "#FFC107", color: "#000", fontWeight: 600 }}
-            label="Upptagen - ej reg."
+            label="Ej reg."
           />
           <Chip
             size="small"
             sx={{ bgcolor: "#F57C00", color: "#fff", fontWeight: 600 }}
-            label="Markförvaring"
+            label="Mark"
           />
           <Chip
             size="small"
@@ -656,8 +656,8 @@ export default function MapPage() {
           </APIProvider>
         )}
 
-        {/* Abandoned objects info banner */}
-        {!selectedObject && abandonedObjects.length > 0 && (
+        {/* Map hint banner (shown when no object is selected) */}
+        {!selectedObject && (
           <Paper
             elevation={4}
             sx={{
@@ -665,30 +665,21 @@ export default function MapPage() {
               bottom: 24,
               left: 24,
               p: 2,
-              maxWidth: 360,
+              maxWidth: 340,
               bgcolor: "rgba(13, 33, 55, 0.95)",
               backdropFilter: "blur(12px)",
-              border: "1px solid rgba(255,167,38,0.3)",
+              border: "1px solid rgba(79,195,247,0.15)",
               borderRadius: 2,
               zIndex: 5,
             }}
           >
-            <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
-              <DangerousIcon sx={{ color: "#FFA726" }} />
-              <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
-                Övergivna objekt ({abandonedObjects.length} st)
-              </Typography>
-            </Box>
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 1, lineHeight: 1.6 }}>
-              Klicka på ett ☠️-märke på kartan för att se detaljer. Objekt utan ägare kommer att <strong>säljas eller destrueras</strong>.
+            <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.6 }}>
+              Klicka på en markör för mer information.
             </Typography>
-            {firebaseUser ? (
-              <Typography variant="caption" color="text.secondary">
-                Du kan göra anspråk som ägare eller anmäla köpintresse.
-              </Typography>
-            ) : (
-              <Typography variant="caption" sx={{ color: "#FFA726" }}>
-                Logga in för att göra anspråk på en övergiven båt.
+            {abandonedObjects.length > 0 && (
+              <Typography variant="caption" sx={{ color: "#FFA726", display: "flex", alignItems: "center", gap: 0.5, mt: 0.5 }}>
+                <DangerousIcon sx={{ fontSize: 14 }} />
+                {abandonedObjects.length} övergivna objekt på kartan
               </Typography>
             )}
           </Paper>

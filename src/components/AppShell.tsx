@@ -147,13 +147,12 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           <ListItemButton
             component="a"
             href="/"
-            target="_blank"
             sx={{ borderRadius: 2 }}
           >
             <ListItemIcon sx={{ minWidth: 40, color: "text.secondary" }}>
               <OpenInNewIcon />
             </ListItemIcon>
-            <ListItemText primary="Visit Website" />
+            <ListItemText primary="Hemsida" />
           </ListItemButton>
         </ListItem>
       </List>

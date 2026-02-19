@@ -13,8 +13,8 @@ A modern web application for managing a small-boat marina — berths, docks, lan
 | **Docks** | Browse all docks, see manager contact info, association vs. private status |
 | **Info** | About the association, berth rules, seasons and environmental regulations |
 | **FAQ** | Accordion with common questions (berth application, parking, pricing, etc.) |
-| **News** | News feed with multi-image posts and emoji reactions (👍❤️😂🎉⚓) |
-| **Marketplace** | Buy, sell, sublet & wanted listings with categories, images, contact info |
+| **News** | News feed with multi-image posts, **markdown** editing and emoji reactions (👍❤️😂🎉⚓) |
+| **Marketplace** | Buy, sell, sublet & wanted listings with categories (incl. 2nd-hand subletting), images, contact info |
 
 ### 🔐 Logged-in Features
 | Feature | Description |
@@ -31,8 +31,10 @@ A modern web application for managing a small-boat marina — berths, docks, lan
 | **Dock Polygons** | Dock outlines on the map |
 | **Resource Markers** | Sea huts, boxes and other resources with click-to-view details |
 | **Land Storage Markers** | Winter storage positions |
-| **Abandoned Objects** | ☠️ markers for abandoned boats/objects with EXIF-based positioning |
+| **Abandoned Objects** | ⚠️ markers for abandoned boats/objects with EXIF-based positioning |
+| **POI Markers** | Purple pill-shaped markers for Points of Interest (toilets, ramps, etc.) |
 | **Info Panel** | Click any marker to see full details, images and owner info |
+| **Map Hint** | Contextual hint banner prompting users to click markers for details |
 | **Claim Ownership** | Logged-in users can claim ownership of an abandoned object |
 | **Purchase Interest** | Create a "Köpes" marketplace listing directly from an abandoned object |
 | **Stats Overlay** | Live count of berths, land plots and abandoned objects |
@@ -54,6 +56,7 @@ Full CRUD for the entire system, accessible to superadmins:
 - **Marketplace** — manage all listings
 - **Interest Applications** — review, reply and update status
 - **Abandoned Objects** — register, edit, position on map, view claim & purchase status
+- **Points of Interest** — create / edit / delete POIs with map positioning and image upload
 - **Image Lightbox** — click any admin thumbnail for a full-size preview
 
 ---
