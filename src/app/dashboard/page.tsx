@@ -570,6 +570,28 @@ function DashboardContent() {
     }
   };
 
+  // Delete land storage image
+  const handleDeleteLandImage = async (entryId: string) => {
+    if (!confirm("Vill du ta bort bilden?")) return;
+    setUploading(entryId);
+    try {
+      await updateDoc(doc(db, "landStorage", entryId), {
+        imageUrl: deleteField(),
+      });
+      setLandEntries((prev) =>
+        prev.map((x) =>
+          x.id === entryId ? { ...x, imageUrl: undefined } : x
+        )
+      );
+      setSuccessMsg("Bilden har tagits bort.");
+      setTimeout(() => setSuccessMsg(""), 4000);
+    } catch (err) {
+      console.error("Error deleting land storage image:", err);
+    } finally {
+      setUploading(null);
+    }
+  };
+
   // ── Second-hand tenant lookup ──
   const handleLookupTenant = async () => {
     if (!lookupBerthId || !lookupInput.trim()) return;
@@ -1304,6 +1326,18 @@ function DashboardContent() {
                               >
                                 {entry.imageUrl ? "Ändra" : "Ladda upp bild"}
                               </Button>
+                              {entry.imageUrl && (
+                                <Tooltip title="Ta bort bild">
+                                  <IconButton
+                                    size="small"
+                                    onClick={() => handleDeleteLandImage(entry.id)}
+                                    disabled={uploading === entry.id}
+                                    sx={{ color: "error.main" }}
+                                  >
+                                    <CloseIcon sx={{ fontSize: 16 }} />
+                                  </IconButton>
+                                </Tooltip>
+                              )}
                             </Box>
                           </TableCell>
                           <TableCell>
