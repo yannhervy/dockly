@@ -55,6 +55,7 @@ import AnchorIcon from "@mui/icons-material/Anchor";
 import SearchIcon from "@mui/icons-material/Search";
 import ShoppingCartIcon from "@mui/icons-material/ShoppingCart";
 import WarningAmberIcon from "@mui/icons-material/WarningAmber";
+import LockOutlinedIcon from "@mui/icons-material/LockOutlined";
 import type { ListingCategory } from "@/lib/types";
 
 // Category helpers
@@ -509,30 +510,48 @@ export default function MarketplacePage() {
                       gap: 0.5,
                     }}
                   >
-                    {listing.contactEmail && (
+                    {firebaseUser ? (
+                      <>
+                        {listing.contactEmail && (
+                          <Button
+                            size="small"
+                            startIcon={<EmailIcon />}
+                            href={`mailto:${listing.contactEmail}`}
+                            sx={{
+                              textTransform: "none",
+                              justifyContent: "flex-start",
+                            }}
+                          >
+                            {listing.contactEmail}
+                          </Button>
+                        )}
+                        {listing.contactPhone && (
+                          <Button
+                            size="small"
+                            startIcon={<PhoneIcon />}
+                            href={`tel:${listing.contactPhone}`}
+                            sx={{
+                              textTransform: "none",
+                              justifyContent: "flex-start",
+                            }}
+                          >
+                            {listing.contactPhone}
+                          </Button>
+                        )}
+                      </>
+                    ) : (
                       <Button
                         size="small"
-                        startIcon={<EmailIcon />}
-                        href={`mailto:${listing.contactEmail}`}
+                        startIcon={<LockOutlinedIcon sx={{ fontSize: 16 }} />}
+                        href="/login"
                         sx={{
                           textTransform: "none",
                           justifyContent: "flex-start",
+                          color: "text.secondary",
+                          fontSize: "0.8rem",
                         }}
                       >
-                        {listing.contactEmail}
-                      </Button>
-                    )}
-                    {listing.contactPhone && (
-                      <Button
-                        size="small"
-                        startIcon={<PhoneIcon />}
-                        href={`tel:${listing.contactPhone}`}
-                        sx={{
-                          textTransform: "none",
-                          justifyContent: "flex-start",
-                        }}
-                      >
-                        {listing.contactPhone}
+                        Logga in för att se kontaktuppgifter
                       </Button>
                     )}
                   </Box>
