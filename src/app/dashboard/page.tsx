@@ -997,7 +997,7 @@ function DashboardContent() {
                       {resources.map((r) => (
                         <TableRow key={r.id}>
                           <TableCell>
-                            <Chip label={r.type} size="small" variant="outlined" />
+                            <Chip label={r.type === "SeaHut" ? "Sjöbod" : r.type === "Berth" ? "Båtplats" : r.type === "Box" ? "Låda" : r.type} size="small" variant="outlined" />
                           </TableCell>
                           <TableCell sx={{ fontWeight: 600 }}>
                             {r.markingCode}
@@ -1261,6 +1261,7 @@ function DashboardContent() {
                                   <IconButton
                                     size="small"
                                     onClick={async () => {
+                                      if (!confirm("Genom att ta bort din GPS-position bekräftar du att du inte längre har något uppställt på hamnens mark.")) return;
                                       try {
                                         await updateDoc(doc(db, "landStorage", entry.id), {
                                           lat: deleteField(),
