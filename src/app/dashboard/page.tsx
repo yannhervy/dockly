@@ -1176,6 +1176,14 @@ function DashboardContent() {
                   Min markförvaring
                 </Typography>
 
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                  När du förvarar något på föreningens mark ska du markera detta med en GPS-position.
+                  När du tar bort din båt eller trailer ska du även ta bort din GPS-position.
+                  Kom ihåg att det är upp till dig att löpande betala in uppställningsavgiften.
+                  Kontroller sker löpande och efterdebitering sker.
+                  Se <a href="/info/upplagning" style={{ color: "#4FC3F7" }}>/info/upplagning</a> för mer info.
+                </Typography>
+
                 <TableContainer
                   component={Paper}
                   sx={{ bgcolor: "transparent", backgroundImage: "none" }}
