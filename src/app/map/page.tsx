@@ -676,12 +676,6 @@ export default function MapPage() {
             <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.6 }}>
               Klicka på en markör för mer information.
             </Typography>
-            {abandonedObjects.length > 0 && (
-              <Typography variant="caption" sx={{ color: "#FFA726", display: "flex", alignItems: "center", gap: 0.5, mt: 0.5 }}>
-                <DangerousIcon sx={{ fontSize: 14 }} />
-                {abandonedObjects.length} övergivna objekt på kartan
-              </Typography>
-            )}
           </Paper>
         )}
 
@@ -752,11 +746,11 @@ export default function MapPage() {
                   bottom: { xs: 8, sm: 24 },
                   left: { xs: 8, sm: 24 },
                   right: { xs: 8, sm: "auto" },
-                  p: { xs: 1.5, sm: 2.5 },
                   minWidth: { xs: 0, sm: 300 },
                   maxWidth: { xs: "none", sm: 380 },
                   maxHeight: "calc(100% - 48px)",
-                  overflowY: "auto",
+                  display: "flex",
+                  flexDirection: "column",
                   bgcolor: "rgba(13, 33, 55, 0.95)",
                   backdropFilter: "blur(12px)",
                   border: "1px solid rgba(79,195,247,0.15)",
@@ -764,7 +758,8 @@ export default function MapPage() {
                   zIndex: 5,
                 }}
               >
-                <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", mb: 1 }}>
+                {/* Sticky header */}
+                <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", p: { xs: 1.5, sm: 2.5 }, pb: 1, flexShrink: 0 }}>
                   <Box>
                     <Typography variant="h6" sx={{ fontWeight: 700, display: "flex", alignItems: "center", gap: 0.5 }}><DangerousIcon fontSize="small" /> #{d.abandonedId}</Typography>
                     <Typography variant="caption" color="text.secondary">Övergiven {objectTypeLabels[d.objectType] || d.objectType}</Typography>
@@ -774,6 +769,8 @@ export default function MapPage() {
                   </IconButton>
                 </Box>
 
+                {/* Scrollable content */}
+                <Box sx={{ overflowY: "auto", flex: 1, px: { xs: 1.5, sm: 2.5 }, WebkitOverflowScrolling: "touch" }}>
                 <Box sx={{ display: "flex", gap: 1, mb: 1.5, flexWrap: "wrap" }}>
                   <Chip label={objectTypeLabels[d.objectType] || d.objectType} size="small" sx={{ bgcolor: "#424242", color: "#fff", fontWeight: 600 }} />
                   {isClaimed ? (
@@ -794,7 +791,10 @@ export default function MapPage() {
                     sx={{ width: "100%", borderRadius: 1, mb: 1.5, border: "1px solid rgba(79,195,247,0.1)" }}
                   />
                 )}
+                </Box>
 
+                {/* Sticky footer */}
+                <Box sx={{ p: { xs: 1.5, sm: 2.5 }, pt: 1, flexShrink: 0 }}>
                 <Typography variant="body2" color="text.secondary">
                   <strong>Övergiven sedan:</strong> {abandonedDate.toLocaleDateString("sv-SE")}
                 </Typography>
@@ -855,6 +855,7 @@ export default function MapPage() {
                     </Button>
                   </DialogActions>
                 </Dialog>
+                </Box>
               </Paper>
             );
           }
@@ -872,15 +873,15 @@ export default function MapPage() {
                   right: { xs: 8, sm: "auto" },
                   width: { sm: 340 },
                   maxHeight: "calc(100% - 48px)",
-                  overflow: "auto",
+                  display: "flex",
+                  flexDirection: "column",
                   bgcolor: "rgba(13, 33, 55, 0.97)",
                   backdropFilter: "blur(12px)",
                   border: "1px solid rgba(124,77,255,0.2)",
-                  p: { xs: 1.5, sm: 2.5 },
                   borderRadius: 2,
                 }}
               >
-                <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", mb: 1.5 }}>
+                <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", p: { xs: 1.5, sm: 2.5 }, pb: 1, flexShrink: 0 }}>
                   <Box>
                     <Typography variant="h6" sx={{ fontWeight: 700 }}>{p.id}</Typography>
                   </Box>
@@ -889,6 +890,8 @@ export default function MapPage() {
                   </IconButton>
                 </Box>
 
+                {/* Scrollable content */}
+                <Box sx={{ overflowY: "auto", flex: 1, px: { xs: 1.5, sm: 2.5 }, WebkitOverflowScrolling: "touch" }}>
                 {p.imageUrl && (
                   <Box
                     component="img"
@@ -897,7 +900,10 @@ export default function MapPage() {
                     sx={{ width: "100%", borderRadius: 1, mb: 1.5, border: "1px solid rgba(124,77,255,0.1)" }}
                   />
                 )}
+                </Box>
 
+                {/* Footer */}
+                <Box sx={{ p: { xs: 1.5, sm: 2.5 }, pt: 1, flexShrink: 0 }}>
                 {p.comment && (
                   <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.6 }}>{p.comment}</Typography>
                 )}
@@ -905,6 +911,7 @@ export default function MapPage() {
                 <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 1 }}>
                   {p.lat.toFixed(6)}, {p.lng.toFixed(6)}
                 </Typography>
+                </Box>
               </Paper>
             );
           }
@@ -984,11 +991,11 @@ export default function MapPage() {
                 bottom: { xs: 8, sm: 24 },
                 left: { xs: 8, sm: 24 },
                 right: { xs: 8, sm: "auto" },
-                p: { xs: 1.5, sm: 2.5 },
                 minWidth: { xs: 0, sm: 300 },
                 maxWidth: { xs: "none", sm: 380 },
                 maxHeight: "calc(100% - 48px)",
-                overflowY: "auto",
+                display: "flex",
+                flexDirection: "column",
                 bgcolor: "rgba(13, 33, 55, 0.95)",
                 backdropFilter: "blur(12px)",
                 border: "1px solid rgba(79,195,247,0.15)",
@@ -997,7 +1004,7 @@ export default function MapPage() {
               }}
             >
               {/* Header */}
-              <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", mb: 1 }}>
+              <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", p: { xs: 1.5, sm: 2.5 }, pb: 1, flexShrink: 0 }}>
                 <Box>
                   <Typography variant="h6" sx={{ fontWeight: 700 }}>{label}</Typography>
                   <Typography variant="caption" color="text.secondary">{typeLabel}</Typography>
@@ -1007,6 +1014,8 @@ export default function MapPage() {
                 </IconButton>
               </Box>
 
+              {/* Scrollable content */}
+              <Box sx={{ overflowY: "auto", flex: 1, px: { xs: 1.5, sm: 2.5 }, WebkitOverflowScrolling: "touch" }}>
               {/* Status chips */}
               <Box sx={{ display: "flex", gap: 1, mb: 1.5, flexWrap: "wrap" }}>
                 <Chip label={statusText} size="small" sx={{ bgcolor: statusColor, color: statusColor === "#FFC107" ? "#000" : "#fff", fontWeight: 600 }} />
@@ -1027,7 +1036,10 @@ export default function MapPage() {
                   sx={{ width: "100%", borderRadius: 1, mb: 1.5, border: "1px solid rgba(79,195,247,0.1)" }}
                 />
               )}
+              </Box>
 
+              {/* Footer - details */}
+              <Box sx={{ p: { xs: 1.5, sm: 2.5 }, pt: 1, flexShrink: 0 }}>
               {/* General info */}
               {dockName && (
                 <Typography variant="body2" color="text.secondary"><strong>Brygga:</strong> {dockName}</Typography>
@@ -1096,6 +1108,7 @@ export default function MapPage() {
                   })()}
                 </>
               )}
+              </Box>
             </Paper>
           );
         })()}
