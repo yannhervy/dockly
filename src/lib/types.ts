@@ -205,6 +205,7 @@ export interface BerthInterest {
   boatWidth: number;   // meters
   boatLength: number;  // meters
   preferredDockId?: string;
+  preferredBerthId?: string; // Optional FK to a specific berth
   message?: string;
   imageUrl?: string;
   createdAt: Timestamp;

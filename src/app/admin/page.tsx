@@ -2272,8 +2272,11 @@ function InterestsTab() {
   const [sendingReply, setSendingReply] = useState(false);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
+  const isSuperadmin = profile?.role === "Superadmin";
+
   useEffect(() => {
     fetchData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function fetchData() {
@@ -2283,8 +2286,22 @@ function InterestsTab() {
         getDocs(query(collection(db, "interests"), orderBy("createdAt", "desc"))),
         getDocs(collection(db, "docks")),
       ]);
-      setInterests(iSnap.docs.map((d) => ({ id: d.id, ...d.data() }) as BerthInterest));
-      setDocks(dSnap.docs.map((d) => ({ id: d.id, ...d.data() }) as Dock));
+      const allDocks = dSnap.docs.map((d) => ({ id: d.id, ...d.data() }) as Dock);
+      setDocks(allDocks);
+
+      let allInterests = iSnap.docs.map((d) => ({ id: d.id, ...d.data() }) as BerthInterest);
+
+      // Dock managers: only see interests for their docks + interests with no dock preference
+      if (!isSuperadmin && firebaseUser) {
+        const managedDockIds = new Set(
+          allDocks.filter((d) => d.managerIds?.includes(firebaseUser.uid)).map((d) => d.id)
+        );
+        allInterests = allInterests.filter(
+          (i) => !i.preferredDockId || managedDockIds.has(i.preferredDockId)
+        );
+      }
+
+      setInterests(allInterests);
     } catch (err) {
       console.error("Error fetching interests:", err);
       try {

@@ -26,6 +26,7 @@ import MapIcon from "@mui/icons-material/Map";
 import HomeIcon from "@mui/icons-material/Home";
 import SmsIcon from "@mui/icons-material/Sms";
 import DangerousIcon from "@mui/icons-material/Dangerous";
+import SailingIcon from "@mui/icons-material/Sailing";
 import {
   APIProvider,
   Map,
@@ -1107,6 +1108,19 @@ export default function MapPage() {
                     ) : null;
                   })()}
                 </>
+              )}
+
+              {/* Interest button for available berths */}
+              {obj.kind === "berth" && obj.data.status === "Available" && firebaseUser && (
+                <Button
+                  variant="contained"
+                  size="small"
+                  startIcon={<SailingIcon />}
+                  href={`/interest?dockId=${obj.data.dockId}&berthId=${obj.data.id}`}
+                  sx={{ mt: 1.5, textTransform: "none", bgcolor: "#1976D2", "&:hover": { bgcolor: "#1565C0" } }}
+                >
+                  Intresseanmälan
+                </Button>
               )}
               </Box>
             </Paper>

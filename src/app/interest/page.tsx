@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useState, useRef, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   collection,
   getDocs,
@@ -17,7 +17,7 @@ import { db, storage } from "@/lib/firebase";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { resizeImage, deleteStorageFile } from "@/lib/storage";
 import { useAuth } from "@/context/AuthContext";
-import type { Dock, BerthInterest, InterestReply } from "@/lib/types";
+import type { Dock, Berth, BerthInterest, InterestReply } from "@/lib/types";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 import Card from "@mui/material/Card";
@@ -64,12 +64,25 @@ const statusColor = (s: string): "warning" | "info" | "success" =>
   s === "Pending" ? "warning" : s === "Contacted" ? "info" : "success";
 
 export default function InterestPage() {
+  return (
+    <Suspense fallback={null}>
+      <InterestPageInner />
+    </Suspense>
+  );
+}
+
+function InterestPageInner() {
   const { firebaseUser, profile, loading: authLoading } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [docks, setDocks] = useState<Dock[]>([]);
   const [submitted, setSubmitted] = useState(false);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
+
+  // Available berths for the selected dock
+  const [availableBerths, setAvailableBerths] = useState<Berth[]>([]);
+  const [loadingBerths, setLoadingBerths] = useState(false);
 
   // User's existing submissions
   const [myInterests, setMyInterests] = useState<BerthInterest[]>([]);
@@ -79,12 +92,14 @@ export default function InterestPage() {
     boatWidth: "",
     boatLength: "",
     preferredDockId: "",
+    preferredBerthId: "",
     phone: "",
     message: "",
   });
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const paramsApplied = useRef(false);
 
   useEffect(() => {
     async function fetchDocks() {
@@ -97,6 +112,47 @@ export default function InterestPage() {
     }
     fetchDocks();
   }, []);
+
+  // Pre-fill from URL query params (e.g. from map)
+  useEffect(() => {
+    if (paramsApplied.current || docks.length === 0) return;
+    const qDock = searchParams.get("dockId");
+    const qBerth = searchParams.get("berthId");
+    if (qDock) {
+      setForm((prev) => ({ ...prev, preferredDockId: qDock, preferredBerthId: qBerth || "" }));
+      paramsApplied.current = true;
+    }
+  }, [searchParams, docks]);
+
+  // Fetch available berths when dock changes
+  useEffect(() => {
+    if (!form.preferredDockId) {
+      setAvailableBerths([]);
+      return;
+    }
+    async function fetchBerths() {
+      setLoadingBerths(true);
+      try {
+        const q = query(
+          collection(db, "resources"),
+          where("type", "==", "Berth"),
+          where("dockId", "==", form.preferredDockId)
+        );
+        const snap = await getDocs(q);
+        const berths = snap.docs
+          .map((d) => ({ id: d.id, ...d.data() }) as Berth)
+          .filter((b) => b.status === "Available")
+          .sort((a, b) => a.berthNumber - b.berthNumber);
+        setAvailableBerths(berths);
+      } catch (err) {
+        console.error("Error fetching berths:", err);
+        setAvailableBerths([]);
+      } finally {
+        setLoadingBerths(false);
+      }
+    }
+    fetchBerths();
+  }, [form.preferredDockId]);
 
   // Pre-fill phone from profile
   useEffect(() => {
@@ -178,6 +234,7 @@ export default function InterestPage() {
         boatWidth: width,
         boatLength: length,
         preferredDockId: form.preferredDockId || null,
+        preferredBerthId: form.preferredBerthId || null,
         message: form.message || null,
         imageUrl: imageUrl,
         createdAt: Timestamp.now(),
@@ -352,6 +409,31 @@ export default function InterestPage() {
                 ))}
               </Select>
             </FormControl>
+
+            {/* Available berths for the selected dock */}
+            {form.preferredDockId && (
+              <FormControl fullWidth sx={{ mb: 3 }}>
+                <InputLabel>Ledig plats (valfritt)</InputLabel>
+                <Select
+                  value={form.preferredBerthId}
+                  label="Ledig plats (valfritt)"
+                  onChange={(e) =>
+                    setForm({ ...form, preferredBerthId: e.target.value })
+                  }
+                  disabled={loadingBerths}
+                >
+                  <MenuItem value="">Ingen specifik plats</MenuItem>
+                  {availableBerths.length === 0 && !loadingBerths && (
+                    <MenuItem disabled>Inga lediga platser just nu</MenuItem>
+                  )}
+                  {availableBerths.map((b) => (
+                    <MenuItem key={b.id} value={b.id}>
+                      Plats {b.markingCode}{b.width && b.length ? ` (${b.length}×${b.width}m)` : ""}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            )}
 
             {/* Phone */}
             <TextField
