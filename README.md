@@ -1,6 +1,6 @@
 # ⛵ Dockly — Stegerholmens Hamn
 
-A modern web application for managing a small-boat marina — berths, docks, land storage, marketplace, news and more. Built with **Next.js 16**, **Firebase** (Auth, Firestore, Storage) and **Material UI**.
+A modern web application for managing a small-boat marina — berths, docks, land storage, marketplace, news and more. Built with **Next.js 16**, **Firebase** (Auth, Firestore, Storage, Hosting) and **Material UI**. The tenant-facing UI is in **Swedish**.
 
 ---
 
@@ -14,13 +14,13 @@ A modern web application for managing a small-boat marina — berths, docks, lan
 | **Info** | About the association, berth rules, seasons and environmental regulations |
 | **FAQ** | Accordion with common questions (berth application, parking, pricing, etc.) |
 | **News** | News feed with multi-image posts, **markdown** editing and emoji reactions (👍❤️😂🎉⚓) |
-| **Marketplace** | Buy, sell, sublet & wanted listings with categories (incl. 2nd-hand subletting), images, contact info |
+| **Marketplace** | Buy, sell, sublet & wanted listings with categories (incl. 2nd-hand subletting), images. Contact info hidden behind login for privacy |
 
 ### 🔐 Logged-in Features
 | Feature | Description |
 |---------|-------------|
 | **Login** | Firebase Authentication (email / password) with profile creation on first login |
-| **Dashboard** | Personal profile editing, boat image uploads, berth & payment overview, unread messages, privacy toggle |
+| **Dashboard (Mina sidor)** | Profile editing, profilsynlighet & SMS toggles, personal satellite map showing own objects, boat & land-storage image uploads, GPS editing for non-berth resources and land-storage entries, unread messages |
 | **Berth Interest** | Submit a berth application with boat dimensions, preferred dock, phone and optional boat photo. Track status & receive replies from managers |
 | **Directory** | Browse all berths with role-based privacy: managers see full contact info + SMS, tenants see limited data |
 
@@ -72,7 +72,7 @@ Full CRUD for the entire system, accessible to superadmins:
 | Storage | Firebase Storage |
 | Maps | Google Maps (`@vis.gl/react-google-maps`) |
 | SMS | 46elks API |
-| Hosting | Vercel-ready |
+| Hosting | Firebase Hosting |
 
 ---
 
@@ -90,6 +90,12 @@ npm run dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000) to view the app.
+
+### Deploy
+
+```bash
+npx next build && npx firebase deploy --only hosting
+```
 
 ### Required Environment Variables
 
