@@ -764,7 +764,7 @@ export default function MapPage() {
                   zIndex: 5,
                 }}
               >
-                <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", mb: 1, position: "sticky", top: 0, bgcolor: "inherit", zIndex: 1, pb: 0.5 }}>
+                <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", mb: 1, position: "sticky", top: 0, bgcolor: "rgb(13, 33, 55)", zIndex: 1, pb: 0.5 }}>
                   <Box>
                     <Typography variant="h6" sx={{ fontWeight: 700, display: "flex", alignItems: "center", gap: 0.5 }}><DangerousIcon fontSize="small" /> #{d.abandonedId}</Typography>
                     <Typography variant="caption" color="text.secondary">Övergiven {objectTypeLabels[d.objectType] || d.objectType}</Typography>
@@ -880,7 +880,7 @@ export default function MapPage() {
                   borderRadius: 2,
                 }}
               >
-                <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", mb: 1.5, position: "sticky", top: 0, bgcolor: "inherit", zIndex: 1, pb: 0.5 }}>
+                <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", mb: 1.5, position: "sticky", top: 0, bgcolor: "rgb(13, 33, 55)", zIndex: 1, pb: 0.5 }}>
                   <Box>
                     <Typography variant="h6" sx={{ fontWeight: 700 }}>{p.id}</Typography>
                   </Box>
@@ -997,7 +997,7 @@ export default function MapPage() {
               }}
             >
               {/* Header */}
-              <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", mb: 1, position: "sticky", top: 0, bgcolor: "inherit", zIndex: 1, pb: 0.5 }}>
+              <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", mb: 1, position: "sticky", top: 0, bgcolor: "rgb(13, 33, 55)", zIndex: 1, pb: 0.5 }}>
                 <Box>
                   <Typography variant="h6" sx={{ fontWeight: 700 }}>{label}</Typography>
                   <Typography variant="caption" color="text.secondary">{typeLabel}</Typography>
