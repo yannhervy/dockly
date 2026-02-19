@@ -3,7 +3,7 @@
 import React, { useEffect, useState, useRef, useCallback } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { db } from "@/lib/firebase";
-import { uploadBoatImage, uploadProfileImage } from "@/lib/storage";
+import { uploadBoatImage, uploadProfileImage, uploadLandStorageImage } from "@/lib/storage";
 import { Resource, Berth, Dock, LandStorageEntry, UserMessage } from "@/lib/types";
 import { normalizePhone } from "@/lib/phoneUtils";
 import { APIProvider, Map as GMap, AdvancedMarker, useMap, useMapsLibrary } from "@vis.gl/react-google-maps";
@@ -462,7 +462,7 @@ function DashboardContent() {
         phone: editPhone.trim(),
       });
       setEditing(false);
-      setSuccessMsg("Profile updated!");
+      setSuccessMsg("Profil uppdaterad!");
       setTimeout(() => setSuccessMsg(""), 4000);
       refreshProfile?.();
     } catch (err) {
@@ -491,7 +491,7 @@ function DashboardContent() {
       await updateDoc(doc(db, "users", firebaseUser.uid), {
         photoURL: url,
       });
-      setSuccessMsg("Profile picture updated!");
+      setSuccessMsg("Profilbild uppdaterad!");
       setTimeout(() => setSuccessMsg(""), 4000);
       refreshProfile?.();
     } catch (err) {
@@ -524,7 +524,7 @@ function DashboardContent() {
           r.id === uploadTargetId ? { ...r, objectImageUrl: url } : r
         )
       );
-      setSuccessMsg("Boat image updated successfully!");
+      setSuccessMsg("Båtbild uppdaterad!");
       setTimeout(() => setSuccessMsg(""), 4000);
     } catch (err) {
       console.error("Error uploading image:", err);
@@ -532,6 +532,41 @@ function DashboardContent() {
       setUploading(null);
       setUploadTargetId(null);
       if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
+  // Handle land storage image upload
+  const landFileInputRef = useRef<HTMLInputElement>(null);
+  const [landUploadTargetId, setLandUploadTargetId] = useState<string | null>(null);
+
+  const handleLandUploadClick = (entryId: string) => {
+    setLandUploadTargetId(entryId);
+    landFileInputRef.current?.click();
+  };
+
+  const handleLandFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !landUploadTargetId) return;
+
+    setUploading(landUploadTargetId);
+    try {
+      const url = await uploadLandStorageImage(file, landUploadTargetId);
+      await updateDoc(doc(db, "landStorage", landUploadTargetId), {
+        imageUrl: url,
+      });
+      setLandEntries((prev) =>
+        prev.map((x) =>
+          x.id === landUploadTargetId ? { ...x, imageUrl: url } : x
+        )
+      );
+      setSuccessMsg("Bild för markförvaring uppdaterad!");
+      setTimeout(() => setSuccessMsg(""), 4000);
+    } catch (err) {
+      console.error("Error uploading land storage image:", err);
+    } finally {
+      setUploading(null);
+      setLandUploadTargetId(null);
+      if (landFileInputRef.current) landFileInputRef.current.value = "";
     }
   };
 
@@ -610,10 +645,10 @@ function DashboardContent() {
           sx={{ mb: 1, display: "flex", alignItems: "center", gap: 1.5 }}
         >
           <DashboardIcon sx={{ color: "primary.main" }} />
-          My Pages
+          Mina sidor
         </Typography>
         <Typography variant="body1" color="text.secondary">
-          Manage your profile, boat images, and view your leases.
+          Hantera din profil, båtbilder och se dina hyresavtal.
         </Typography>
       </Box>
 
@@ -684,7 +719,7 @@ function DashboardContent() {
                     <TextField
                       fullWidth
                       size="small"
-                      label="Name"
+                      label="Namn"
                       value={editName}
                       onChange={(e) => setEditName(e.target.value)}
                       sx={{ mb: 2 }}
@@ -692,7 +727,7 @@ function DashboardContent() {
                     <TextField
                       fullWidth
                       size="small"
-                      label="Phone"
+                      label="Telefon"
                       value={editPhone}
                       onChange={(e) => setEditPhone(e.target.value)}
                       sx={{ mb: 2 }}
@@ -705,7 +740,7 @@ function DashboardContent() {
                         onClick={handleSaveProfile}
                         disabled={saving || !editName.trim()}
                       >
-                        Save
+                        Spara
                       </Button>
                       <Button
                         variant="outlined"
@@ -714,14 +749,14 @@ function DashboardContent() {
                         onClick={handleCancelEdit}
                         disabled={saving}
                       >
-                        Cancel
+                        Avbryt
                       </Button>
                     </Box>
                   </Box>
                 ) : (
                   <>
                     <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                      {profile?.name || "User"}
+                      {profile?.name || "Användare"}
                     </Typography>
                     <Typography variant="body2" color="text.secondary">
                       {profile?.email || firebaseUser?.email}
@@ -747,7 +782,7 @@ function DashboardContent() {
               {!editing && (
                 <Box sx={{ mb: 2 }}>
                   <Typography variant="caption" color="text.secondary">
-                    Phone
+                    Telefon
                   </Typography>
                   <Typography variant="body2">
                     {profile?.phone || "—"}
@@ -765,7 +800,7 @@ function DashboardContent() {
                   onClick={() => setEditing(true)}
                   sx={{ mb: 2, textTransform: "none" }}
                 >
-                  Edit Profile
+                  Redigera profil
                 </Button>
               )}
 
@@ -788,12 +823,12 @@ function DashboardContent() {
                   )}
                   <Box>
                     <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                      Profile Visibility
+                      Profilsynlighet
                     </Typography>
                     <Typography variant="caption" color="text.secondary">
                       {isPublic
-                        ? "Visible in harbor directory"
-                        : "Hidden from harbor directory"}
+                        ? "Synlig i hamnkatalogen"
+                        : "Dold från hamnkatalogen"}
                     </Typography>
                   </Box>
                 </Box>
@@ -907,7 +942,7 @@ function DashboardContent() {
                 }}
               >
                 <DirectionsBoatIcon sx={{ color: "primary.main" }} />
-                My Leases
+                Mina hyresavtal
               </Typography>
 
               {loading ? (
@@ -917,7 +952,7 @@ function DashboardContent() {
               ) : resources.length === 0 ? (
                 <Box sx={{ textAlign: "center", py: 4, color: "text.secondary" }}>
                   <PersonIcon sx={{ fontSize: 48, mb: 1, opacity: 0.3 }} />
-                  <Typography>No active leases found.</Typography>
+                  <Typography>Inga aktiva hyresavtal hittades.</Typography>
                 </Box>
               ) : (
                 <TableContainer
@@ -927,13 +962,13 @@ function DashboardContent() {
                   <Table>
                     <TableHead>
                       <TableRow>
-                        <TableCell>Type</TableCell>
-                        <TableCell>Marking Code</TableCell>
+                        <TableCell>Typ</TableCell>
+                        <TableCell>Märkningskod</TableCell>
                         <TableCell>Status</TableCell>
-                        <TableCell>Payment</TableCell>
+                        <TableCell>Betalning</TableCell>
                         <TableCell>GPS</TableCell>
                         <TableCell>2:a-hand</TableCell>
-                        <TableCell>Boat Image</TableCell>
+                        <TableCell>Båtbild</TableCell>
                       </TableRow>
                     </TableHead>
                     <TableBody>
@@ -1109,7 +1144,7 @@ function DashboardContent() {
                                 onClick={() => handleUploadClick(r.id)}
                                 disabled={uploading === r.id}
                               >
-                                {r.objectImageUrl ? "Change" : "Upload"}
+                                {r.objectImageUrl ? "Ändra" : "Ladda upp"}
                               </Button>
                             </Box>
                           </TableCell>
@@ -1138,7 +1173,7 @@ function DashboardContent() {
                   }}
                 >
                   <ConstructionIcon sx={{ color: "primary.main" }} />
-                  My Land Storage
+                  Min markförvaring
                 </Typography>
 
                 <TableContainer
@@ -1148,11 +1183,12 @@ function DashboardContent() {
                   <Table>
                     <TableHead>
                       <TableRow>
-                        <TableCell>Code</TableCell>
-                        <TableCell>Season</TableCell>
-                        <TableCell>Payment</TableCell>
+                        <TableCell>Kod</TableCell>
+                        <TableCell>Säsong</TableCell>
+                        <TableCell>Betalning</TableCell>
                         <TableCell>GPS</TableCell>
-                        <TableCell>Comment</TableCell>
+                        <TableCell>Bild</TableCell>
+                        <TableCell>Kommentar</TableCell>
                       </TableRow>
                     </TableHead>
                     <TableBody>
@@ -1207,6 +1243,33 @@ function DashboardContent() {
                             )}
                           </TableCell>
                           <TableCell>
+                            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                              {entry.imageUrl ? (
+                                <Avatar
+                                  src={entry.imageUrl}
+                                  variant="rounded"
+                                  sx={{ width: 40, height: 40, cursor: "pointer" }}
+                                  onClick={() => setPreviewImageUrl(entry.imageUrl!)}
+                                />
+                              ) : null}
+                              <Button
+                                size="small"
+                                startIcon={
+                                  uploading === entry.id ? (
+                                    <CircularProgress size={14} />
+                                  ) : (
+                                    <PhotoCameraIcon />
+                                  )
+                                }
+                                onClick={() => handleLandUploadClick(entry.id)}
+                                disabled={uploading === entry.id}
+                                color={entry.imageUrl ? "primary" : "warning"}
+                              >
+                                {entry.imageUrl ? "Ändra" : "Ladda upp bild"}
+                              </Button>
+                            </Box>
+                          </TableCell>
+                          <TableCell>
                             {entry.comment || "—"}
                           </TableCell>
                         </TableRow>
@@ -1230,14 +1293,14 @@ function DashboardContent() {
                     sx={{ display: "flex", alignItems: "center", gap: 1 }}
                   >
                     <SmsIcon sx={{ color: "primary.main" }} />
-                    Messages ({messages.length})
+                    Meddelanden ({messages.length})
                   </Typography>
                   <Button
                     size="small"
                     startIcon={<MarkEmailReadIcon />}
                     onClick={handleClearMessages}
                   >
-                    Clear All
+                    Rensa alla
                   </Button>
                 </Box>
                 {messages.map((msg) => (
@@ -1255,8 +1318,8 @@ function DashboardContent() {
                       {msg.text}
                     </Typography>
                     <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: "block" }}>
-                      From {msg.authorName}
-                      {msg.sentAsSms && " · Sent as SMS"}
+                      Från {msg.authorName}
+                      {msg.sentAsSms && " · Skickat som SMS"}
                       {msg.createdAt && " · " + msg.createdAt.toDate().toLocaleDateString("sv-SE")}
                     </Typography>
                   </Box>
@@ -1302,6 +1365,13 @@ function DashboardContent() {
         style={{ display: "none" }}
         onChange={handleProfilePictureChange}
       />
+      <input
+        ref={landFileInputRef}
+        type="file"
+        accept="image/*"
+        style={{ display: "none" }}
+        onChange={handleLandFileChange}
+      />
       {/* Second-hand tenant lookup dialog */}
       <Dialog
         open={!!lookupBerthId}
@@ -1309,14 +1379,14 @@ function DashboardContent() {
         maxWidth="xs"
         fullWidth
       >
-        <DialogTitle>Find second-hand tenant</DialogTitle>
+        <DialogTitle>Hitta andrahandshyresgäst</DialogTitle>
         <DialogContent>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            Enter the tenant&apos;s phone number or email address to look them up.
+            Ange hyresgästens telefonnummer eller e-postadress för att söka.
           </Typography>
           <TextField
             fullWidth
-            label="Phone or email"
+            label="Telefon eller e-post"
             value={lookupInput}
             onChange={(e) => { setLookupInput(e.target.value); setLookupError(""); }}
             onKeyDown={(e) => { if (e.key === "Enter") handleLookupTenant(); }}
@@ -1327,14 +1397,14 @@ function DashboardContent() {
           )}
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setLookupBerthId(null)}>Cancel</Button>
+          <Button onClick={() => setLookupBerthId(null)}>Avbryt</Button>
           <Button
             variant="contained"
             onClick={handleLookupTenant}
             disabled={lookupLoading || !lookupInput.trim()}
             startIcon={lookupLoading ? <CircularProgress size={16} /> : undefined}
           >
-            Search
+            Sök
           </Button>
         </DialogActions>
       </Dialog>
