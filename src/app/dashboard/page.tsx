@@ -1213,19 +1213,48 @@ function DashboardContent() {
                           </TableCell>
                           <TableCell>
                             {entry.lat && entry.lng ? (
-                              <Tooltip title="GPS position set — click to edit">
-                                <IconButton
-                                  size="small"
-                                  onClick={() => {
-                                    setGpsEditLandEntry(entry);
-                                    setGpsLandLat(entry.lat);
-                                    setGpsLandLng(entry.lng);
-                                  }}
-                                  sx={{ color: "success.main" }}
-                                >
-                                  <PlaceIcon fontSize="small" />
-                                </IconButton>
-                              </Tooltip>
+                              <Box sx={{ display: "flex", alignItems: "center" }}>
+                                <Tooltip title="GPS-position angiven — klicka för att redigera">
+                                  <IconButton
+                                    size="small"
+                                    onClick={() => {
+                                      setGpsEditLandEntry(entry);
+                                      setGpsLandLat(entry.lat);
+                                      setGpsLandLng(entry.lng);
+                                    }}
+                                    sx={{ color: "success.main" }}
+                                  >
+                                    <PlaceIcon fontSize="small" />
+                                  </IconButton>
+                                </Tooltip>
+                                <Tooltip title="Ta bort GPS-position">
+                                  <IconButton
+                                    size="small"
+                                    onClick={async () => {
+                                      try {
+                                        await updateDoc(doc(db, "landStorage", entry.id), {
+                                          lat: deleteField(),
+                                          lng: deleteField(),
+                                        });
+                                        setLandEntries((prev) =>
+                                          prev.map((x) =>
+                                            x.id === entry.id
+                                              ? { ...x, lat: undefined, lng: undefined }
+                                              : x
+                                          )
+                                        );
+                                        setSuccessMsg("GPS-position borttagen!");
+                                        setTimeout(() => setSuccessMsg(""), 3000);
+                                      } catch (err) {
+                                        console.error("Error deleting GPS:", err);
+                                      }
+                                    }}
+                                    sx={{ color: "error.main", ml: -0.5 }}
+                                  >
+                                    <CloseIcon sx={{ fontSize: 16 }} />
+                                  </IconButton>
+                                </Tooltip>
+                              </Box>
                             ) : (
                               <Tooltip title="GPS-position saknas — klicka för att ange">
                                 <IconButton
