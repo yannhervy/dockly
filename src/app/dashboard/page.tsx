@@ -4,10 +4,10 @@ import React, { useEffect, useState, useRef, useCallback } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { db } from "@/lib/firebase";
 import { uploadBoatImage, uploadProfileImage } from "@/lib/storage";
-import { Resource, Berth, LandStorageEntry, UserMessage } from "@/lib/types";
+import { Resource, Berth, Dock, LandStorageEntry, UserMessage } from "@/lib/types";
 import { normalizePhone } from "@/lib/phoneUtils";
-import { APIProvider, Map as GMap, AdvancedMarker } from "@vis.gl/react-google-maps";
-import { HARBOR_CENTER } from "@/lib/mapUtils";
+import { APIProvider, Map as GMap, AdvancedMarker, useMap, useMapsLibrary } from "@vis.gl/react-google-maps";
+import { computeBoatHull, HARBOR_CENTER } from "@/lib/mapUtils";
 import useMediaQuery from "@mui/material/useMediaQuery";
 import {
   collection,
@@ -73,6 +73,146 @@ export default function DashboardPage() {
       <DashboardContent />
     </ProtectedRoute>
   );
+}
+
+// ─── Personal Map: renders only the user's objects ─────────
+function MyObjectsMapContent({
+  resources,
+  landEntries,
+  currentUid,
+  onClickResource,
+}: {
+  resources: Resource[];
+  landEntries: LandStorageEntry[];
+  currentUid?: string;
+  onClickResource: (r: Resource) => void;
+}) {
+  const map = useMap();
+  const coreLib = useMapsLibrary("core");
+  const markerLib = useMapsLibrary("marker");
+
+  useEffect(() => {
+    if (!map || !coreLib || !markerLib) return;
+
+    const cleanups: (() => void)[] = [];
+    const bounds = new google.maps.LatLngBounds();
+    let hasAny = false;
+
+    // ─── Berths (boat hull polygons) ─────────────
+    resources
+      .filter((r): r is Berth => r.type === "Berth" && !!r.lat && !!r.lng)
+      .forEach((berth) => {
+        const w = berth.maxWidth || 3;
+        const l = berth.maxLength || 10;
+        const h = berth.heading || 0;
+        const corners = computeBoatHull(berth.lat!, berth.lng!, w, l, h);
+
+        const polygon = new google.maps.Polygon({
+          paths: corners,
+          strokeColor: "#00E5FF",
+          strokeOpacity: 0.9,
+          strokeWeight: 3,
+          fillColor: "#00E5FF",
+          fillOpacity: 0.5,
+          map,
+          zIndex: 2,
+        });
+
+        polygon.addListener("mouseover", () => polygon.setOptions({ fillOpacity: 0.7, strokeWeight: 4 }));
+        polygon.addListener("mouseout", () => polygon.setOptions({ fillOpacity: 0.5, strokeWeight: 3 }));
+
+        // Label
+        const labelEl = document.createElement("div");
+        labelEl.textContent = berth.markingCode;
+        labelEl.style.cssText = `
+          font-size: 10px; font-weight: 700; color: #fff;
+          background: rgba(0,0,0,0.55); padding: 1px 3px;
+          border-radius: 2px; white-space: nowrap;
+          pointer-events: none; text-shadow: 0 1px 2px rgba(0,0,0,0.9);
+        `;
+        const labelMarker = new google.maps.marker.AdvancedMarkerElement({
+          position: { lat: berth.lat!, lng: berth.lng! },
+          map,
+          content: labelEl,
+          zIndex: 3,
+        });
+
+        bounds.extend({ lat: berth.lat!, lng: berth.lng! });
+        hasAny = true;
+        cleanups.push(() => { polygon.setMap(null); labelMarker.map = null; });
+      });
+
+    // ─── SeaHuts / Boxes (circle markers) ────────
+    resources
+      .filter((r) => r.type !== "Berth" && r.lat && r.lng)
+      .forEach((res) => {
+        const el = document.createElement("div");
+        el.innerHTML = `<span>${res.markingCode}</span>`;
+        el.style.cssText = `
+          display: flex; align-items: center; justify-content: center;
+          width: 34px; height: 34px; border-radius: 50%;
+          background: #00E5FF; border: 2px solid #00B8D4;
+          color: #000; font-size: 10px; font-weight: 800;
+          cursor: pointer; box-shadow: 0 0 10px 3px rgba(0,229,255,0.6);
+          transition: transform 0.15s;
+        `;
+        el.addEventListener("mouseenter", () => { el.style.transform = "scale(1.3)"; });
+        el.addEventListener("mouseleave", () => { el.style.transform = "scale(1)"; });
+        el.addEventListener("click", () => onClickResource(res));
+
+        const marker = new google.maps.marker.AdvancedMarkerElement({
+          position: { lat: res.lat!, lng: res.lng! },
+          map,
+          content: el,
+          title: `${res.markingCode} (${res.type === "SeaHut" ? "Sjöbod" : "Låda"})`,
+          zIndex: 5,
+        });
+
+        bounds.extend({ lat: res.lat!, lng: res.lng! });
+        hasAny = true;
+        cleanups.push(() => { marker.map = null; });
+      });
+
+    // ─── Land storage (orange circle markers) ────
+    landEntries
+      .filter((e) => e.lat && e.lng)
+      .forEach((entry) => {
+        const el = document.createElement("div");
+        el.innerHTML = `<span>${entry.code}</span>`;
+        el.style.cssText = `
+          display: flex; align-items: center; justify-content: center;
+          width: 34px; height: 34px; border-radius: 50%;
+          background: #F57C00; border: 2px solid #E65100;
+          color: #fff; font-size: 10px; font-weight: 800;
+          cursor: default; box-shadow: 0 2px 6px rgba(0,0,0,0.5);
+          text-shadow: 0 1px 2px rgba(0,0,0,0.6);
+          transition: transform 0.15s;
+        `;
+        el.addEventListener("mouseenter", () => { el.style.transform = "scale(1.3)"; });
+        el.addEventListener("mouseleave", () => { el.style.transform = "scale(1)"; });
+
+        const marker = new google.maps.marker.AdvancedMarkerElement({
+          position: { lat: entry.lat!, lng: entry.lng! },
+          map,
+          content: el,
+          title: `${entry.code} — Markförvaring`,
+          zIndex: 4,
+        });
+
+        bounds.extend({ lat: entry.lat!, lng: entry.lng! });
+        hasAny = true;
+        cleanups.push(() => { marker.map = null; });
+      });
+
+    // Auto-fit bounds to show all objects
+    if (hasAny) {
+      map.fitBounds(bounds, 60);
+    }
+
+    return () => { cleanups.forEach((fn) => fn()); };
+  }, [map, coreLib, markerLib, resources, landEntries, currentUid, onClickResource]);
+
+  return null;
 }
 
 function DashboardContent() {
@@ -687,6 +827,61 @@ function DashboardContent() {
                   onChange={handleSmsToggle}
                   color="primary"
                 />
+              </Box>
+            </CardContent>
+          </Card>
+        </Grid>
+
+        {/* Personal map — my objects only */}
+        <Grid size={{ xs: 12, md: 8 }}>
+          <Card sx={{ height: "100%", minHeight: 350 }}>
+            <CardContent sx={{ p: 0, height: "100%", "&:last-child": { pb: 0 } }}>
+              <Box sx={{ height: "100%", position: "relative" }}>
+                <Box
+                  sx={{
+                    position: "absolute",
+                    top: 12,
+                    left: 12,
+                    zIndex: 5,
+                    bgcolor: "rgba(0,0,0,0.6)",
+                    px: 1.5,
+                    py: 0.5,
+                    borderRadius: 1,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 0.5,
+                  }}
+                >
+                  <PlaceIcon sx={{ fontSize: 18, color: "primary.main" }} />
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#fff" }}>
+                    Mina objekt
+                  </Typography>
+                </Box>
+                <APIProvider apiKey={process.env.NEXT_PUBLIC_GOOGLE_MAPS_KEY || ""}>
+                  <GMap
+                    defaultCenter={HARBOR_CENTER}
+                    defaultZoom={16}
+                    mapId="dashboard-my-objects"
+                    mapTypeId="satellite"
+                    style={{ width: "100%", height: "100%", minHeight: 350, borderRadius: 8 }}
+                    gestureHandling="greedy"
+                    disableDefaultUI
+                    zoomControl
+                  >
+                    <MyObjectsMapContent
+                      resources={resources}
+                      landEntries={landEntries}
+                      currentUid={firebaseUser?.uid}
+                      onClickResource={(r) => {
+                        if (r.type !== "Berth" && (!r.lat || !r.lng)) {
+                          setGpsEditResource(r);
+                          setGpsLat(r.lat);
+                          setGpsLng(r.lng);
+                        }
+                      }}
+                    />
+                  </GMap>
+                </APIProvider>
               </Box>
             </CardContent>
           </Card>
