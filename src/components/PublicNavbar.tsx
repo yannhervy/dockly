@@ -24,12 +24,13 @@ import LoginIcon from "@mui/icons-material/Login";
 import DashboardIcon from "@mui/icons-material/Dashboard";
 import LogoutIcon from "@mui/icons-material/Logout";
 import AdminPanelSettingsIcon from "@mui/icons-material/AdminPanelSettings";
+import LockOutlinedIcon from "@mui/icons-material/LockOutlined";
 
 const PUBLIC_NAV = [
   { label: "Hem", path: "/" },
   { label: "Nyheter", path: "/news" },
   { label: "Bryggor", path: "/docks" },
-  { label: "Karta", path: "/map" },
+  { label: "Karta", path: "/map", requiresAuth: true },
   { label: "Info", path: "/info" },
   { label: "FAQ", path: "/faq" },
   { label: "Köp & Sälj", path: "/marketplace" },
@@ -116,6 +117,9 @@ export default function PublicNavbar() {
                 }}
               >
                 {item.label}
+                {item.requiresAuth && !firebaseUser && (
+                  <LockOutlinedIcon sx={{ fontSize: 12, ml: 0.3, opacity: 0.5 }} />
+                )}
               </Button>
             ))}
           </Box>
@@ -224,7 +228,14 @@ export default function PublicNavbar() {
                 onClick={() => handleNav(item.path)}
                 sx={{ borderRadius: 1, mx: 1 }}
               >
-                <ListItemText primary={item.label} />
+                <ListItemText primary={
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                    {item.label}
+                    {item.requiresAuth && !firebaseUser && (
+                      <LockOutlinedIcon sx={{ fontSize: 14, opacity: 0.5 }} />
+                    )}
+                  </Box>
+                } />
               </ListItemButton>
             </ListItem>
           ))}
