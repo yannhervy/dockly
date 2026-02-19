@@ -180,6 +180,7 @@ export default function MarketplacePage() {
                 l.status === "Active" &&
                 (!l.expiresAt || l.expiresAt.toDate() > now)
             )
+            .sort((a, b) => (b.createdAt?.toMillis() ?? 0) - (a.createdAt?.toMillis() ?? 0))
         );
       } catch {
         // Ignore
