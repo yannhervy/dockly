@@ -592,6 +592,61 @@ function DashboardContent() {
     }
   };
 
+  // Allocate a land storage code to the current user
+  const [allocating, setAllocating] = useState(false);
+  const handleAllocateLandCode = async () => {
+    if (!firebaseUser) return;
+    setAllocating(true);
+    try {
+      // Find the first available land storage entry
+      const availSnap = await getDocs(
+        query(
+          collection(db, "landStorage"),
+          where("status", "==", "Available")
+        )
+      );
+      const available = availSnap.docs
+        .map((d) => ({ id: d.id, ...d.data() }) as LandStorageEntry)
+        .filter((e) => !e.occupantId)
+        .sort((a, b) => a.code.localeCompare(b.code));
+
+      if (available.length === 0) {
+        alert("Det finns inga lediga uppställningskoder just nu.");
+        return;
+      }
+
+      const entry = available[0];
+      await updateDoc(doc(db, "landStorage", entry.id), {
+        occupantId: firebaseUser.uid,
+        firstName: profile?.name?.split(" ")[0] || "",
+        lastName: profile?.name?.split(" ").slice(1).join(" ") || "",
+        phone: profile?.phone || "",
+        email: firebaseUser.email || "",
+        status: "Occupied",
+      });
+
+      setLandEntries((prev) => [
+        ...prev,
+        {
+          ...entry,
+          occupantId: firebaseUser.uid,
+          firstName: profile?.name?.split(" ")[0] || "",
+          lastName: profile?.name?.split(" ").slice(1).join(" ") || "",
+          phone: profile?.phone || "",
+          email: firebaseUser.email || "",
+          status: "Occupied",
+        },
+      ]);
+      setSuccessMsg(`Uppställningskod ${entry.code} har tilldelats dig!`);
+      setTimeout(() => setSuccessMsg(""), 4000);
+    } catch (err) {
+      console.error("Error allocating land storage code:", err);
+      alert("Något gick fel. Försök igen.");
+    } finally {
+      setAllocating(false);
+    }
+  };
+
   // ── Second-hand tenant lookup ──
   const handleLookupTenant = async () => {
     if (!lookupBerthId || !lookupInput.trim()) return;
@@ -1181,7 +1236,6 @@ function DashboardContent() {
         </Grid>
 
         {/* Land Storage entries */}
-        {landEntries.length > 0 && (
           <Grid size={{ xs: 12 }}>
             <Card>
               <CardContent sx={{ p: 3 }}>
@@ -1199,13 +1253,26 @@ function DashboardContent() {
                 </Typography>
 
                 <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                  När du förvarar något på föreningens mark ska du markera detta med en GPS-position.
-                  När du tar bort din båt eller trailer ska du även ta bort din GPS-position.
+                  När du förvarar något på föreningens mark ska du markera detta med en GPS-position, bild och märka båten/kärran med uppläggningskod.
+                  När du tar bort din båt eller trailer ska du ta bort din GPS-position.
                   Kom ihåg att det är upp till dig att löpande betala in uppställningsavgiften.
                   Kontroller sker löpande och efterdebitering sker.
                   Se <a href="/info/upplagning" style={{ color: "#4FC3F7" }}>/info/upplagning</a> för mer info.
                 </Typography>
 
+                {landEntries.length === 0 && (
+                  <Button
+                    variant="outlined"
+                    startIcon={allocating ? <CircularProgress size={16} /> : <ConstructionIcon />}
+                    onClick={handleAllocateLandCode}
+                    disabled={allocating}
+                    sx={{ mb: 2 }}
+                  >
+                    Jag behöver en uppställningskod
+                  </Button>
+                )}
+
+                {landEntries.length > 0 && (
                 <TableContainer
                   component={Paper}
                   sx={{ bgcolor: "transparent", backgroundImage: "none" }}
@@ -1349,10 +1416,10 @@ function DashboardContent() {
                     </TableBody>
                   </Table>
                 </TableContainer>
+                )}
               </CardContent>
             </Card>
           </Grid>
-        )}
 
         {/* Messages from managers */}
         {messages.length > 0 && (

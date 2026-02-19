@@ -150,16 +150,20 @@ export default function UpplagningPage() {
       >
         <Paragraph>
           För att få nyttja hamnens mark för förvaring måste du ha ett unikt
-          uppläggningsnummer.
+          uppläggningsnummer. Du tilldelar enkelt en kod själv via{" "}
+          <MuiLink component={Link} href="/dashboard" color="primary">
+            Mina sidor
+          </MuiLink>.
         </Paragraph>
         <Box component="ol" sx={{ pl: 2.5, mt: 0, mb: 1.5 }}>
           <Box component="li" sx={{ mb: 0.5 }}>
             <Typography variant="body1" color="text.secondary" sx={{ lineHeight: 1.8 }}>
-              Kontakta <strong>Yann Hervy</strong> via SMS (
-              <MuiLink href="tel:+46733619893" color="primary">
-                0733-61 98 93
-              </MuiLink>
-              ) och uppge ditt namn för att få en kod.
+              Logga in och gå till{" "}
+              <MuiLink component={Link} href="/dashboard" color="primary">
+                Mina sidor
+              </MuiLink>. Under <strong>Min markförvaring</strong> klickar du på{" "}
+              <strong>&quot;Jag behöver en uppställningskod&quot;</strong> så tilldelas du
+              automatiskt en ledig kod.
             </Typography>
           </Box>
           <Box component="li" sx={{ mb: 0.5 }}>
