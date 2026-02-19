@@ -1104,7 +1104,7 @@ export default function MapPage() {
         {!loading && (
           <Paper
             sx={{
-              display: "flex",
+              display: { xs: "none", md: "flex" },
               alignItems: "center",
               gap: 1,
               flexWrap: "wrap",
