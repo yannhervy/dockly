@@ -23,7 +23,7 @@ export default function ProtectedRoute({
   children,
   allowedRoles = [],
 }: ProtectedRouteProps) {
-  const { firebaseUser, profile, loading } = useAuth();
+  const { firebaseUser, profile, loading, needsApproval } = useAuth();
   const router = useRouter();
 
   React.useEffect(() => {
@@ -48,6 +48,38 @@ export default function ProtectedRoute({
   }
 
   if (!firebaseUser) return null;
+
+  // Pending approval gate
+  if (needsApproval) {
+    return (
+      <Box
+        sx={{
+          display: "flex",
+          flexDirection: "column",
+          justifyContent: "center",
+          alignItems: "center",
+          height: "60vh",
+          gap: 2,
+          px: 3,
+          textAlign: "center",
+        }}
+      >
+        <Typography variant="h5" sx={{ fontWeight: 700 }}>
+          ⏳ Väntar på godkännande
+        </Typography>
+        <Typography variant="body1" color="text.secondary" sx={{ maxWidth: 500 }}>
+          Ditt konto har skapats men behöver godkännas av en bryggansvarig innan
+          du kan använda tjänsten. Du får ett SMS när ditt konto är godkänt.
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 500, mt: 1 }}>
+          Under tiden kan du utforska sidan som gäst.
+        </Typography>
+        <a href="/" style={{ color: "#4FC3F7", fontWeight: 600, textDecoration: "none" }}>
+          Gå till startsidan →
+        </a>
+      </Box>
+    );
+  }
 
   // Role check
   if (

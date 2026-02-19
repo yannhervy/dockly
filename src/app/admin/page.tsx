@@ -80,6 +80,18 @@ import InputAdornment from "@mui/material/InputAdornment";
 import SearchIcon from "@mui/icons-material/Search";
 import ToggleButton from "@mui/material/ToggleButton";
 import ToggleButtonGroup from "@mui/material/ToggleButtonGroup";
+import Badge from "@mui/material/Badge";
+import CheckCircleIcon from "@mui/icons-material/CheckCircle";
+import type { EngagementType } from "@/lib/types";
+
+const ENGAGEMENT_LABELS: Record<EngagementType, string> = {
+  berth: "Båtplats",
+  seahut: "Sjöbod",
+  box: "Låda",
+  landstorage: "Uppställning",
+  interest: "Intresserad",
+  other: "Övrigt",
+};
 
 export default function AdminPage() {
   return (
@@ -157,6 +169,8 @@ function UsersTab() {
     internalComment: "",
   });
   const [editSaving, setEditSaving] = useState(false);
+  const [approvingId, setApprovingId] = useState<string | null>(null);
+  const [pendingLinkedObjects, setPendingLinkedObjects] = useState<Record<string, string[]>>({});
 
   // Send message state
   const [msgText, setMsgText] = useState("");
@@ -171,7 +185,36 @@ function UsersTab() {
     setLoading(true);
     try {
       const snap = await getDocs(collection(db, "users"));
-      setUsers(snap.docs.map((d) => ({ id: d.id, ...d.data() }) as User));
+      const allUsers = snap.docs.map((d) => ({ id: d.id, ...d.data() }) as User);
+      setUsers(allUsers);
+
+      // Fetch linked objects for pending users
+      const pending = allUsers.filter((u) => u.approved === false);
+      if (pending.length > 0) {
+        const [resSnap, landSnap] = await Promise.all([
+          getDocs(collection(db, "resources")),
+          getDocs(collection(db, "landStorage")),
+        ]);
+        const objMap: Record<string, string[]> = {};
+        for (const u of pending) {
+          const linked: string[] = [];
+          resSnap.docs.forEach((d) => {
+            const data = d.data();
+            if ((data.occupantIds || []).includes(u.id)) {
+              const type = data.type === "berth" ? "Båtplats" : data.type === "seahut" ? "Sjöbod" : data.type === "box" ? "Låda" : data.type;
+              linked.push(`${type} ${data.code || d.id}`);
+            }
+          });
+          landSnap.docs.forEach((d) => {
+            const data = d.data();
+            if (data.occupantId === u.id) {
+              linked.push(`Uppställning ${data.code || d.id}`);
+            }
+          });
+          objMap[u.id] = linked;
+        }
+        setPendingLinkedObjects(objMap);
+      }
     } catch (err) {
       console.error("Error fetching users:", err);
     } finally {
@@ -226,6 +269,37 @@ function UsersTab() {
       console.error("Error deleting user:", err);
       setSuccessMsg("");
       alert(err instanceof Error ? err.message : "Failed to delete user");
+    }
+  };
+
+  // Approve a pending user
+  const handleApproveUser = async (userId: string) => {
+    setApprovingId(userId);
+    try {
+      const token = await firebaseUser?.getIdToken();
+      const res = await fetch(
+        "https://europe-west1-stegerholmenshamn.cloudfunctions.net/approveUser",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ uid: userId }),
+        }
+      );
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "Approve failed");
+      }
+      setSuccessMsg("Användaren har godkänts och fått SMS.");
+      setTimeout(() => setSuccessMsg(""), 4000);
+      fetchUsers();
+    } catch (err) {
+      console.error("Error approving user:", err);
+      alert(err instanceof Error ? err.message : "Failed to approve user");
+    } finally {
+      setApprovingId(null);
     }
   };
 
@@ -442,6 +516,67 @@ function UsersTab() {
         </Button>
       </Box>
 
+      {/* Pending users */}
+      {(() => {
+        const pending = users.filter((u) => u.approved === false);
+        if (pending.length === 0) return null;
+        return (
+          <Card sx={{ mb: 3, border: "1px solid rgba(255,183,77,0.3)", bgcolor: "rgba(255,183,77,0.04)" }}>
+            <CardContent sx={{ p: 2 }}>
+              <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1.5, display: "flex", alignItems: "center", gap: 1 }}>
+                ⏳ Väntar på godkännande ({pending.length})
+              </Typography>
+              {pending.map((u) => (
+                <Box key={u.id} sx={{ display: "flex", alignItems: "center", gap: 2, mb: 1.5, p: 1.5, borderRadius: 2, bgcolor: "rgba(255,255,255,0.03)" }}>
+                  <Box sx={{ flex: 1, minWidth: 0 }}>
+                    <Typography sx={{ fontWeight: 600 }}>{u.name}</Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      {u.email} · {u.phone}
+                    </Typography>
+                    <Box sx={{ display: "flex", gap: 0.5, mt: 0.5, flexWrap: "wrap" }}>
+                      {(u.engagement || []).map((e) => (
+                        <Chip key={e} label={ENGAGEMENT_LABELS[e] || e} size="small" variant="outlined" />
+                      ))}
+                    </Box>
+                    {u.registrationNote && (
+                      <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, fontStyle: "italic" }}>
+                        “{u.registrationNote}”
+                      </Typography>
+                    )}
+                    {(pendingLinkedObjects[u.id] || []).length > 0 && (
+                      <Box sx={{ display: "flex", gap: 0.5, mt: 0.5, flexWrap: "wrap" }}>
+                        {pendingLinkedObjects[u.id].map((obj) => (
+                          <Chip key={obj} label={obj} size="small" color="info" variant="outlined" />
+                        ))}
+                      </Box>
+                    )}
+                  </Box>
+                  <Button
+                    variant="contained"
+                    color="success"
+                    size="small"
+                    startIcon={approvingId === u.id ? <CircularProgress size={14} /> : <CheckCircleIcon />}
+                    onClick={() => handleApproveUser(u.id)}
+                    disabled={approvingId === u.id}
+                  >
+                    Godkänn
+                  </Button>
+                  <Button
+                    variant="outlined"
+                    color="error"
+                    size="small"
+                    startIcon={<DeleteIcon />}
+                    onClick={() => handleDeleteUser(u.id)}
+                  >
+                    Neka
+                  </Button>
+                </Box>
+              ))}
+            </CardContent>
+          </Card>
+        );
+      })()}
+
       {loading ? (
         <Box sx={{ display: "flex", justifyContent: "center", py: 4 }}>
           <CircularProgress />
@@ -459,6 +594,7 @@ function UsersTab() {
                 <TableCell>Role</TableCell>
                 <TableCell>Phone</TableCell>
                 <TableCell>Public</TableCell>
+                <TableCell>Senast inloggad</TableCell>
                 <TableCell align="right">Actions</TableCell>
               </TableRow>
             </TableHead>
@@ -497,6 +633,11 @@ function UsersTab() {
                       size="small"
                       color={u.isPublic ? "success" : "default"}
                     />
+                  </TableCell>
+                  <TableCell>
+                    {u.lastLogin
+                      ? u.lastLogin.toDate().toLocaleString("sv-SE", { dateStyle: "short", timeStyle: "short" })
+                      : "—"}
                   </TableCell>
                   <TableCell align="right">
                     <IconButton

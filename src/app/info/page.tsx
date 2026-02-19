@@ -12,6 +12,9 @@ import ForestIcon from "@mui/icons-material/Forest";
 import LocalParkingIcon from "@mui/icons-material/LocalParking";
 import ConstructionIcon from "@mui/icons-material/Construction";
 import AnchorIcon from "@mui/icons-material/Anchor";
+import DirectionsBoatIcon from "@mui/icons-material/DirectionsBoat";
+import HomeIcon from "@mui/icons-material/Home";
+import CleaningServicesIcon from "@mui/icons-material/CleaningServices";
 
 const subPages = [
   {
@@ -47,6 +50,27 @@ const subPages = [
     description:
       "Akterförtöjning, bojregler, kätting, ryckdämpare och hamnsimulator.",
     href: "/info/fortojning",
+  },
+  {
+    icon: <DirectionsBoatIcon sx={{ fontSize: 40, color: "#4FC3F7" }} />,
+    title: "Sjösättning & Nyckel",
+    description:
+      "Sjösättningsrampen, nyckel till bommen och regler för bilkörning på området.",
+    href: "/info/sjosattning",
+  },
+  {
+    icon: <HomeIcon sx={{ fontSize: 40, color: "#FFB74D" }} />,
+    title: "Sjöbodsregler",
+    description:
+      "Placering, storlekar, tak, fönster, färg, brandsäkerhet och underhåll.",
+    href: "/info/sjobodar",
+  },
+  {
+    icon: <CleaningServicesIcon sx={{ fontSize: 40, color: "#66BB6A" }} />,
+    title: "Städdag",
+    description:
+      "Gemensam arbetsdag i juni — vad vi gör, vad du tar med och grillning efteråt.",
+    href: "/info/staddag",
   },
 ];
 

@@ -16,7 +16,7 @@ import {
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useRouter } from "next/navigation";
-import type { Resource, Berth, LandStorageEntry } from "@/lib/types";
+import type { Resource, Berth, LandStorageEntry, EngagementType } from "@/lib/types";
 import { normalizePhone } from "@/lib/phoneUtils";
 import Box from "@mui/material/Box";
 import Card from "@mui/material/Card";
@@ -33,6 +33,16 @@ import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import SmsIcon from "@mui/icons-material/Sms";
 import Switch from "@mui/material/Switch";
 import FormControlLabel from "@mui/material/FormControlLabel";
+import Chip from "@mui/material/Chip";
+
+const ENGAGEMENT_OPTIONS: { value: EngagementType; label: string }[] = [
+  { value: "berth", label: "Jag har båtplats" },
+  { value: "seahut", label: "Jag har sjöbod" },
+  { value: "box", label: "Jag har låda" },
+  { value: "landstorage", label: "Jag har uppställning" },
+  { value: "interest", label: "Intresserad av båtplats" },
+  { value: "other", label: "Övrigt" },
+];
 
 /**
  * Profile setup page shown after first login when the user
@@ -48,8 +58,11 @@ export default function ProfileSetupPage() {
   const [name, setName] = useState(firebaseUser?.displayName || "");
   const [phone, setPhone] = useState("");
   const [allowMapSms, setAllowMapSms] = useState(true);
+  const [engagement, setEngagement] = useState<EngagementType[]>([]);
+  const [registrationNote, setRegistrationNote] = useState("");
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
   const [prefilled, setPrefilled] = useState(false);
 
   // Ids of matching resources/landStorage to link on submit
@@ -134,13 +147,17 @@ export default function ProfileSetupPage() {
       return;
     }
     if (!phone.trim()) {
-      setError("Phone number is required.");
+      setError("Telefonnummer krävs.");
       return;
     }
     // Basic phone validation (at least 6 digits)
     const digitsOnly = phone.replace(/\D/g, "");
     if (digitsOnly.length < 6) {
-      setError("Please enter a valid phone number.");
+      setError("Ange ett giltigt telefonnummer.");
+      return;
+    }
+    if (engagement.length === 0) {
+      setError("Välj minst ett engagemang.");
       return;
     }
 
@@ -157,11 +174,14 @@ export default function ProfileSetupPage() {
         isPublic: true,
         allowMapSms,
         phone: phone.trim(),
+        engagement,
+        registrationNote: registrationNote.trim() || null,
       };
 
-      // Only set role and createdAt for genuinely new users
+      // Only set role, approved, and createdAt for genuinely new users
       if (!existingDoc.exists()) {
         profileData.role = "Tenant";
+        profileData.approved = false;
         profileData.createdAt = Timestamp.now();
       }
 
@@ -180,11 +200,11 @@ export default function ProfileSetupPage() {
         });
       }
 
-      // Force reload to pick up the new profile
-      window.location.href = "/dashboard";
+      // Show waiting for approval message
+      setSubmitted(true);
     } catch (err) {
       console.error("Error creating profile:", err);
-      setError("Could not save profile. Please try again.");
+      setError("Kunde inte spara profilen. Försök igen.");
       setSaving(false);
     }
   };
@@ -214,12 +234,12 @@ export default function ProfileSetupPage() {
           <Box sx={{ textAlign: "center", mb: 3 }}>
             <AnchorIcon sx={{ fontSize: 40, color: "primary.main", mb: 1 }} />
             <Typography variant="h5" sx={{ fontWeight: 700, mb: 0.5 }}>
-              Welcome to Dockly!
+              Välkommen till Dockly!
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              Please complete your profile to continue.
+              Fyll i din profil för att fortsätta.
               <br />
-              Your phone number is required for harbor communication.
+              Ditt telefonnummer behövs för hamnens kommunikation.
             </Typography>
           </Box>
 
@@ -232,7 +252,7 @@ export default function ProfileSetupPage() {
           <Box component="form" onSubmit={handleSubmit}>
             <TextField
               fullWidth
-              label="Full Name"
+              label="Namn"
               value={name}
               onChange={(e) => setName(e.target.value)}
               required
@@ -250,7 +270,7 @@ export default function ProfileSetupPage() {
 
             <TextField
               fullWidth
-              label="Phone Number"
+              label="Telefonnummer"
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
               required
@@ -268,8 +288,50 @@ export default function ProfileSetupPage() {
               helperText={
                 prefilled
                   ? "Ifyllt automatiskt från befintliga hamnuppgifter"
-                  : "Required for harbor association communication"
+                  : "Behövs för föreningens kommunikation"
               }
+            />
+
+            {/* Engagement chips */}
+            <Box sx={{ mb: 2.5 }}>
+              <Typography variant="body2" sx={{ fontWeight: 600, mb: 1 }}>
+                Mitt engagemang i hamnen
+              </Typography>
+              <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
+                {ENGAGEMENT_OPTIONS.map((opt) => {
+                  const selected = engagement.includes(opt.value);
+                  return (
+                    <Chip
+                      key={opt.value}
+                      label={opt.label}
+                      variant={selected ? "filled" : "outlined"}
+                      color={selected ? "primary" : "default"}
+                      onClick={() =>
+                        setEngagement((prev) =>
+                          selected
+                            ? prev.filter((v) => v !== opt.value)
+                            : [...prev, opt.value]
+                        )
+                      }
+                      sx={{ cursor: "pointer" }}
+                    />
+                  );
+                })}
+              </Box>
+            </Box>
+
+            {/* Free-text note */}
+            <TextField
+              fullWidth
+              label="Fritext"
+              placeholder="T.ex. Brygga C plats 12, sjöbod 5, låda 3..."
+              multiline
+              minRows={2}
+              maxRows={4}
+              value={registrationNote}
+              onChange={(e) => setRegistrationNote(e.target.value)}
+              sx={{ mb: 2.5 }}
+              helperText="Här får du gärna skriva vilken brygga, låda eller sjöbod du har så vi kan säkerställa att den knyts till dig."
             />
 
             <Box
@@ -317,9 +379,22 @@ export default function ProfileSetupPage() {
               startIcon={<CheckCircleIcon />}
               sx={{ py: 1.2 }}
             >
-              {saving ? "Saving..." : "Complete Profile"}
+              {saving ? "Sparar..." : "Skapa profil"}
             </Button>
           </Box>
+
+          {/* Submitted: waiting for approval */}
+          {submitted && (
+            <Box sx={{ textAlign: "center", py: 3 }}>
+              <Typography variant="h5" sx={{ fontWeight: 700, mb: 1 }}>
+                ✅ Profilen är skapad!
+              </Typography>
+              <Typography variant="body1" color="text.secondary">
+                Ditt konto behöver godkännas av en bryggansvarig innan du kan
+                använda tjänsten. Du får ett SMS när ditt konto är godkänt.
+              </Typography>
+            </Box>
+          )}
         </CardContent>
       </Card>
     </Box>

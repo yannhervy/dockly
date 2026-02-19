@@ -1,8 +1,10 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { useRouter, usePathname } from "next/navigation";
+import { db } from "@/lib/firebase";
+import { collection, query, where, onSnapshot, getDocs, orderBy } from "firebase/firestore";
 import AppBar from "@mui/material/AppBar";
 import Toolbar from "@mui/material/Toolbar";
 import Typography from "@mui/material/Typography";
@@ -28,6 +30,9 @@ import AnchorIcon from "@mui/icons-material/Anchor";
 
 import ConstructionIcon from "@mui/icons-material/Construction";
 import OpenInNewIcon from "@mui/icons-material/OpenInNew";
+import Badge from "@mui/material/Badge";
+import NotificationsIcon from "@mui/icons-material/Notifications";
+import Tooltip from "@mui/material/Tooltip";
 
 const DRAWER_WIDTH = 260;
 
@@ -60,6 +65,42 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [pendingCount, setPendingCount] = useState(0);
+  const [unseenReplyCount, setUnseenReplyCount] = useState(0);
+
+  const isManagerOrAdmin = profile?.role === "Superadmin" || profile?.role === "Dock Manager";
+
+  // Listen for pending users (approved === false)
+  useEffect(() => {
+    if (!isManagerOrAdmin) return;
+    const q = query(collection(db, "users"), where("approved", "==", false));
+    const unsub = onSnapshot(q, (snap) => setPendingCount(snap.size));
+    return () => unsub();
+  }, [isManagerOrAdmin]);
+
+  // Listen for unseen replies on user's interests
+  useEffect(() => {
+    if (!firebaseUser) return;
+    const q = query(
+      collection(db, "interests"),
+      where("userId", "==", firebaseUser.uid)
+    );
+    const unsub = onSnapshot(q, async (snap) => {
+      let count = 0;
+      for (const d of snap.docs) {
+        const data = d.data();
+        const lastSeen = data.lastSeenRepliesAt?.toMillis?.() || 0;
+        const repliesSnap = await getDocs(
+          query(collection(db, "interests", d.id, "replies"), orderBy("createdAt", "desc"))
+        );
+        for (const r of repliesSnap.docs) {
+          if (r.data().createdAt.toMillis() > lastSeen) count++;
+        }
+      }
+      setUnseenReplyCount(count);
+    });
+    return () => unsub();
+  }, [firebaseUser]);
 
   // Don't show the shell on the login or setup pages
   if (pathname === "/login" || pathname === "/setup") {
@@ -243,6 +284,32 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             <Typography variant="body2" sx={{ color: "text.secondary" }}>
               {firebaseUser.email}
             </Typography>
+          )}
+          {isManagerOrAdmin && pendingCount > 0 && (
+            <Tooltip title={`${pendingCount} konton väntar på godkännande`}>
+              <IconButton
+                color="inherit"
+                onClick={() => router.push("/dashboard")}
+                sx={{ ml: 1 }}
+              >
+                <Badge badgeContent={pendingCount} color="warning">
+                  <NotificationsIcon />
+                </Badge>
+              </IconButton>
+            </Tooltip>
+          )}
+          {unseenReplyCount > 0 && (
+            <Tooltip title={`${unseenReplyCount} nya svar på dina intresseanmälningar`}>
+              <IconButton
+                color="inherit"
+                onClick={() => router.push("/dashboard")}
+                sx={{ ml: 0.5 }}
+              >
+                <Badge badgeContent={unseenReplyCount} color="error">
+                  <NotificationsIcon />
+                </Badge>
+              </IconButton>
+            </Tooltip>
           )}
         </Toolbar>
       </AppBar>

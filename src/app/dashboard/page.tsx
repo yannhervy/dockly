@@ -2,9 +2,10 @@
 
 import React, { useEffect, useState, useRef, useCallback } from "react";
 import { useAuth } from "@/context/AuthContext";
-import { db } from "@/lib/firebase";
+import { db, auth } from "@/lib/firebase";
+import { deleteUser as firebaseDeleteUser } from "firebase/auth";
 import { uploadBoatImage, uploadProfileImage, uploadLandStorageImage } from "@/lib/storage";
-import { Resource, Berth, Dock, LandStorageEntry, UserMessage } from "@/lib/types";
+import { Resource, Berth, Dock, LandStorageEntry, UserMessage, User, EngagementType, BerthInterest, InterestReply } from "@/lib/types";
 import { normalizePhone } from "@/lib/phoneUtils";
 import { APIProvider, Map as GMap, AdvancedMarker, useMap, useMapsLibrary } from "@vis.gl/react-google-maps";
 import { computeBoatHull, HARBOR_CENTER } from "@/lib/mapUtils";
@@ -16,11 +17,14 @@ import {
   getDocs,
   doc,
   updateDoc,
+  deleteDoc,
   getDoc,
   arrayUnion,
   orderBy,
   writeBatch,
   deleteField,
+  onSnapshot,
+  Timestamp,
 } from "firebase/firestore";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import Box from "@mui/material/Box";
@@ -66,6 +70,18 @@ import PersonAddIcon from "@mui/icons-material/PersonAdd";
 import PlaceIcon from "@mui/icons-material/Place";
 import MyLocationIcon from "@mui/icons-material/MyLocation";
 import WarningAmberIcon from "@mui/icons-material/WarningAmber";
+import CheckCircleIcon from "@mui/icons-material/CheckCircle";
+import DeleteIcon from "@mui/icons-material/Delete";
+
+
+const ENGAGEMENT_LABELS: Record<EngagementType, string> = {
+  berth: "Båtplats",
+  seahut: "Sjöbod",
+  box: "Låda",
+  landstorage: "Uppställning",
+  interest: "Intresserad",
+  other: "Övrigt",
+};
 
 export default function DashboardPage() {
   return (
@@ -258,6 +274,130 @@ function DashboardContent() {
   const [gpsLandLat, setGpsLandLat] = useState<number | undefined>(undefined);
   const [gpsLandLng, setGpsLandLng] = useState<number | undefined>(undefined);
   const [gpsLandSaving, setGpsLandSaving] = useState(false);
+
+  // Interest registrations
+  const [myInterests, setMyInterests] = useState<BerthInterest[]>([]);
+  const [interestReplies, setInterestReplies] = useState<Record<string, InterestReply[]>>({});
+
+  useEffect(() => {
+    if (!firebaseUser) return;
+    const q = query(
+      collection(db, "interests"),
+      where("userId", "==", firebaseUser.uid),
+      orderBy("createdAt", "desc")
+    );
+    const unsub = onSnapshot(q, async (snap) => {
+      const interests = snap.docs.map((d) => ({ id: d.id, ...d.data() }) as BerthInterest);
+      setMyInterests(interests);
+      // Fetch replies for each interest
+      const repliesMap: Record<string, InterestReply[]> = {};
+      await Promise.all(
+        interests.map(async (interest) => {
+          const rSnap = await getDocs(
+            query(collection(db, "interests", interest.id, "replies"), orderBy("createdAt", "asc"))
+          );
+          repliesMap[interest.id] = rSnap.docs.map((d) => ({ id: d.id, ...d.data() }) as InterestReply);
+        })
+      );
+      setInterestReplies(repliesMap);
+    });
+    return () => unsub();
+  }, [firebaseUser]);
+
+  // Pending users (for managers/superadmins)
+  const [pendingUsers, setPendingUsers] = useState<User[]>([]);
+  const [approvingId, setApprovingId] = useState<string | null>(null);
+  const isManagerOrAdmin = profile?.role === "Superadmin" || profile?.role === "Dock Manager";
+  const [pendingLinkedObjects, setPendingLinkedObjects] = useState<Record<string, string[]>>({});
+
+  useEffect(() => {
+    if (!isManagerOrAdmin) return;
+    const q = query(collection(db, "users"), where("approved", "==", false));
+    const unsub = onSnapshot(q, async (snap) => {
+      const users = snap.docs.map((d) => ({ id: d.id, ...d.data() }) as User);
+      setPendingUsers(users);
+
+      // Fetch linked objects for each pending user
+      if (users.length > 0) {
+        const objMap: Record<string, string[]> = {};
+        const [resSnap, landSnap] = await Promise.all([
+          getDocs(collection(db, "resources")),
+          getDocs(collection(db, "landStorage")),
+        ]);
+        for (const u of users) {
+          const linked: string[] = [];
+          resSnap.docs.forEach((d) => {
+            const data = d.data();
+            if ((data.occupantIds || []).includes(u.id)) {
+              const type = data.type === "berth" ? "Båtplats" : data.type === "seahut" ? "Sjöbod" : data.type === "box" ? "Låda" : data.type;
+              linked.push(`${type} ${data.code || d.id}`);
+            }
+          });
+          landSnap.docs.forEach((d) => {
+            const data = d.data();
+            if (data.occupantId === u.id) {
+              linked.push(`Uppställning ${data.code || d.id}`);
+            }
+          });
+          objMap[u.id] = linked;
+        }
+        setPendingLinkedObjects(objMap);
+      }
+    });
+    return () => unsub();
+  }, [isManagerOrAdmin]);
+
+  const handleApproveUser = async (userId: string) => {
+    setApprovingId(userId);
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      const res = await fetch(
+        "https://europe-west1-stegerholmenshamn.cloudfunctions.net/approveUser",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ uid: userId }),
+        }
+      );
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.error || "Approve failed");
+      setSuccessMsg("Användaren har godkänts och fått SMS.");
+      setTimeout(() => setSuccessMsg(""), 4000);
+    } catch (err) {
+      console.error("Error approving user:", err);
+      alert(err instanceof Error ? err.message : "Failed to approve user");
+    } finally {
+      setApprovingId(null);
+    }
+  };
+
+  const handleRejectUser = async (userId: string) => {
+    if (!confirm("Neka och radera detta konto?")) return;
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      const res = await fetch(
+        "https://deleteuser-srp7u2ucna-ew.a.run.app",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ uid: userId }),
+        }
+      );
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.error || "Delete failed");
+      setSuccessMsg("Kontot har nekats och raderats.");
+      setTimeout(() => setSuccessMsg(""), 4000);
+    } catch (err) {
+      console.error("Error rejecting user:", err);
+      alert(err instanceof Error ? err.message : "Failed to reject user");
+    }
+  };
 
   useEffect(() => {
     if (profile) {
@@ -736,6 +876,64 @@ function DashboardContent() {
       )}
 
       <Grid container spacing={3}>
+        {/* Pending users approval (managers/superadmins only) */}
+        {isManagerOrAdmin && pendingUsers.length > 0 && (
+          <Grid size={{ xs: 12 }}>
+            <Card sx={{ border: "1px solid rgba(255,183,77,0.3)", bgcolor: "rgba(255,183,77,0.04)" }}>
+              <CardContent sx={{ p: 2 }}>
+                <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1.5, display: "flex", alignItems: "center", gap: 1 }}>
+                  ⏳ Konton som väntar på godkännande ({pendingUsers.length})
+                </Typography>
+                {pendingUsers.map((u) => (
+                  <Box key={u.id} sx={{ display: "flex", alignItems: "center", gap: 2, mb: 1.5, p: 1.5, borderRadius: 2, bgcolor: "rgba(255,255,255,0.03)" }}>
+                    <Box sx={{ flex: 1, minWidth: 0 }}>
+                      <Typography sx={{ fontWeight: 600 }}>{u.name}</Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        {u.email} · {u.phone}
+                      </Typography>
+                      <Box sx={{ display: "flex", gap: 0.5, mt: 0.5, flexWrap: "wrap" }}>
+                        {(u.engagement || []).map((e) => (
+                          <Chip key={e} label={ENGAGEMENT_LABELS[e] || e} size="small" variant="outlined" />
+                        ))}
+                      </Box>
+                      {u.registrationNote && (
+                        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, fontStyle: "italic" }}>
+                          “{u.registrationNote}”
+                        </Typography>
+                      )}
+                      {(pendingLinkedObjects[u.id] || []).length > 0 && (
+                        <Box sx={{ display: "flex", gap: 0.5, mt: 0.5, flexWrap: "wrap" }}>
+                          {pendingLinkedObjects[u.id].map((obj) => (
+                            <Chip key={obj} label={obj} size="small" color="info" variant="outlined" />
+                          ))}
+                        </Box>
+                      )}
+                    </Box>
+                    <Button
+                      variant="contained"
+                      color="success"
+                      size="small"
+                      startIcon={approvingId === u.id ? <CircularProgress size={14} /> : <CheckCircleIcon />}
+                      onClick={() => handleApproveUser(u.id)}
+                      disabled={approvingId === u.id}
+                    >
+                      Godkänn
+                    </Button>
+                    <Button
+                      variant="outlined"
+                      color="error"
+                      size="small"
+                      startIcon={<DeleteIcon />}
+                      onClick={() => handleRejectUser(u.id)}
+                    >
+                      Neka
+                    </Button>
+                  </Box>
+                ))}
+              </CardContent>
+            </Card>
+          </Grid>
+        )}
         {/* Profile card */}
         <Grid size={{ xs: 12, md: 4 }}>
           <Card sx={{ height: "100%" }}>
@@ -946,6 +1144,35 @@ function DashboardContent() {
                   color="primary"
                 />
               </Box>
+
+              {/* Delete own account */}
+              <Button
+                fullWidth
+                variant="text"
+                size="small"
+                color="error"
+                startIcon={<DeleteIcon />}
+                onClick={async () => {
+                  if (!confirm("Är du säker på att du vill radera ditt konto? Denna åtgärd kan inte ångras.")) return;
+                  if (!confirm("Ditt konto och all data kommer att raderas permanent. Fortsätt?")) return;
+                  try {
+                    const user = auth.currentUser;
+                    if (!user) return;
+                    await deleteDoc(doc(db, "users", user.uid));
+                    await firebaseDeleteUser(user);
+                  } catch (err: unknown) {
+                    if (err instanceof Error && 'code' in err && (err as { code: string }).code === "auth/requires-recent-login") {
+                      alert("Du behöver logga in igen innan du kan radera ditt konto. Logga ut och in igen och försök sedan.");
+                    } else {
+                      console.error("Error deleting account:", err);
+                      alert("Kunde inte radera kontot. Försök igen.");
+                    }
+                  }
+                }}
+                sx={{ mt: 2, textTransform: "none", opacity: 0.6, "&:hover": { opacity: 1 } }}
+              >
+                Radera mitt konto
+              </Button>
             </CardContent>
           </Card>
         </Grid>
@@ -1420,6 +1647,154 @@ function DashboardContent() {
               </CardContent>
             </Card>
           </Grid>
+
+        {/* My Interest Registrations */}
+        {myInterests.length > 0 && (
+          <Grid size={{ xs: 12 }}>
+            <Card sx={{ border: "1px solid rgba(79, 195, 247, 0.2)" }}>
+              <CardContent sx={{ p: 3 }}>
+                <Typography
+                  variant="h6"
+                  sx={{ display: "flex", alignItems: "center", gap: 1, mb: 2 }}
+                >
+                  ⚓ Mina intresseanmälningar ({myInterests.length})
+                </Typography>
+                {myInterests.map((interest) => {
+                  const replies = interestReplies[interest.id] || [];
+                  const hasUnseen = replies.some(
+                    (r) => !interest.lastSeenRepliesAt || r.createdAt.toMillis() > interest.lastSeenRepliesAt.toMillis()
+                  );
+                  return (
+                    <Box
+                      key={interest.id}
+                      sx={{
+                        p: 2,
+                        mb: 1.5,
+                        borderRadius: 2,
+                        bgcolor: "rgba(79, 195, 247, 0.04)",
+                        border: hasUnseen
+                          ? "1px solid rgba(255, 183, 77, 0.4)"
+                          : "1px solid rgba(79, 195, 247, 0.1)",
+                      }}
+                    >
+                      <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                        <Box>
+                          <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                            {interest.boatWidth}×{interest.boatLength}m
+                            {interest.preferredDockId && ` · Brygga ${interest.preferredDockId}`}
+                            {interest.preferredBerthId && ` plats ${interest.preferredBerthId}`}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            {interest.createdAt.toDate().toLocaleDateString("sv-SE")}
+                            {interest.message && ` · "${interest.message}"`}
+                          </Typography>
+                        </Box>
+                        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                          {hasUnseen && (
+                            <Chip
+                              label="Nytt svar!"
+                              size="small"
+                              color="warning"
+                              sx={{ fontWeight: 700 }}
+                            />
+                          )}
+                          <Chip
+                            label={
+                              interest.status === "Pending" ? "Väntar" :
+                              interest.status === "Contacted" ? "Kontaktad" : "Löst"
+                            }
+                            size="small"
+                            color={
+                              interest.status === "Pending" ? "warning" :
+                              interest.status === "Contacted" ? "info" : "success"
+                            }
+                            variant="outlined"
+                          />
+                        </Box>
+                      </Box>
+
+                      {/* Replies — always visible */}
+                      {replies.length > 0 && (
+                        <Box sx={{ mt: 1.5, pt: 1.5, borderTop: "1px solid rgba(255,255,255,0.08)" }}>
+                          {replies.map((reply) => {
+                            const isNew = !interest.lastSeenRepliesAt || reply.createdAt.toMillis() > interest.lastSeenRepliesAt.toMillis();
+                            return (
+                              <Box
+                                key={reply.id}
+                                sx={{
+                                  p: 1.5,
+                                  mb: 1,
+                                  borderRadius: 1.5,
+                                  bgcolor: isNew ? "rgba(255, 183, 77, 0.08)" : "rgba(79, 195, 247, 0.08)",
+                                  borderLeft: isNew ? "3px solid #FFB74D" : "3px solid #4FC3F7",
+                                }}
+                              >
+                                <Typography variant="body2" sx={{ fontWeight: 600, mb: 0.5 }}>
+                                  {reply.authorName}
+                                  {isNew && " 🆕"}
+                                </Typography>
+                                <Typography variant="body2">{reply.message}</Typography>
+                                <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: "block" }}>
+                                  {reply.createdAt.toDate().toLocaleString("sv-SE")}
+                                </Typography>
+                              </Box>
+                            );
+                          })}
+                        </Box>
+                      )}
+
+                      {/* Mark as seen button if unseen */}
+                      {hasUnseen && (
+                        <Button
+                          size="small"
+                          variant="text"
+                          sx={{ mt: 1, textTransform: "none" }}
+                          onClick={async () => {
+                            await updateDoc(doc(db, "interests", interest.id), {
+                              lastSeenRepliesAt: Timestamp.now(),
+                            });
+                            setMyInterests((prev) =>
+                              prev.map((i) =>
+                                i.id === interest.id
+                                  ? { ...i, lastSeenRepliesAt: Timestamp.now() }
+                                  : i
+                              )
+                            );
+                          }}
+                        >
+                          ✓ Markera som läst
+                        </Button>
+                      )}
+                      <Box sx={{ display: "flex", justifyContent: "flex-end", mt: 1 }}>
+                        <Button
+                          size="small"
+                          variant="text"
+                          color="error"
+                          startIcon={<DeleteIcon />}
+                          sx={{ textTransform: "none", opacity: 0.6, "&:hover": { opacity: 1 } }}
+                          onClick={async () => {
+                            if (!confirm("Vill du ta bort denna intresseanmälan?")) return;
+                            try {
+                              await deleteDoc(doc(db, "interests", interest.id));
+                              setMyInterests((prev) => prev.filter((i) => i.id !== interest.id));
+                              setSuccessMsg("Intresseanmälan borttagen.");
+                              setTimeout(() => setSuccessMsg(""), 3000);
+                            } catch (err) {
+                              console.error("Error deleting interest:", err);
+                              alert("Kunde inte ta bort intresseanmälan.");
+                            }
+                          }}
+                        >
+                          Ta bort
+                        </Button>
+                      </Box>
+                    </Box>
+                  );
+                })}
+              </CardContent>
+            </Card>
+          </Grid>
+        )}
 
         {/* Messages from managers */}
         {messages.length > 0 && (

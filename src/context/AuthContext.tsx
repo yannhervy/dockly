@@ -17,7 +17,8 @@ import {
   sendPasswordResetEmail,
   User as FirebaseUser,
 } from "firebase/auth";
-import { doc, getDoc } from "firebase/firestore";
+import { doc, getDoc, updateDoc } from "firebase/firestore";
+import { Timestamp } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
 import { User, UserRole } from "@/lib/types";
 
@@ -38,6 +39,7 @@ interface AuthContextValue {
   isDockManager: boolean;
   isTenant: boolean;
   hasRole: (role: UserRole) => boolean;
+  needsApproval: boolean; // true when user has profile but is not yet approved
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -58,8 +60,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             ? ({ id: snap.id, ...snap.data() } as User)
             : null;
           // Set both user and profile together before clearing loading
-          setFirebaseUser(user);
+           setFirebaseUser(user);
           setProfile(profileData);
+          // Update lastLogin timestamp silently
+          if (profileData) {
+            updateDoc(doc(db, "users", user.uid), { lastLogin: Timestamp.now() }).catch(() => {});
+          }
         } catch {
           setFirebaseUser(user);
           setProfile(null);
@@ -116,12 +122,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // or has an incomplete profile (missing phone — not yet through /setup)
   const needsSetup = !loading && !!firebaseUser && (!profile || !profile.phone);
 
+  // True when user is authenticated and has a profile, but has not been approved
+  // Missing approved field (legacy users) is treated as approved
+  const needsApproval = !loading && !!firebaseUser && !!profile && profile.approved === false;
+
   const value = useMemo<AuthContextValue>(
     () => ({
       firebaseUser,
       profile,
       loading,
       needsSetup,
+      needsApproval,
       login,
       register,
       loginWithGoogle,
@@ -134,7 +145,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       hasRole,
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [firebaseUser, profile, loading, needsSetup]
+    [firebaseUser, profile, loading, needsSetup, needsApproval]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

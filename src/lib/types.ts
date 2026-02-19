@@ -3,6 +3,15 @@ import { Timestamp } from "firebase/firestore";
 // ─── User roles ───────────────────────────────────────────
 export type UserRole = "Superadmin" | "Dock Manager" | "Tenant";
 
+// What the user has or wants in the harbor (selected during registration)
+export type EngagementType =
+  | "berth"        // Jag har båtplats
+  | "seahut"       // Jag har sjöbod
+  | "box"          // Jag har låda
+  | "landstorage"  // Jag har uppställning
+  | "interest"     // Jag är intresserad av båtplats
+  | "other";       // Övrigt
+
 export interface User {
   id: string;
   email: string;
@@ -13,6 +22,10 @@ export interface User {
   phone: string;
   photoURL?: string; // Profile picture URL
   internalComment?: string; // Internal note visible only to managers/superadmin
+  engagement?: EngagementType[]; // Harbor engagement (selected during setup)
+  registrationNote?: string; // Free-text note from registration (e.g. berth/seahut details)
+  approved?: boolean; // false until approved by manager/superadmin (missing = approved for legacy users)
+  lastLogin?: Timestamp; // Updated each time the user signs in
   createdAt: Timestamp;
 }
 
@@ -209,6 +222,7 @@ export interface BerthInterest {
   message?: string;
   imageUrl?: string;
   createdAt: Timestamp;
+  lastSeenRepliesAt?: Timestamp; // When the user last viewed replies
   status: InterestStatus;
 }
 

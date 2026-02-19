@@ -41,8 +41,8 @@ const FAQ_ITEMS = [
     a: 'Ja! Under "Köp & Sälj" kan du skapa annonser för begagnad utrustning, båtar och andra marinrelaterade prylar. Du kan även hitta kringtjänster som krympplastning och akterförtöjning.',
   },
   {
-    q: "Hur blir jag medlem i hamnföreningen?",
-    a: "Medlemskap följer med din båtplats. När du tilldelas en plats blir du automatiskt medlem i föreningen och förväntas delta i gemensamma arbetsdagar och årsmötet.",
+    q: "Är jag medlem i hamnföreningen?",
+    a: "Hamnföreningen har ett begränsat antal medlemmar som utgör styrelsen. Som båtplats-, sjöbods- eller lådinnehavare är du hyresgäst på området. Du förväntas följa hamnens regler och är välkommen att delta i gemensamma arbetsdagar.",
   },
   {
     q: "Finns det parkering?",

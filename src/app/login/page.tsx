@@ -127,10 +127,10 @@ export default function LoginPage() {
                 mb: 0.5,
               }}
             >
-              Dockly
+              Stegerholmens Hamn
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              Harbor Management System
+              Logga in för att hantera din båtplats
             </Typography>
           </Box>
 
@@ -149,11 +149,11 @@ export default function LoginPage() {
           <Box component="form" onSubmit={handleEmailSubmit}>
             <TextField
               fullWidth
-              label="Email"
+              label="E-post"
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              sx={{ mb: 2 }}
+              sx={{ mb: 2.5 }}
               slotProps={{
                 input: {
                   startAdornment: (
@@ -166,11 +166,11 @@ export default function LoginPage() {
             />
             <TextField
               fullWidth
-              label="Password"
+              label="Lösenord"
               type={showPassword ? "text" : "password"}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              sx={{ mb: 1 }}
+              sx={{ mb: 2 }}
               slotProps={{
                 input: {
                   startAdornment: (
@@ -199,7 +199,7 @@ export default function LoginPage() {
                 onClick={handleForgotPassword}
                 sx={{ textTransform: "none", color: "text.secondary" }}
               >
-                Forgot password?
+                Glömt lösenord?
               </Button>
             </Box>
 
@@ -211,27 +211,27 @@ export default function LoginPage() {
               disabled={loading}
               sx={{ mb: 2, py: 1.2 }}
             >
-              {isRegister ? "Create Account" : "Sign In"}
+              {isRegister ? "Skapa konto" : "Logga in"}
             </Button>
           </Box>
 
           {/* Toggle sign-in / register */}
           <Box sx={{ textAlign: "center", mb: 1 }}>
             <Typography variant="body2" color="text.secondary" component="span">
-              {isRegister ? "Already have an account? " : "Don't have an account? "}
+              {isRegister ? "Har du redan ett konto? " : "Har du inget konto? "}
             </Typography>
             <Button
               size="small"
               onClick={() => { setIsRegister(!isRegister); setError(""); setSuccess(""); }}
               sx={{ textTransform: "none", fontWeight: 600 }}
             >
-              {isRegister ? "Sign In" : "Create Account"}
+              {isRegister ? "Logga in" : "Skapa konto"}
             </Button>
           </Box>
 
           <Divider sx={{ my: 2 }}>
             <Typography variant="caption" color="text.secondary">
-              OR
+              ELLER
             </Typography>
           </Divider>
 
@@ -252,8 +252,20 @@ export default function LoginPage() {
               },
             }}
           >
-            Sign in with Google
+            Logga in med Google
           </Button>
+
+          {/* Dockly footer */}
+          <Box sx={{ textAlign: "center", mt: 3, pt: 2, borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+            <Typography variant="caption" color="text.secondary" sx={{ lineHeight: 1.6 }}>
+              Vill du ha ett Dockly hamnsystem till din hamn?{" "}
+              <br />
+              Kontakta Yann Hervy{" "}
+              <a href="tel:+46733619893" style={{ color: "#4FC3F7", textDecoration: "none" }}>
+                +46 733 61 98 93
+              </a>
+            </Typography>
+          </Box>
         </CardContent>
       </Card>
     </Box>
