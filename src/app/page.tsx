@@ -7,6 +7,7 @@ import Button from "@mui/material/Button";
 import Grid from "@mui/material/Grid";
 import Card from "@mui/material/Card";
 import CardContent from "@mui/material/CardContent";
+import CardMedia from "@mui/material/CardMedia";
 import SailingIcon from "@mui/icons-material/Sailing";
 import InfoIcon from "@mui/icons-material/Info";
 import DirectionsBoatIcon from "@mui/icons-material/DirectionsBoat";
@@ -14,8 +15,13 @@ import StorefrontIcon from "@mui/icons-material/Storefront";
 import PlaceIcon from "@mui/icons-material/Place";
 import PersonAddIcon from "@mui/icons-material/PersonAdd";
 import LoginIcon from "@mui/icons-material/Login";
+import NewspaperIcon from "@mui/icons-material/Newspaper";
+import ArrowForwardIcon from "@mui/icons-material/ArrowForward";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
+import { db } from "@/lib/firebase";
+import { collection, query, orderBy, limit, getDocs, Timestamp } from "firebase/firestore";
+import type { NewsPost } from "@/lib/types";
 
 export default function HomePage() {
   const router = useRouter();
@@ -37,6 +43,26 @@ export default function HomePage() {
     const timer = setInterval(advanceSlide, 6000);
     return () => clearInterval(timer);
   }, [advanceSlide, slideCount]);
+
+  // ── Fetch latest news posts ──
+  const [newsPosts, setNewsPosts] = useState<NewsPost[]>([]);
+  useEffect(() => {
+    (async () => {
+      try {
+        const q = query(
+          collection(db, "news"),
+          orderBy("createdAt", "desc"),
+          limit(3)
+        );
+        const snap = await getDocs(q);
+        setNewsPosts(
+          snap.docs.map((d) => ({ id: d.id, ...d.data() }) as NewsPost)
+        );
+      } catch (err) {
+        console.error("Error fetching news for homepage:", err);
+      }
+    })();
+  }, []);
 
   return (
     <Box>
@@ -313,6 +339,92 @@ export default function HomePage() {
           ))}
         </Grid>
       </Box>
+
+      {/* ─── Latest News Section ───────────────────────────── */}
+      {newsPosts.length > 0 && (
+        <Box sx={{ maxWidth: 1100, mx: "auto", px: 3, py: 6 }}>
+          <Box
+            sx={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              mb: 3,
+            }}
+          >
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+              <NewspaperIcon sx={{ color: "primary.main" }} />
+              <Typography variant="h5" sx={{ fontWeight: 700 }}>
+                Senaste nytt
+              </Typography>
+            </Box>
+            <Button
+              endIcon={<ArrowForwardIcon />}
+              onClick={() => router.push("/news")}
+              sx={{ textTransform: "none" }}
+            >
+              Se alla nyheter
+            </Button>
+          </Box>
+
+          <Grid container spacing={3}>
+            {newsPosts.map((post) => (
+              <Grid size={{ xs: 12, md: 4 }} key={post.id}>
+                <Card
+                  onClick={() => router.push("/news")}
+                  sx={{
+                    cursor: "pointer",
+                    height: "100%",
+                    display: "flex",
+                    flexDirection: "column",
+                    bgcolor: "rgba(13, 33, 55, 0.6)",
+                    backdropFilter: "blur(12px)",
+                    border: "1px solid rgba(79,195,247,0.08)",
+                    transition: "all 0.3s",
+                    "&:hover": {
+                      transform: "translateY(-3px)",
+                      border: "1px solid rgba(79,195,247,0.2)",
+                      boxShadow: "0 8px 32px rgba(79,195,247,0.1)",
+                    },
+                  }}
+                >
+                  {post.imageUrls?.[0] && (
+                    <CardMedia
+                      component="img"
+                      height="180"
+                      image={post.imageUrls[0]}
+                      alt={post.title}
+                      sx={{ objectFit: "cover" }}
+                    />
+                  )}
+                  <CardContent sx={{ p: 3, flex: 1, display: "flex", flexDirection: "column" }}>
+                    <Typography variant="h6" sx={{ fontWeight: 700, mb: 0.5 }}>
+                      {post.title}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary" sx={{ mb: 1.5 }}>
+                      {post.authorName} ·{" "}
+                      {post.createdAt?.toDate?.()?.toLocaleDateString("sv-SE") || ""}
+                    </Typography>
+                    <Typography
+                      variant="body2"
+                      color="text.secondary"
+                      sx={{
+                        display: "-webkit-box",
+                        WebkitLineClamp: 3,
+                        WebkitBoxOrient: "vertical",
+                        overflow: "hidden",
+                        lineHeight: 1.6,
+                        flex: 1,
+                      }}
+                    >
+                      {post.body.replace(/[#*_~`>\[\]()!]/g, "").slice(0, 200)}
+                    </Typography>
+                  </CardContent>
+                </Card>
+              </Grid>
+            ))}
+          </Grid>
+        </Box>
+      )}
 
       {/* ─── Map Section ──────────────────────────────────── */}
       <Box sx={{ maxWidth: 1100, mx: "auto", px: 3, py: 4 }}>
