@@ -19,6 +19,8 @@ import Dialog from "@mui/material/Dialog";
 import DialogTitle from "@mui/material/DialogTitle";
 import DialogContent from "@mui/material/DialogContent";
 import DialogActions from "@mui/material/DialogActions";
+import Switch from "@mui/material/Switch";
+import FormControlLabel from "@mui/material/FormControlLabel";
 import PersonIcon from "@mui/icons-material/Person";
 import ShoppingCartIcon from "@mui/icons-material/ShoppingCart";
 import CloseIcon from "@mui/icons-material/Close";
@@ -27,6 +29,7 @@ import HomeIcon from "@mui/icons-material/Home";
 import SmsIcon from "@mui/icons-material/Sms";
 import DangerousIcon from "@mui/icons-material/Dangerous";
 import SailingIcon from "@mui/icons-material/Sailing";
+import LayersIcon from "@mui/icons-material/Layers";
 import {
   APIProvider,
   Map,
@@ -475,6 +478,20 @@ export default function MapPage() {
   const [userSmsPrefs, setUserSmsPrefs] = useState<globalThis.Map<string, boolean>>(new globalThis.Map());
   const [buyConfirmOpen, setBuyConfirmOpen] = useState(false);
 
+  // Layer visibility toggles
+  const [layers, setLayers] = useState({
+    berths: true,
+    docks: true,
+    seaHuts: true,
+    boxes: true,
+    landStorage: true,
+    abandoned: true,
+    pois: true,
+  });
+  const [layerPanelOpen, setLayerPanelOpen] = useState(false);
+  const toggleLayer = (key: keyof typeof layers) =>
+    setLayers((prev) => ({ ...prev, [key]: !prev[key] }));
+
   useEffect(() => {
     async function fetchData() {
       try {
@@ -646,20 +663,104 @@ export default function MapPage() {
               tiltInteractionEnabled={true}
               rotateControl={true}
             >
-              <BerthPolygons
-                berths={berthsWithCoords}
-                docks={docks}
-                onSelect={handleSelectBerth}
-                currentUid={currentUid}
-              />
-              <DockPolygons docks={docks} />
-              <ResourceMarkers resources={otherResources} currentUid={currentUid} onSelect={handleSelectResource} />
-              <LandStorageMarkers entries={landEntries} currentUid={currentUid} onSelect={handleSelectLandStorage} />
-              <AbandonedObjectMarkers entries={abandonedObjects} onSelect={handleSelectAbandoned} />
-              <POIMarkers pois={pois} onSelect={handleSelectPOI} />
+              {layers.berths && (
+                <BerthPolygons
+                  berths={berthsWithCoords}
+                  docks={docks}
+                  onSelect={handleSelectBerth}
+                  currentUid={currentUid}
+                />
+              )}
+              {layers.docks && <DockPolygons docks={docks} />}
+              {(layers.seaHuts || layers.boxes) && (
+                <ResourceMarkers
+                  resources={otherResources.filter(
+                    (r) =>
+                      (layers.seaHuts && r.type === "SeaHut") ||
+                      (layers.boxes && r.type === "Box")
+                  )}
+                  currentUid={currentUid}
+                  onSelect={handleSelectResource}
+                />
+              )}
+              {layers.landStorage && (
+                <LandStorageMarkers entries={landEntries} currentUid={currentUid} onSelect={handleSelectLandStorage} />
+              )}
+              {layers.abandoned && (
+                <AbandonedObjectMarkers entries={abandonedObjects} onSelect={handleSelectAbandoned} />
+              )}
+              {layers.pois && (
+                <POIMarkers pois={pois} onSelect={handleSelectPOI} />
+              )}
             </Map>
           </APIProvider>
         )}
+
+        {/* Layer toggle panel */}
+        <Paper
+          sx={{
+            position: "absolute",
+            top: 12,
+            left: 12,
+            zIndex: 6,
+            bgcolor: "rgba(13, 33, 55, 0.92)",
+            backdropFilter: "blur(12px)",
+            border: "1px solid rgba(79,195,247,0.15)",
+            borderRadius: 2,
+            overflow: "hidden",
+          }}
+        >
+          <Box
+            sx={{
+              display: "flex",
+              alignItems: "center",
+              gap: 1,
+              px: 1.5,
+              py: 0.75,
+              cursor: "pointer",
+              "&:hover": { bgcolor: "rgba(79,195,247,0.08)" },
+              transition: "background 0.15s",
+            }}
+            onClick={() => setLayerPanelOpen((v) => !v)}
+          >
+            <LayersIcon sx={{ color: "primary.main", fontSize: 20 }} />
+            <Typography variant="body2" sx={{ fontWeight: 600, userSelect: "none" }}>
+              Lager
+            </Typography>
+          </Box>
+
+          {layerPanelOpen && (
+            <Box sx={{ px: 1.5, pb: 1, display: "flex", flexDirection: "column", gap: 0 }}>
+              <Divider sx={{ mb: 0.5, borderColor: "rgba(79,195,247,0.12)" }} />
+              {([
+                { key: "berths" as const, label: "Båtplatser", color: "#4CAF50" },
+                { key: "docks" as const, label: "Bryggor", color: "#42A5F5" },
+                { key: "seaHuts" as const, label: "Sjöbodar", color: "#F44336" },
+                { key: "boxes" as const, label: "Lådor", color: "#F44336" },
+                { key: "landStorage" as const, label: "Markförvaring", color: "#F57C00" },
+                { key: "abandoned" as const, label: "Övergivna", color: "#9E9E9E" },
+                { key: "pois" as const, label: "POI", color: "#7C4DFF" },
+              ]).map(({ key, label, color }) => (
+                <FormControlLabel
+                  key={key}
+                  sx={{ mx: 0, "& .MuiFormControlLabel-label": { fontSize: "0.82rem", fontWeight: 500 } }}
+                  control={
+                    <Switch
+                      size="small"
+                      checked={layers[key]}
+                      onChange={() => toggleLayer(key)}
+                      sx={{
+                        "& .MuiSwitch-switchBase.Mui-checked": { color },
+                        "& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track": { bgcolor: color },
+                      }}
+                    />
+                  }
+                  label={label}
+                />
+              ))}
+            </Box>
+          )}
+        </Paper>
 
         {/* Map hint banner (shown when no object is selected) */}
         {!selectedObject && (

@@ -4,8 +4,8 @@ import React, { useEffect, useState, useRef, useCallback } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { db, auth } from "@/lib/firebase";
 import { deleteUser as firebaseDeleteUser, reauthenticateWithCredential, EmailAuthProvider, updatePassword } from "firebase/auth";
-import { uploadBoatImage, uploadProfileImage, uploadLandStorageImage } from "@/lib/storage";
-import { Resource, Berth, Dock, LandStorageEntry, UserMessage, User, EngagementType, BerthInterest, InterestReply } from "@/lib/types";
+import { uploadBoatImage, uploadProfileImage, uploadLandStorageImage, deleteStorageFile } from "@/lib/storage";
+import { Resource, Berth, Dock, LandStorageEntry, UserMessage, User, EngagementType, BerthInterest, InterestReply, MarketplaceListing, ListingCategory } from "@/lib/types";
 import { normalizePhone } from "@/lib/phoneUtils";
 import { APIProvider, Map as GMap, AdvancedMarker, useMap, useMapsLibrary } from "@vis.gl/react-google-maps";
 import { computeBoatHull, HARBOR_CENTER } from "@/lib/mapUtils";
@@ -73,6 +73,7 @@ import MyLocationIcon from "@mui/icons-material/MyLocation";
 import WarningAmberIcon from "@mui/icons-material/WarningAmber";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import DeleteIcon from "@mui/icons-material/Delete";
+import StorefrontIcon from "@mui/icons-material/Storefront";
 
 
 const ENGAGEMENT_LABELS: Record<EngagementType, string> = {
@@ -82,6 +83,14 @@ const ENGAGEMENT_LABELS: Record<EngagementType, string> = {
   landstorage: "Uppställning",
   interest: "Intresserad",
   other: "Övrigt",
+};
+
+const LISTING_CATEGORY_LABELS: Record<ListingCategory, string> = {
+  Sale: "Till salu",
+  WantedToBuy: "Köpes",
+  Service: "Tjänst",
+  SubletOffer: "2-hand erbjudes",
+  SubletWanted: "2-hand önskas",
 };
 
 export default function DashboardPage() {
@@ -288,6 +297,10 @@ function DashboardContent() {
 
   // Interest registrations
   const [myInterests, setMyInterests] = useState<BerthInterest[]>([]);
+
+  // Marketplace listings
+  const [myListings, setMyListings] = useState<MarketplaceListing[]>([]);
+  const [deletingListingId, setDeletingListingId] = useState<string | null>(null);
   const [interestReplies, setInterestReplies] = useState<Record<string, InterestReply[]>>({});
 
   useEffect(() => {
@@ -314,6 +327,35 @@ function DashboardContent() {
     });
     return () => unsub();
   }, [firebaseUser]);
+
+  // Fetch user's marketplace listings
+  useEffect(() => {
+    if (!firebaseUser) return;
+    const q = query(
+      collection(db, "marketplace"),
+      where("createdBy", "==", firebaseUser.uid),
+      orderBy("createdAt", "desc")
+    );
+    const unsub = onSnapshot(q, (snap) => {
+      setMyListings(
+        snap.docs.map((d) => ({ id: d.id, ...d.data() }) as MarketplaceListing)
+      );
+    });
+    return () => unsub();
+  }, [firebaseUser]);
+
+  const handleDeleteListing = async (listingId: string) => {
+    try {
+      const listing = myListings.find((l) => l.id === listingId);
+      if (listing?.imageUrl) await deleteStorageFile(listing.imageUrl);
+      await deleteDoc(doc(db, "marketplace", listingId));
+      setSuccessMsg("Annons borttagen!");
+      setTimeout(() => setSuccessMsg(""), 3000);
+    } catch (err) {
+      console.error("Error deleting listing:", err);
+    }
+    setDeletingListingId(null);
+  };
 
   // Pending users (for managers/superadmins)
   const [pendingUsers, setPendingUsers] = useState<User[]>([]);
@@ -1835,6 +1877,106 @@ function DashboardContent() {
               </CardContent>
             </Card>
           </Grid>
+
+        {/* My Marketplace Listings */}
+        {myListings.length > 0 && (
+          <Grid size={{ xs: 12 }}>
+            <Card>
+              <CardContent sx={{ p: 3 }}>
+                <Typography
+                  variant="h6"
+                  sx={{ display: "flex", alignItems: "center", gap: 1, mb: 2 }}
+                >
+                  <StorefrontIcon sx={{ color: "#FFB74D" }} />
+                  Mina annonser ({myListings.length})
+                </Typography>
+                <TableContainer
+                  component={Paper}
+                  sx={{ bgcolor: "transparent", backgroundImage: "none" }}
+                >
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>Titel</TableCell>
+                        <TableCell>Kategori</TableCell>
+                        <TableCell>Pris</TableCell>
+                        <TableCell>Skapad</TableCell>
+                        <TableCell>Status</TableCell>
+                        <TableCell align="right">Ta bort</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {myListings.map((listing) => (
+                        <TableRow key={listing.id}>
+                          <TableCell sx={{ fontWeight: 600 }}>
+                            {listing.title}
+                          </TableCell>
+                          <TableCell>
+                            <Chip
+                              label={LISTING_CATEGORY_LABELS[listing.category] || listing.category}
+                              size="small"
+                              variant="outlined"
+                            />
+                          </TableCell>
+                          <TableCell>
+                            {listing.price > 0
+                              ? `${listing.price.toLocaleString("sv-SE")} kr`
+                              : "—"}
+                          </TableCell>
+                          <TableCell>
+                            <Typography variant="caption" color="text.secondary">
+                              {listing.createdAt?.toDate?.()?.toLocaleDateString("sv-SE") || "—"}
+                            </Typography>
+                          </TableCell>
+                          <TableCell>
+                            <Chip
+                              label={listing.status === "Active" ? "Aktiv" : listing.status === "Sold" ? "Såld" : "Stängd"}
+                              size="small"
+                              color={listing.status === "Active" ? "success" : "default"}
+                            />
+                          </TableCell>
+                          <TableCell align="right">
+                            {deletingListingId === listing.id ? (
+                              <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, justifyContent: "flex-end" }}>
+                                <Typography variant="caption" color="error.main" sx={{ whiteSpace: "nowrap" }}>
+                                  Är du säker?
+                                </Typography>
+                                <Button
+                                  size="small"
+                                  color="error"
+                                  variant="contained"
+                                  onClick={() => handleDeleteListing(listing.id)}
+                                  sx={{ minWidth: 0, px: 1 }}
+                                >
+                                  Ja
+                                </Button>
+                                <Button
+                                  size="small"
+                                  onClick={() => setDeletingListingId(null)}
+                                  sx={{ minWidth: 0, px: 1 }}
+                                >
+                                  Nej
+                                </Button>
+                              </Box>
+                            ) : (
+                              <IconButton
+                                size="small"
+                                color="error"
+                                onClick={() => setDeletingListingId(listing.id)}
+                              >
+                                <DeleteIcon fontSize="small" />
+                              </IconButton>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              </CardContent>
+            </Card>
+          </Grid>
+        )}
 
         {/* My Interest Registrations */}
         {myInterests.length > 0 && (
