@@ -3,7 +3,7 @@
 import React, { useEffect, useState, useRef, useCallback } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { db, auth } from "@/lib/firebase";
-import { deleteUser as firebaseDeleteUser } from "firebase/auth";
+import { deleteUser as firebaseDeleteUser, reauthenticateWithCredential, EmailAuthProvider, updatePassword } from "firebase/auth";
 import { uploadBoatImage, uploadProfileImage, uploadLandStorageImage } from "@/lib/storage";
 import { Resource, Berth, Dock, LandStorageEntry, UserMessage, User, EngagementType, BerthInterest, InterestReply } from "@/lib/types";
 import { normalizePhone } from "@/lib/phoneUtils";
@@ -64,6 +64,7 @@ import EditIcon from "@mui/icons-material/Edit";
 import SaveIcon from "@mui/icons-material/Save";
 import CloseIcon from "@mui/icons-material/Close";
 import SmsIcon from "@mui/icons-material/Sms";
+import LockIcon from "@mui/icons-material/Lock";
 import MarkEmailReadIcon from "@mui/icons-material/MarkEmailRead";
 import PersonRemoveIcon from "@mui/icons-material/PersonRemove";
 import PersonAddIcon from "@mui/icons-material/PersonAdd";
@@ -254,6 +255,15 @@ function DashboardContent() {
   // Profile picture upload
   const profileInputRef = useRef<HTMLInputElement>(null);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
+
+  // Password change state
+  const [showPasswordChange, setShowPasswordChange] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmNewPassword, setConfirmNewPassword] = useState("");
+  const [passwordLoading, setPasswordLoading] = useState(false);
+  const [passwordError, setPasswordError] = useState("");
+  const [passwordSuccess, setPasswordSuccess] = useState("");
 
   // Second-hand tenant lookup
   const [secondHandNames, setSecondHandNames] = useState<Record<string, string>>({});
@@ -617,6 +627,50 @@ function DashboardContent() {
     setEditName(profile?.name || "");
     setEditPhone(profile?.phone || "");
     setEditing(false);
+  };
+
+  // Check if user has email/password provider
+  const hasPasswordProvider = firebaseUser?.providerData.some(
+    (p) => p.providerId === "password"
+  ) ?? false;
+
+  // Handle user password change
+  const handleChangePassword = async () => {
+    if (!firebaseUser || !firebaseUser.email) return;
+    if (newPassword.length < 6) {
+      setPasswordError("Lösenordet måste vara minst 6 tecken.");
+      return;
+    }
+    if (newPassword !== confirmNewPassword) {
+      setPasswordError("Lösenorden matchar inte.");
+      return;
+    }
+    setPasswordError("");
+    setPasswordLoading(true);
+    try {
+      // Re-authenticate with current password
+      const credential = EmailAuthProvider.credential(firebaseUser.email, currentPassword);
+      await reauthenticateWithCredential(firebaseUser, credential);
+      // Update the password
+      await updatePassword(firebaseUser, newPassword);
+      setPasswordSuccess("Lösenordet har ändrats!");
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmNewPassword("");
+      setShowPasswordChange(false);
+      setTimeout(() => setPasswordSuccess(""), 5000);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "";
+      if (msg.includes("auth/wrong-password") || msg.includes("auth/invalid-credential")) {
+        setPasswordError("Fel nuvarande lösenord.");
+      } else if (msg.includes("auth/too-many-requests")) {
+        setPasswordError("För många försök. Vänta en stund.");
+      } else {
+        setPasswordError("Kunde inte ändra lösenordet. Försök igen.");
+      }
+    } finally {
+      setPasswordLoading(false);
+    }
   };
 
   // Profile picture upload
@@ -1079,6 +1133,92 @@ function DashboardContent() {
                 </Button>
               )}
 
+              {/* Password change section */}
+              {passwordSuccess && (
+                <Alert severity="success" sx={{ mb: 2 }}>{passwordSuccess}</Alert>
+              )}
+              {hasPasswordProvider ? (
+                <>
+                  {!showPasswordChange ? (
+                    <Button
+                      fullWidth
+                      variant="outlined"
+                      size="small"
+                      startIcon={<LockIcon />}
+                      onClick={() => setShowPasswordChange(true)}
+                      sx={{ mb: 2, textTransform: "none" }}
+                    >
+                      Ändra lösenord
+                    </Button>
+                  ) : (
+                    <Box sx={{ mb: 2 }}>
+                      <Typography variant="subtitle2" sx={{ mb: 1, display: "flex", alignItems: "center", gap: 0.5 }}>
+                        <LockIcon fontSize="small" color="primary" />
+                        Ändra lösenord
+                      </Typography>
+                      {passwordError && (
+                        <Alert severity="error" sx={{ mb: 1 }}>{passwordError}</Alert>
+                      )}
+                      <TextField
+                        fullWidth
+                        size="small"
+                        type="password"
+                        label="Nuvarande lösenord"
+                        value={currentPassword}
+                        onChange={(e) => setCurrentPassword(e.target.value)}
+                        sx={{ mb: 1.5 }}
+                      />
+                      <TextField
+                        fullWidth
+                        size="small"
+                        type="password"
+                        label="Nytt lösenord"
+                        value={newPassword}
+                        onChange={(e) => setNewPassword(e.target.value)}
+                        sx={{ mb: 1.5 }}
+                      />
+                      <TextField
+                        fullWidth
+                        size="small"
+                        type="password"
+                        label="Bekräfta nytt lösenord"
+                        value={confirmNewPassword}
+                        onChange={(e) => setConfirmNewPassword(e.target.value)}
+                        sx={{ mb: 1.5 }}
+                      />
+                      <Box sx={{ display: "flex", gap: 1 }}>
+                        <Button
+                          variant="contained"
+                          size="small"
+                          onClick={handleChangePassword}
+                          disabled={passwordLoading || !currentPassword || !newPassword}
+                          startIcon={passwordLoading ? <CircularProgress size={14} /> : <SaveIcon />}
+                        >
+                          {passwordLoading ? "Sparar..." : "Spara"}
+                        </Button>
+                        <Button
+                          variant="outlined"
+                          size="small"
+                          onClick={() => {
+                            setShowPasswordChange(false);
+                            setPasswordError("");
+                            setCurrentPassword("");
+                            setNewPassword("");
+                            setConfirmNewPassword("");
+                          }}
+                        >
+                          Avbryt
+                        </Button>
+                      </Box>
+                    </Box>
+                  )}
+                </>
+              ) : (
+                <Alert severity="info" sx={{ mb: 2 }}>
+                  Du loggar in med Google — lösenordet hanteras av Google.
+                </Alert>
+              )}
+
               {/* Privacy toggle */}
               <Box
                 sx={{
@@ -1206,12 +1346,16 @@ function DashboardContent() {
                   <GMap
                     defaultCenter={HARBOR_CENTER}
                     defaultZoom={16}
+                    defaultTilt={45}
                     mapId="dashboard-my-objects"
                     mapTypeId="satellite"
                     style={{ width: "100%", height: "100%", minHeight: 350, borderRadius: 8 }}
                     gestureHandling="greedy"
                     disableDefaultUI
                     zoomControl
+                    headingInteractionEnabled={true}
+                    tiltInteractionEnabled={true}
+                    rotateControl={true}
                   >
                     <MyObjectsMapContent
                       resources={resources}

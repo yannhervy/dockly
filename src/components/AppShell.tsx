@@ -29,10 +29,16 @@ import LogoutIcon from "@mui/icons-material/Logout";
 import AnchorIcon from "@mui/icons-material/Anchor";
 
 import ConstructionIcon from "@mui/icons-material/Construction";
+import Button from "@mui/material/Button";
 import OpenInNewIcon from "@mui/icons-material/OpenInNew";
 import Badge from "@mui/material/Badge";
 import NotificationsIcon from "@mui/icons-material/Notifications";
 import Tooltip from "@mui/material/Tooltip";
+import PeopleIcon from "@mui/icons-material/People";
+import SailingIcon from "@mui/icons-material/Sailing";
+import DangerousIcon from "@mui/icons-material/Dangerous";
+import PlaceIcon from "@mui/icons-material/Place";
+import VisibilityIcon from "@mui/icons-material/Visibility";
 
 const DRAWER_WIDTH = 260;
 
@@ -41,34 +47,73 @@ interface NavItem {
   path: string;
   icon: React.ReactNode;
   roles?: string[]; // Empty = visible to all authenticated users
+  dividerBefore?: string; // Section divider label before this item
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { label: "Harbor Directory", path: "/admin/directory", icon: <PublicIcon /> },
-  { label: "Land Storage", path: "/admin/land-storage", icon: <ConstructionIcon />, roles: ["Superadmin", "Dock Manager"] },
+  { label: "Hamnkatalog", path: "/admin/directory", icon: <PublicIcon /> },
   {
-    label: "Dock Manager",
+    label: "Hamnkapten",
     path: "/admin/manager",
     icon: <ManageAccountsIcon />,
     roles: ["Superadmin", "Dock Manager"],
   },
   {
-    label: "Admin",
-    path: "/admin",
-    icon: <AdminPanelSettingsIcon />,
+    label: "Intresseanmälningar",
+    path: "/admin/interests",
+    icon: <SailingIcon />,
+    roles: ["Superadmin", "Dock Manager"],
+  },
+  {
+    label: "Användare",
+    path: "/admin/users",
+    icon: <PeopleIcon />,
+    roles: ["Superadmin"],
+    dividerBefore: "Admin",
+  },
+  {
+    label: "Bryggor",
+    path: "/admin/docks",
+    icon: <AnchorIcon />,
+    roles: ["Superadmin"],
+  },
+  {
+    label: "Resurser",
+    path: "/admin/resources",
+    icon: <DirectionsBoatIcon />,
+    roles: ["Superadmin"],
+  },
+  {
+    label: "Markuppställning",
+    path: "/admin/land-storage",
+    icon: <ConstructionIcon />,
+    roles: ["Superadmin", "Dock Manager"],
+  },
+  {
+    label: "Övergivna objekt",
+    path: "/admin/abandoned",
+    icon: <DangerousIcon />,
+    roles: ["Superadmin"],
+  },
+  {
+    label: "Platser (POI)",
+    path: "/admin/poi",
+    icon: <PlaceIcon />,
     roles: ["Superadmin"],
   },
 ];
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
-  const { profile, firebaseUser, logout } = useAuth();
+  const { profile, realProfile, firebaseUser, logout, isViewingAs, viewingAsProfile, stopViewingAs } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
   const [unseenReplyCount, setUnseenReplyCount] = useState(0);
 
-  const isManagerOrAdmin = profile?.role === "Superadmin" || profile?.role === "Dock Manager";
+  // Use real profile for permission checks in sidebar (not the viewed user's profile)
+  const sidebarProfile = realProfile || profile;
+  const isManagerOrAdmin = sidebarProfile?.role === "Superadmin" || sidebarProfile?.role === "Dock Manager";
 
   // Listen for pending users (approved === false)
   useEffect(() => {
@@ -115,7 +160,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
   const visibleItems = NAV_ITEMS.filter((item) => {
     if (!item.roles || item.roles.length === 0) return true;
-    return profile && item.roles.includes(profile.role);
+    return sidebarProfile && item.roles.includes(sidebarProfile.role);
   });
 
   const handleNav = (path: string) => {
@@ -155,30 +200,35 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       {/* Navigation list */}
       <List sx={{ flex: 1, px: 1, py: 1 }}>
         {visibleItems.map((item) => (
-          <ListItem key={item.path} disablePadding sx={{ mb: 0.5 }}>
-            <ListItemButton
-              onClick={() => handleNav(item.path)}
-              selected={
-                item.path === "/admin"
-                  ? pathname === "/admin"
-                  : pathname.startsWith(item.path)
-              }
-              sx={{
-                borderRadius: 2,
-                "&.Mui-selected": {
-                  backgroundColor: "rgba(79, 195, 247, 0.12)",
-                  "&:hover": {
-                    backgroundColor: "rgba(79, 195, 247, 0.18)",
+          <React.Fragment key={item.path}>
+            {item.dividerBefore && (
+              <Box sx={{ px: 2, pt: 1.5, pb: 0.5 }}>
+                <Typography variant="caption" sx={{ color: "text.secondary", fontWeight: 700, textTransform: "uppercase", letterSpacing: 1 }}>
+                  {item.dividerBefore}
+                </Typography>
+              </Box>
+            )}
+            <ListItem disablePadding sx={{ mb: 0.5 }}>
+              <ListItemButton
+                onClick={() => handleNav(item.path)}
+                selected={pathname.startsWith(item.path)}
+                sx={{
+                  borderRadius: 2,
+                  "&.Mui-selected": {
+                    backgroundColor: "rgba(79, 195, 247, 0.12)",
+                    "&:hover": {
+                      backgroundColor: "rgba(79, 195, 247, 0.18)",
+                    },
                   },
-                },
-              }}
-            >
-              <ListItemIcon sx={{ minWidth: 40, color: "text.secondary" }}>
-                {item.icon}
-              </ListItemIcon>
-              <ListItemText primary={item.label} />
-            </ListItemButton>
-          </ListItem>
+                }}
+              >
+                <ListItemIcon sx={{ minWidth: 40, color: "text.secondary" }}>
+                  {item.icon}
+                </ListItemIcon>
+                <ListItemText primary={item.label} />
+              </ListItemButton>
+            </ListItem>
+          </React.Fragment>
         ))}
       </List>
 
@@ -352,6 +402,36 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           py: 3,
         }}
       >
+        {/* View-as impersonation banner */}
+        {isViewingAs && viewingAsProfile && (
+          <Box
+            sx={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 1,
+              py: 1,
+              px: 2,
+              bgcolor: "rgba(255, 183, 77, 0.15)",
+              borderBottom: "1px solid rgba(255, 183, 77, 0.3)",
+              color: "warning.main",
+            }}
+          >
+            <VisibilityIcon fontSize="small" />
+            <Typography variant="body2" sx={{ fontWeight: 600 }}>
+              Du visar appen som {viewingAsProfile.name} ({viewingAsProfile.role})
+            </Typography>
+            <Button
+              size="small"
+              variant="outlined"
+              color="warning"
+              onClick={stopViewingAs}
+              sx={{ ml: 1, textTransform: "none" }}
+            >
+              Avsluta
+            </Button>
+          </Box>
+        )}
         {children}
       </Box>
     </Box>

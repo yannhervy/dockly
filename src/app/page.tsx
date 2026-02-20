@@ -1,5 +1,6 @@
 "use client";
 
+import React, { useState, useEffect, useCallback } from "react";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 import Button from "@mui/material/Button";
@@ -11,10 +12,31 @@ import InfoIcon from "@mui/icons-material/Info";
 import DirectionsBoatIcon from "@mui/icons-material/DirectionsBoat";
 import StorefrontIcon from "@mui/icons-material/Storefront";
 import PlaceIcon from "@mui/icons-material/Place";
+import PersonAddIcon from "@mui/icons-material/PersonAdd";
+import LoginIcon from "@mui/icons-material/Login";
 import { useRouter } from "next/navigation";
+import { useAuth } from "@/context/AuthContext";
 
 export default function HomePage() {
   const router = useRouter();
+  const { firebaseUser } = useAuth();
+  const isLoggedIn = !!firebaseUser;
+
+  // Carousel state — only carousel when not logged in (2 slides)
+  const [activeSlide, setActiveSlide] = useState(0);
+  const slideCount = isLoggedIn ? 1 : 2;
+
+  // Auto-advance carousel every 6 seconds
+  const advanceSlide = useCallback(() => {
+    if (slideCount <= 1) return;
+    setActiveSlide((prev) => (prev + 1) % slideCount);
+  }, [slideCount]);
+
+  useEffect(() => {
+    if (slideCount <= 1) return;
+    const timer = setInterval(advanceSlide, 6000);
+    return () => clearInterval(timer);
+  }, [advanceSlide, slideCount]);
 
   return (
     <Box>
@@ -31,7 +53,6 @@ export default function HomePage() {
           px: 3,
           py: 8,
           overflow: "hidden",
-          // Full photo background, no overlay
           backgroundImage: "url('/IMG20221112150016-EDIT.jpg')",
           backgroundSize: "cover",
           backgroundPosition: "center",
@@ -72,60 +93,169 @@ export default function HomePage() {
           >
             Stegerholmens Hamn
           </Typography>
-          <Typography
-            variant="h6"
-            sx={{
-              color: "rgba(255,255,255,0.85)",
-              fontWeight: 400,
-              mb: 4,
-              maxWidth: 520,
-              mx: "auto",
-              lineHeight: 1.6,
-            }}
-          >
-            En idyllisk hamn med nära till både skärgården och stan. Båtplatser, sjöbodar och gemenskap
-            vid vattnet.
-          </Typography>
-          <Box sx={{ display: "flex", gap: 2, justifyContent: "center", flexWrap: "wrap" }}>
-            <Button
-              variant="contained"
-              size="large"
-              onClick={() => router.push("/interest")}
+
+          {/* ── Carousel slides ── */}
+          <Box sx={{ position: "relative", minHeight: { xs: 150, sm: 130 } }}>
+            {/* Slide 0: informational */}
+            <Box
               sx={{
-                px: 4,
-                py: 1.5,
-                fontSize: "1rem",
-                textTransform: "none",
-                borderRadius: 3,
-                background: "linear-gradient(135deg, #4FC3F7, #0288D1)",
-                "&:hover": {
-                  background: "linear-gradient(135deg, #29B6F6, #0277BD)",
-                },
+                position: activeSlide === 0 ? "relative" : "absolute",
+                top: 0,
+                left: 0,
+                right: 0,
+                opacity: activeSlide === 0 ? 1 : 0,
+                transition: "opacity 0.6s ease-in-out",
+                pointerEvents: activeSlide === 0 ? "auto" : "none",
               }}
             >
-              Intresseanmälan för båtplats
-            </Button>
-            <Button
-              variant="outlined"
-              size="large"
-              onClick={() => router.push("/docks")}
-              sx={{
-                px: 4,
-                py: 1.5,
-                fontSize: "1rem",
-                textTransform: "none",
-                borderRadius: 3,
-                borderColor: "rgba(255,255,255,0.4)",
-                color: "#fff",
-                "&:hover": {
-                  borderColor: "rgba(255,255,255,0.7)",
-                  bgcolor: "rgba(255,255,255,0.08)",
-                },
-              }}
-            >
-              Se våra bryggor
-            </Button>
+              <Typography
+                variant="h6"
+                sx={{
+                  color: "rgba(255,255,255,0.85)",
+                  fontWeight: 400,
+                  mb: 4,
+                  maxWidth: 520,
+                  mx: "auto",
+                  lineHeight: 1.6,
+                }}
+              >
+                En idyllisk hamn med nära till både skärgården och stan. Båtplatser, sjöbodar och gemenskap
+                vid vattnet.
+              </Typography>
+              <Box sx={{ display: "flex", gap: 2, justifyContent: "center", flexWrap: "wrap" }}>
+                <Button
+                  variant="contained"
+                  size="large"
+                  onClick={() => router.push("/interest")}
+                  sx={{
+                    px: 4,
+                    py: 1.5,
+                    fontSize: "1rem",
+                    textTransform: "none",
+                    borderRadius: 3,
+                    background: "linear-gradient(135deg, #4FC3F7, #0288D1)",
+                    "&:hover": {
+                      background: "linear-gradient(135deg, #29B6F6, #0277BD)",
+                    },
+                  }}
+                >
+                  Intresseanmälan för båtplats
+                </Button>
+                <Button
+                  variant="outlined"
+                  size="large"
+                  onClick={() => router.push("/docks")}
+                  sx={{
+                    px: 4,
+                    py: 1.5,
+                    fontSize: "1rem",
+                    textTransform: "none",
+                    borderRadius: 3,
+                    borderColor: "rgba(255,255,255,0.4)",
+                    color: "#fff",
+                    "&:hover": {
+                      borderColor: "rgba(255,255,255,0.7)",
+                      bgcolor: "rgba(255,255,255,0.08)",
+                    },
+                  }}
+                >
+                  Se våra bryggor
+                </Button>
+              </Box>
+            </Box>
+
+            {/* Slide 1: account CTA (only for non-logged-in users) */}
+            {!isLoggedIn && (
+              <Box
+                sx={{
+                  position: activeSlide === 1 ? "relative" : "absolute",
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  opacity: activeSlide === 1 ? 1 : 0,
+                  transition: "opacity 0.6s ease-in-out",
+                  pointerEvents: activeSlide === 1 ? "auto" : "none",
+                }}
+              >
+                <Typography
+                  variant="h6"
+                  sx={{
+                    color: "rgba(255,255,255,0.85)",
+                    fontWeight: 400,
+                    mb: 4,
+                    maxWidth: 520,
+                    mx: "auto",
+                    lineHeight: 1.6,
+                  }}
+                >
+                  Skapa konto eller logga in för att komma åt samtliga funktioner.
+                </Typography>
+                <Box sx={{ display: "flex", gap: 2, justifyContent: "center", flexWrap: "wrap" }}>
+                  <Button
+                    variant="contained"
+                    size="large"
+                    startIcon={<PersonAddIcon />}
+                    onClick={() => router.push("/login")}
+                    sx={{
+                      px: 4,
+                      py: 1.5,
+                      fontSize: "1rem",
+                      textTransform: "none",
+                      borderRadius: 3,
+                      background: "linear-gradient(135deg, #4FC3F7, #0288D1)",
+                      "&:hover": {
+                        background: "linear-gradient(135deg, #29B6F6, #0277BD)",
+                      },
+                    }}
+                  >
+                    Skapa konto
+                  </Button>
+                  <Button
+                    variant="outlined"
+                    size="large"
+                    startIcon={<LoginIcon />}
+                    onClick={() => router.push("/login")}
+                    sx={{
+                      px: 4,
+                      py: 1.5,
+                      fontSize: "1rem",
+                      textTransform: "none",
+                      borderRadius: 3,
+                      borderColor: "rgba(255,255,255,0.4)",
+                      color: "#fff",
+                      "&:hover": {
+                        borderColor: "rgba(255,255,255,0.7)",
+                        bgcolor: "rgba(255,255,255,0.08)",
+                      },
+                    }}
+                  >
+                    Logga in
+                  </Button>
+                </Box>
+              </Box>
+            )}
           </Box>
+
+          {/* Dot indicators */}
+          {slideCount > 1 && (
+            <Box sx={{ display: "flex", gap: 1, justifyContent: "center", mt: 3 }}>
+              {Array.from({ length: slideCount }).map((_, i) => (
+                <Box
+                  key={i}
+                  onClick={() => setActiveSlide(i)}
+                  sx={{
+                    width: 10,
+                    height: 10,
+                    borderRadius: "50%",
+                    bgcolor: activeSlide === i ? "#4FC3F7" : "rgba(255,255,255,0.3)",
+                    cursor: "pointer",
+                    transition: "all 0.3s",
+                    "&:hover": { bgcolor: activeSlide === i ? "#4FC3F7" : "rgba(255,255,255,0.5)" },
+                  }}
+                />
+              ))}
+            </Box>
+          )}
         </Box>
       </Box>
 

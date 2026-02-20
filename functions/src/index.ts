@@ -538,3 +538,272 @@ export const onInterestReplyCreated = onDocumentCreated(
     }
   }
 );
+
+
+// ─── Password Reset via SMS ────────────────────────────────
+
+/**
+ * Request a password reset SMS.
+ * No authentication required (user is locked out).
+ *
+ * POST /requestPasswordResetSms
+ * Body: { "phone": "+46701234567" }
+ */
+export const requestPasswordResetSms = onRequest(
+  { cors: true, region: "europe-west1" },
+  async (req, res) => {
+    if (req.method !== "POST") {
+      res.status(405).json({ error: "Method not allowed" });
+      return;
+    }
+
+    const { phone } = req.body;
+    if (!phone || typeof phone !== "string") {
+      res.status(400).json({ error: "Missing required field: phone" });
+      return;
+    }
+
+    const normalized = normalizePhone(phone);
+
+    // Rate limit: max 3 requests per phone per hour
+    const now = Date.now();
+    const oneHourAgo = new Date(now - 60 * 60 * 1000);
+    const recentAttempts = await admin.firestore()
+      .collection("passwordResetTokens")
+      .where("phone", "==", normalized)
+      .where("createdAt", ">", admin.firestore.Timestamp.fromDate(oneHourAgo))
+      .get();
+
+    if (recentAttempts.size >= 3) {
+      res.status(429).json({ error: "För många försök. Vänta en stund och försök igen." });
+      return;
+    }
+
+    // Find user by phone in Firestore
+    const usersSnap = await admin.firestore()
+      .collection("users")
+      .where("phone", "==", normalized)
+      .limit(1)
+      .get();
+
+    // Also try unnormalized phone
+    let userDoc = usersSnap.docs[0];
+    if (!userDoc) {
+      const altSnap = await admin.firestore()
+        .collection("users")
+        .where("phone", "==", phone.trim())
+        .limit(1)
+        .get();
+      userDoc = altSnap.docs[0];
+    }
+
+    if (!userDoc) {
+      // Don't reveal whether the phone exists — always show success
+      res.status(200).json({ success: true });
+      return;
+    }
+
+    const userData = userDoc.data();
+    const uid = userDoc.id;
+
+    // Check if user has a password provider (not Google-only)
+    try {
+      const authUser = await admin.auth().getUser(uid);
+      const hasPasswordProvider = authUser.providerData.some(
+        (p) => p.providerId === "password"
+      );
+      if (!hasPasswordProvider) {
+        res.status(400).json({
+          error: "google_only",
+          message: "Ditt konto är kopplat till Google. Logga in med Google-knappen istället.",
+        });
+        return;
+      }
+    } catch {
+      // User not found in Auth — should not normally happen
+      res.status(200).json({ success: true });
+      return;
+    }
+
+    // Generate a one-time token
+    const crypto = await import("crypto");
+    const token = crypto.randomBytes(32).toString("hex");
+    const expiresAt = admin.firestore.Timestamp.fromDate(new Date(now + 15 * 60 * 1000)); // 15 minutes
+
+    await admin.firestore().collection("passwordResetTokens").doc(token).set({
+      uid,
+      phone: normalized,
+      email: userData.email,
+      createdAt: admin.firestore.Timestamp.now(),
+      expiresAt,
+    });
+
+    // Send SMS with reset link
+    const resetUrl = `https://stegerholmenshamn.web.app/reset-password?token=${token}`;
+    const message = `Återställ ditt lösenord på Stegerholmens Hamn: ${resetUrl}`;
+
+    const authStr = Buffer.from(
+      `${elksUsername.value()}:${elksPassword.value()}`
+    ).toString("base64");
+
+    try {
+      const body = new URLSearchParams({
+        from: DEFAULT_SENDER,
+        to: normalized,
+        message,
+      });
+      const response = await fetch(API_URL, {
+        method: "POST",
+        body: body.toString(),
+        headers: {
+          Authorization: `Basic ${authStr}`,
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+      });
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`Password reset SMS to ${normalized} failed: ${errorText}`);
+        res.status(500).json({ error: "Kunde inte skicka SMS. Försök igen." });
+        return;
+      }
+    } catch (err) {
+      console.error(`Error sending password reset SMS:`, err);
+      res.status(500).json({ error: "Kunde inte skicka SMS. Försök igen." });
+      return;
+    }
+
+    res.status(200).json({ success: true });
+  }
+);
+
+/**
+ * Reset password using a one-time token (from SMS link).
+ *
+ * POST /resetPasswordWithToken
+ * Body: { "token": "abc123...", "newPassword": "..." }
+ */
+export const resetPasswordWithToken = onRequest(
+  { cors: true, region: "europe-west1" },
+  async (req, res) => {
+    if (req.method !== "POST") {
+      res.status(405).json({ error: "Method not allowed" });
+      return;
+    }
+
+    const { token, newPassword } = req.body;
+    if (!token || !newPassword) {
+      res.status(400).json({ error: "Missing required fields: token, newPassword" });
+      return;
+    }
+
+    if (newPassword.length < 6) {
+      res.status(400).json({ error: "Lösenordet måste vara minst 6 tecken." });
+      return;
+    }
+
+    // Validate token
+    const tokenDoc = await admin.firestore()
+      .collection("passwordResetTokens")
+      .doc(token)
+      .get();
+
+    if (!tokenDoc.exists) {
+      res.status(400).json({ error: "Ogiltig eller utgången länk. Begär en ny." });
+      return;
+    }
+
+    const tokenData = tokenDoc.data()!;
+    const expiresAt = tokenData.expiresAt.toDate();
+
+    if (new Date() > expiresAt) {
+      // Clean up expired token
+      await tokenDoc.ref.delete();
+      res.status(400).json({ error: "Länken har gått ut. Begär en ny." });
+      return;
+    }
+
+    // Set new password
+    try {
+      await admin.auth().updateUser(tokenData.uid, { password: newPassword });
+    } catch (err) {
+      console.error("Failed to update password:", err);
+      res.status(500).json({ error: "Kunde inte uppdatera lösenordet. Försök igen." });
+      return;
+    }
+
+    // Delete used token
+    await tokenDoc.ref.delete();
+
+    res.status(200).json({ success: true });
+  }
+);
+
+
+// ─── Admin Password Management ────────────────────────────
+
+/**
+ * Allow a Superadmin to set a user's password.
+ *
+ * POST /adminSetPassword
+ * Body: { "targetUid": "...", "newPassword": "..." }
+ * Headers: Authorization: Bearer <firebase-id-token>
+ */
+export const adminSetPassword = onRequest(
+  { cors: true, region: "europe-west1" },
+  async (req, res) => {
+    if (req.method !== "POST") {
+      res.status(405).json({ error: "Method not allowed" });
+      return;
+    }
+
+    // Verify caller is authenticated
+    const authHeader = req.headers.authorization;
+    if (!authHeader?.startsWith("Bearer ")) {
+      res.status(401).json({ error: "Missing or invalid authorization header" });
+      return;
+    }
+
+    const token = authHeader.split("Bearer ")[1];
+    let callerUid: string;
+    try {
+      const decoded = await admin.auth().verifyIdToken(token);
+      callerUid = decoded.uid;
+    } catch {
+      res.status(401).json({ error: "Invalid auth token" });
+      return;
+    }
+
+    // Verify caller is Superadmin
+    const callerDoc = await admin.firestore().doc(`users/${callerUid}`).get();
+    const callerRole = callerDoc.data()?.role;
+    if (callerRole !== "Superadmin") {
+      res.status(403).json({ error: "Only Superadmin can change user passwords." });
+      return;
+    }
+
+    const { targetUid, newPassword } = req.body;
+    if (!targetUid || !newPassword) {
+      res.status(400).json({ error: "Missing required fields: targetUid, newPassword" });
+      return;
+    }
+
+    if (newPassword.length < 6) {
+      res.status(400).json({ error: "Lösenordet måste vara minst 6 tecken." });
+      return;
+    }
+
+    // Prevent changing own password via this endpoint
+    if (targetUid === callerUid) {
+      res.status(400).json({ error: "Använd profilsidan för att ändra ditt eget lösenord." });
+      return;
+    }
+
+    try {
+      await admin.auth().updateUser(targetUid, { password: newPassword });
+      res.status(200).json({ success: true });
+    } catch (err) {
+      console.error(`Failed to set password for ${targetUid}:`, err);
+      res.status(500).json({ error: "Kunde inte uppdatera lösenordet." });
+    }
+  }
+);

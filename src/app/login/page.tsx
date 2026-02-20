@@ -13,15 +13,46 @@ import Divider from "@mui/material/Divider";
 import Alert from "@mui/material/Alert";
 import IconButton from "@mui/material/IconButton";
 import InputAdornment from "@mui/material/InputAdornment";
+import Dialog from "@mui/material/Dialog";
+import DialogTitle from "@mui/material/DialogTitle";
+import DialogContent from "@mui/material/DialogContent";
+import DialogActions from "@mui/material/DialogActions";
+import CircularProgress from "@mui/material/CircularProgress";
 import AnchorIcon from "@mui/icons-material/Anchor";
 import GoogleIcon from "@mui/icons-material/Google";
 import Visibility from "@mui/icons-material/Visibility";
 import VisibilityOff from "@mui/icons-material/VisibilityOff";
 import EmailIcon from "@mui/icons-material/Email";
 import LockIcon from "@mui/icons-material/Lock";
+import PhoneIcon from "@mui/icons-material/Phone";
+
+/**
+ * Map Firebase Auth error codes to user-friendly Swedish messages.
+ */
+function getFirebaseErrorMessage(error: unknown, fallback: string): string {
+  if (!(error instanceof Error)) return fallback;
+  const msg = error.message;
+
+  if (msg.includes("auth/invalid-credential") || msg.includes("auth/wrong-password") || msg.includes("auth/user-not-found"))
+    return "Fel e-post eller lösenord.";
+  if (msg.includes("auth/too-many-requests"))
+    return "För många misslyckade försök. Vänta en stund och försök igen.";
+  if (msg.includes("auth/email-already-in-use"))
+    return "E-postadressen används redan av ett annat konto.";
+  if (msg.includes("auth/weak-password"))
+    return "Lösenordet måste vara minst 6 tecken.";
+  if (msg.includes("auth/network-request-failed"))
+    return "Nätverksfel. Kontrollera din anslutning och försök igen.";
+  if (msg.includes("auth/popup-closed-by-user"))
+    return "Inloggningen avbröts.";
+  if (msg.includes("auth/invalid-email"))
+    return "Ogiltig e-postadress.";
+
+  return fallback;
+}
 
 export default function LoginPage() {
-  const { login, register, loginWithGoogle, resetPassword, firebaseUser, loading: authLoading } = useAuth();
+  const { login, register, loginWithGoogle, firebaseUser, loading: authLoading } = useAuth();
   const router = useRouter();
 
   const [email, setEmail] = useState("");
@@ -31,6 +62,13 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [loading, setLoading] = useState(false);
+
+  // SMS password reset dialog state
+  const [showResetDialog, setShowResetDialog] = useState(false);
+  const [resetPhone, setResetPhone] = useState("");
+  const [resetLoading, setResetLoading] = useState(false);
+  const [resetError, setResetError] = useState("");
+  const [resetSuccess, setResetSuccess] = useState("");
 
   // Redirect when auth state confirms user is logged in
   useEffect(() => {
@@ -51,8 +89,7 @@ export default function LoginPage() {
       }
       // Navigation handled by useEffect above
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : isRegister ? "Registration failed" : "Login failed";
-      setError(msg);
+      setError(getFirebaseErrorMessage(err, isRegister ? "Registreringen misslyckades." : "Inloggningen misslyckades."));
     } finally {
       setLoading(false);
     }
@@ -65,29 +102,54 @@ export default function LoginPage() {
       await loginWithGoogle();
       // Navigation handled by useEffect above
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Google login failed";
-      setError(msg);
+      setError(getFirebaseErrorMessage(err, "Inloggningen misslyckades."));
     } finally {
       setLoading(false);
     }
   };
 
-  const handleForgotPassword = async () => {
-    if (!email) {
-      setError("Enter your email address first");
+  const handleForgotPassword = () => {
+    setShowResetDialog(true);
+    setResetError("");
+    setResetSuccess("");
+    setResetPhone("");
+  };
+
+  const handleSendResetSms = async () => {
+    if (!resetPhone.trim()) {
+      setResetError("Ange ditt telefonnummer.");
       return;
     }
-    setError("");
+    setResetError("");
+    setResetLoading(true);
     try {
-      await resetPassword(email);
-      setSuccess("Password reset email sent! Check your inbox.");
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Failed to send reset email";
-      setError(msg);
+      const response = await fetch(
+        "https://europe-west1-stegerholmenshamn.cloudfunctions.net/requestPasswordResetSms",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ phone: resetPhone.trim() }),
+        }
+      );
+      const data = await response.json();
+      if (!response.ok) {
+        if (data.error === "google_only") {
+          setResetError(data.message);
+        } else {
+          setResetError(data.error || "Något gick fel.");
+        }
+        return;
+      }
+      setResetSuccess("Om numret finns i systemet skickas ett SMS med en återställningslänk.");
+    } catch {
+      setResetError("Nätverksfel. Kontrollera din anslutning.");
+    } finally {
+      setResetLoading(false);
     }
   };
 
   return (
+    <>
     <Box
       sx={{
         minHeight: "100vh",
@@ -269,5 +331,71 @@ export default function LoginPage() {
         </CardContent>
       </Card>
     </Box>
+
+      {/* SMS Password Reset Dialog */}
+      <Dialog
+        open={showResetDialog}
+        onClose={() => setShowResetDialog(false)}
+        maxWidth="xs"
+        fullWidth
+        PaperProps={{
+          sx: {
+            bgcolor: "rgba(13, 33, 55, 0.95)",
+            backdropFilter: "blur(24px)",
+          },
+        }}
+      >
+        <DialogTitle>Återställ lösenord</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Ange ditt telefonnummer så skickar vi en SMS-länk för att återställa ditt lösenord.
+          </Typography>
+
+          {resetError && (
+            <Alert severity="error" sx={{ mb: 2 }}>
+              {resetError}
+            </Alert>
+          )}
+          {resetSuccess && (
+            <Alert severity="success" sx={{ mb: 2 }}>
+              {resetSuccess}
+            </Alert>
+          )}
+
+          {!resetSuccess && (
+            <TextField
+              fullWidth
+              label="Telefonnummer"
+              placeholder="07XX-XX XX XX"
+              value={resetPhone}
+              onChange={(e) => setResetPhone(e.target.value)}
+              slotProps={{
+                input: {
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <PhoneIcon fontSize="small" sx={{ color: "text.secondary" }} />
+                    </InputAdornment>
+                  ),
+                },
+              }}
+            />
+          )}
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button onClick={() => setShowResetDialog(false)} color="inherit">
+            Stäng
+          </Button>
+          {!resetSuccess && (
+            <Button
+              variant="contained"
+              onClick={handleSendResetSms}
+              disabled={resetLoading}
+            >
+              {resetLoading ? <CircularProgress size={20} color="inherit" /> : "Skicka SMS"}
+            </Button>
+          )}
+        </DialogActions>
+      </Dialog>
+    </>
   );
 }

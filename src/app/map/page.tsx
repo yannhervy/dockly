@@ -633,6 +633,7 @@ export default function MapPage() {
             <Map
               defaultCenter={HARBOR_CENTER}
               defaultZoom={DEFAULT_ZOOM}
+              defaultTilt={45}
               mapId="harbor-map"
               mapTypeId="satellite"
               style={{ width: "100%", height: "100%" }}
@@ -641,6 +642,9 @@ export default function MapPage() {
               zoomControl={true}
               mapTypeControl={true}
               streetViewControl={false}
+              headingInteractionEnabled={true}
+              tiltInteractionEnabled={true}
+              rotateControl={true}
             >
               <BerthPolygons
                 berths={berthsWithCoords}

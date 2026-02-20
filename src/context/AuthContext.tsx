@@ -6,6 +6,7 @@ import React, {
   useEffect,
   useState,
   useMemo,
+  useCallback,
 } from "react";
 import {
   onAuthStateChanged,
@@ -26,20 +27,26 @@ import { User, UserRole } from "@/lib/types";
 interface AuthContextValue {
   firebaseUser: FirebaseUser | null;
   profile: User | null;
+  realProfile: User | null; // Always the actual admin profile (even during view-as)
   loading: boolean;
-  needsSetup: boolean; // True when authenticated but no Firestore profile
+  needsSetup: boolean;
   login: (email: string, password: string) => Promise<void>;
   register: (email: string, password: string) => Promise<void>;
   loginWithGoogle: () => Promise<void>;
   logout: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
   refreshProfile: () => Promise<void>;
-  // Role helpers
+  // Role helpers (reflect viewed user during view-as)
   isSuperadmin: boolean;
   isDockManager: boolean;
   isTenant: boolean;
   hasRole: (role: UserRole) => boolean;
-  needsApproval: boolean; // true when user has profile but is not yet approved
+  needsApproval: boolean;
+  // View-as (impersonation without logout)
+  isViewingAs: boolean;
+  viewingAsProfile: User | null;
+  startViewingAs: (user: User) => void;
+  stopViewingAs: () => void;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -47,8 +54,19 @@ const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 // ─── Provider ─────────────────────────────────────────────
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
-  const [profile, setProfile] = useState<User | null>(null);
+  const [realProfile, setRealProfile] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+
+  // View-as (impersonation) state
+  const [viewingAsProfile, setViewingAsProfile] = useState<User | null>(() => {
+    if (typeof window === "undefined") return null;
+    try {
+      const stored = sessionStorage.getItem("viewingAs");
+      return stored ? JSON.parse(stored) : null;
+    } catch {
+      return null;
+    }
+  });
 
   // Listen to Firebase Auth state and fetch Firestore profile
   useEffect(() => {
@@ -61,18 +79,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             : null;
           // Set both user and profile together before clearing loading
            setFirebaseUser(user);
-          setProfile(profileData);
+          setRealProfile(profileData);
           // Update lastLogin timestamp silently
           if (profileData) {
             updateDoc(doc(db, "users", user.uid), { lastLogin: Timestamp.now() }).catch(() => {});
           }
         } catch {
           setFirebaseUser(user);
-          setProfile(null);
+          setRealProfile(null);
         }
       } else {
         setFirebaseUser(null);
-        setProfile(null);
+        setRealProfile(null);
+        // Clear view-as on logout
+        setViewingAsProfile(null);
+        sessionStorage.removeItem("viewingAs");
       }
       setLoading(false);
     });
@@ -106,11 +127,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (!firebaseUser) return;
     try {
       const snap = await getDoc(doc(db, "users", firebaseUser.uid));
-      setProfile(snap.exists() ? ({ id: snap.id, ...snap.data() } as User) : null);
+      setRealProfile(snap.exists() ? ({ id: snap.id, ...snap.data() } as User) : null);
     } catch (err) {
       console.error("Error refreshing profile:", err);
     }
   };
+
+  // View-as methods
+  const startViewingAs = useCallback((user: User) => {
+    setViewingAsProfile(user);
+    sessionStorage.setItem("viewingAs", JSON.stringify(user));
+  }, []);
+
+  const stopViewingAs = useCallback(() => {
+    setViewingAsProfile(null);
+    sessionStorage.removeItem("viewingAs");
+  }, []);
+
+  // Active profile: viewed user during view-as, otherwise real profile
+  const profile = viewingAsProfile || realProfile;
+  const isViewingAs = !!viewingAsProfile;
 
   // Role helpers
   const hasRole = (role: UserRole) => profile?.role === role;
@@ -130,6 +166,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     () => ({
       firebaseUser,
       profile,
+      realProfile,
       loading,
       needsSetup,
       needsApproval,
@@ -143,9 +180,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       isDockManager,
       isTenant,
       hasRole,
+      isViewingAs,
+      viewingAsProfile,
+      startViewingAs,
+      stopViewingAs,
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [firebaseUser, profile, loading, needsSetup, needsApproval]
+    [firebaseUser, profile, realProfile, loading, needsSetup, needsApproval, isViewingAs, viewingAsProfile]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -101,12 +101,14 @@ export default function DocksPage() {
                       </Typography>
                     </Box>
 
-                    <Chip
-                      label={dock.type === "Association" ? "Förening" : "Privat"}
-                      size="small"
-                      color={dock.type === "Association" ? "success" : "warning"}
-                      sx={{ mb: 2 }}
-                    />
+                    {dock.associationName && (
+                      <Chip
+                        label={dock.associationName}
+                        size="small"
+                        color="success"
+                        sx={{ mb: 2 }}
+                      />
+                    )}
 
                     {/* Managers */}
                     <Typography
