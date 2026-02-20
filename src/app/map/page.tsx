@@ -488,7 +488,7 @@ export default function MapPage() {
     abandoned: true,
     pois: true,
   });
-  const [layerPanelOpen, setLayerPanelOpen] = useState(false);
+  const [layerPanelOpen, setLayerPanelOpen] = useState(true);
   const toggleLayer = (key: keyof typeof layers) =>
     setLayers((prev) => ({ ...prev, [key]: !prev[key] }));
 
@@ -657,7 +657,7 @@ export default function MapPage() {
               gestureHandling="greedy"
               disableDefaultUI={false}
               zoomControl={true}
-              mapTypeControl={true}
+              mapTypeControl={false}
               streetViewControl={false}
               headingInteractionEnabled={true}
               tiltInteractionEnabled={true}
@@ -733,13 +733,13 @@ export default function MapPage() {
             <Box sx={{ px: 1.5, pb: 1, display: "flex", flexDirection: "column", gap: 0 }}>
               <Divider sx={{ mb: 0.5, borderColor: "rgba(79,195,247,0.12)" }} />
               {([
-                { key: "berths" as const, label: "Båtplatser", color: "#4CAF50" },
-                { key: "docks" as const, label: "Bryggor", color: "#42A5F5" },
-                { key: "seaHuts" as const, label: "Sjöbodar", color: "#F44336" },
-                { key: "boxes" as const, label: "Lådor", color: "#F44336" },
-                { key: "landStorage" as const, label: "Markförvaring", color: "#F57C00" },
-                { key: "abandoned" as const, label: "Övergivna", color: "#9E9E9E" },
-                { key: "pois" as const, label: "POI", color: "#7C4DFF" },
+                { key: "berths" as const, label: `Båtplatser (${berths.length})`, color: "#4CAF50" },
+                { key: "docks" as const, label: `Bryggor (${docks.length})`, color: "#42A5F5" },
+                { key: "seaHuts" as const, label: `Sjöbodar (${seaHuts.length})`, color: "#F44336" },
+                { key: "boxes" as const, label: `Lådor (${boxes.length})`, color: "#F44336" },
+                { key: "landStorage" as const, label: `Markförvaring (${landEntries.length})`, color: "#F57C00" },
+                { key: "abandoned" as const, label: `Övergivna (${abandonedObjects.length})`, color: "#9E9E9E" },
+                { key: "pois" as const, label: `POI (${pois.length})`, color: "#7C4DFF" },
               ]).map(({ key, label, color }) => (
                 <FormControlLabel
                   key={key}
@@ -1232,63 +1232,7 @@ export default function MapPage() {
           );
         })()}
 
-        {/* Stats */}
-        {!loading && (
-          <Paper
-            sx={{
-              display: { xs: "none", md: "flex" },
-              alignItems: "center",
-              gap: 1,
-              flexWrap: "wrap",
-              position: "absolute",
-              top: 12,
-              right: 12,
-              px: 2,
-              py: 1,
-              bgcolor: "rgba(13, 33, 55, 0.85)",
-              backdropFilter: "blur(8px)",
-              border: "1px solid rgba(79,195,247,0.1)",
-              borderRadius: 1,
-              zIndex: 5,
-            }}
-          >
-            <Typography variant="caption" color="text.secondary">
-              {berthsWithCoords.length} / {berths.length} båtplatser
-            </Typography>
-            {seaHuts.length > 0 && (
-              <>
-                <Typography variant="caption" color="text.secondary" sx={{ opacity: 0.4 }}>{"•"}</Typography>
-                <Typography variant="caption" color="text.secondary">
-                  {seaHuts.length} sjöbodar
-                </Typography>
-              </>
-            )}
-            {boxes.length > 0 && (
-              <>
-                <Typography variant="caption" color="text.secondary" sx={{ opacity: 0.4 }}>{"•"}</Typography>
-                <Typography variant="caption" color="text.secondary">
-                  {boxes.length} lådor
-                </Typography>
-              </>
-            )}
-            {landEntries.length > 0 && (
-              <>
-                <Typography variant="caption" color="text.secondary" sx={{ opacity: 0.4 }}>{"•"}</Typography>
-                <Typography variant="caption" color="text.secondary">
-                  {landWithCoords.length} / {landEntries.length} markplatser
-                </Typography>
-              </>
-            )}
-            {abandonedObjects.length > 0 && (
-              <>
-                <Typography variant="caption" color="text.secondary" sx={{ opacity: 0.4 }}>{"•"}</Typography>
-                <Typography variant="caption" color="text.secondary" sx={{ display: "flex", alignItems: "center", gap: 0.3 }}>
-                  <DangerousIcon sx={{ fontSize: 14 }} /> {abandonedObjects.length} övergivna
-                </Typography>
-              </>
-            )}
-          </Paper>
-        )}
+
       </Box>
     </Box>
 

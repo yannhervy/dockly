@@ -1790,6 +1790,7 @@ function ResourcesTab({ initialEditId }: { initialEditId?: string }) {
   const [editImagePreview, setEditImagePreview] = useState<string | null>(null);
   const [removeImage, setRemoveImage] = useState(false);
   const [movedBerths, setMovedBerths] = useState<Record<string, { lat: number; lng: number }>>({});
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [filterType, setFilterType] = useState<"all" | Resource["type"]>("all");
   const [form, setForm] = useState({
@@ -1881,9 +1882,9 @@ function ResourcesTab({ initialEditId }: { initialEditId?: string }) {
   };
 
   const handleDeleteResource = async (id: string) => {
-    if (!confirm("Delete this resource?")) return;
     try {
       await deleteDoc(doc(db, "resources", id));
+      setDeleteConfirmId(null);
       setSuccessMsg("Resource deleted.");
       setTimeout(() => setSuccessMsg(""), 3000);
       fetchAll();
@@ -2135,7 +2136,7 @@ function ResourcesTab({ initialEditId }: { initialEditId?: string }) {
                     <IconButton
                       size="small"
                       color="error"
-                      onClick={() => handleDeleteResource(r.id)}
+                      onClick={() => setDeleteConfirmId(r.id)}
                     >
                       <DeleteIcon fontSize="small" />
                     </IconButton>
@@ -2518,6 +2519,25 @@ function ResourcesTab({ initialEditId }: { initialEditId?: string }) {
           </DialogActions>
         </Dialog>
       )}
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={!!deleteConfirmId} onClose={() => setDeleteConfirmId(null)} maxWidth="xs">
+        <DialogTitle>Delete resource?</DialogTitle>
+        <DialogContent>
+          <Typography>
+            Are you sure you want to delete this resource? This action cannot be undone.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeleteConfirmId(null)}>Cancel</Button>
+          <Button
+            variant="contained"
+            color="error"
+            onClick={() => deleteConfirmId && handleDeleteResource(deleteConfirmId)}
+          >
+            Delete
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }
