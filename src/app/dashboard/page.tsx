@@ -237,6 +237,7 @@ function DashboardContent() {
   const [isPublic, setIsPublic] = useState(profile?.isPublic ?? false);
   const [allowMapSms, setAllowMapSms] = useState(profile?.allowMapSms ?? true);
   const [resources, setResources] = useState<Resource[]>([]);
+  const [subletResourceIds, setSubletResourceIds] = useState<Set<string>>(new Set());
   const [landEntries, setLandEntries] = useState<LandStorageEntry[]>([]);
   const [messages, setMessages] = useState<UserMessage[]>([]);
   const [loading, setLoading] = useState(true);
@@ -464,9 +465,27 @@ function DashboardContent() {
           where("occupantIds", "array-contains", uid)
         )
       );
-      setResources(
-        myResSnap.docs.map((d) => ({ id: d.id, ...d.data() }) as Resource)
+      const myResources = myResSnap.docs.map(
+        (d) => ({ id: d.id, ...d.data() }) as Resource
       );
+
+      // Also fetch berths where the user is a second-hand tenant
+      const subletSnap = await getDocs(
+        query(
+          collection(db, "resources"),
+          where("secondHandTenantId", "==", uid)
+        )
+      );
+      const subletIds = new Set<string>();
+      for (const d of subletSnap.docs) {
+        subletIds.add(d.id);
+        // Add if not already in myResources (avoid duplicates)
+        if (!myResources.some((r) => r.id === d.id)) {
+          myResources.push({ id: d.id, ...d.data() } as Resource);
+        }
+      }
+      setSubletResourceIds(subletIds);
+      setResources(myResources);
 
       // Resolve second-hand tenant names
       const names: Record<string, string> = {};
@@ -1420,10 +1439,17 @@ function DashboardContent() {
                       </TableRow>
                     </TableHead>
                     <TableBody>
-                      {resources.map((r) => (
-                        <TableRow key={r.id}>
+                      {resources.map((r) => {
+                        const isSublet = subletResourceIds.has(r.id);
+                        return (
+                        <TableRow key={r.id} sx={isSublet ? { bgcolor: "rgba(33, 150, 243, 0.06)" } : undefined}>
                           <TableCell>
-                            <Chip label={r.type === "SeaHut" ? "Sjöbod" : r.type === "Berth" ? "Båtplats" : r.type === "Box" ? "Låda" : r.type} size="small" variant="outlined" />
+                            <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                              <Chip label={r.type === "SeaHut" ? "Sjöbod" : r.type === "Berth" ? "Båtplats" : r.type === "Box" ? "Låda" : r.type} size="small" variant="outlined" />
+                              {isSublet && (
+                                <Chip label="Andrahand" size="small" color="info" sx={{ fontWeight: 600 }} />
+                              )}
+                            </Box>
                           </TableCell>
                           <TableCell sx={{ fontWeight: 600 }}>
                             {r.markingCode}
@@ -1480,9 +1506,13 @@ function DashboardContent() {
                               <Typography variant="caption" color="text.secondary">—</Typography>
                             )}
                           </TableCell>
-                          {/* Subletting toggles — only for Berths */}
+                          {/* Subletting toggles — only for Berths owned by the user (not sublet) */}
                           <TableCell>
-                            {r.type === "Berth" ? (
+                            {isSublet ? (
+                              <Typography variant="caption" color="info.main" sx={{ fontStyle: "italic" }}>
+                                Du hyr i andrahand
+                              </Typography>
+                            ) : r.type === "Berth" ? (
                               <Box sx={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 0.5 }}>
                                 <Switch
                                   size="small"
@@ -1571,6 +1601,18 @@ function DashboardContent() {
                             )}
                           </TableCell>
                           <TableCell>
+                            {isSublet ? (
+                              r.objectImageUrl ? (
+                                <Avatar
+                                  src={r.objectImageUrl}
+                                  variant="rounded"
+                                  sx={{ width: 40, height: 40, cursor: "pointer" }}
+                                  onClick={() => setPreviewImageUrl(r.objectImageUrl!)}
+                                />
+                              ) : (
+                                <Typography variant="caption" color="text.secondary">—</Typography>
+                              )
+                            ) : (
                             <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
                               {r.objectImageUrl ? (
                               <Avatar
@@ -1595,9 +1637,11 @@ function DashboardContent() {
                                 {r.objectImageUrl ? "Ändra" : "Ladda upp"}
                               </Button>
                             </Box>
+                            )}
                           </TableCell>
                         </TableRow>
-                      ))}
+                        );
+                      })}
                     </TableBody>
                   </Table>
                 </TableContainer>
