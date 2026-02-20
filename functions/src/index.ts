@@ -568,15 +568,23 @@ export const requestPasswordResetSms = onRequest(
     // Rate limit: max 3 requests per phone per hour
     const now = Date.now();
     const oneHourAgo = new Date(now - 60 * 60 * 1000);
-    const recentAttempts = await admin.firestore()
-      .collection("passwordResetTokens")
-      .where("phone", "==", normalized)
-      .where("createdAt", ">", admin.firestore.Timestamp.fromDate(oneHourAgo))
-      .get();
+    try {
+      const recentAttempts = await admin.firestore()
+        .collection("passwordResetTokens")
+        .where("phone", "==", normalized)
+        .get();
 
-    if (recentAttempts.size >= 3) {
-      res.status(429).json({ error: "För många försök. Vänta en stund och försök igen." });
-      return;
+      const recentCount = recentAttempts.docs.filter((d) => {
+        const created = d.data().createdAt?.toDate?.();
+        return created && created > oneHourAgo;
+      }).length;
+
+      if (recentCount >= 3) {
+        res.status(429).json({ error: "För många försök. Vänta en stund och försök igen." });
+        return;
+      }
+    } catch {
+      // If query fails (e.g. missing index), skip rate limiting
     }
 
     // Find user by phone in Firestore
