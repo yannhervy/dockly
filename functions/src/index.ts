@@ -54,22 +54,14 @@ export const sendSms = onRequest(
     }
 
     const token = authHeader.split("Bearer ")[1];
-    let uid: string;
     try {
-      const decoded = await admin.auth().verifyIdToken(token);
-      uid = decoded.uid;
+      await admin.auth().verifyIdToken(token);
     } catch {
       res.status(401).json({ error: "Invalid auth token" });
       return;
     }
 
-    // Check user role in Firestore (only Superadmin/Manager can send SMS)
-    const userDoc = await admin.firestore().doc(`users/${uid}`).get();
-    const role = userDoc.data()?.role;
-    if (!role || !["Superadmin", "Dock Manager"].includes(role)) {
-      res.status(403).json({ error: "Insufficient permissions. Requires Dock Manager or Superadmin role." });
-      return;
-    }
+    // User is authenticated — allow SMS sending for any logged-in user
 
     // Parse request body
     const { to, message, from } = req.body;
@@ -504,8 +496,7 @@ export const onInterestReplyCreated = onDocumentCreated(
     }
 
     const normalized = normalizePhone(ownerPhone);
-    const authorName = replyData.authorName || "Hamnförvaltningen";
-    const message = `Hej! Du har fått ett svar på din intresseanmälan från ${authorName}. Logga in på stegerholmenshamn.web.app/dashboard för att läsa.`;
+    const message = `Hej! Du har fått ett svar på din intresseanmälan från Stegerholmens hamn. Gå till Mina sidor för att läsa: https://stegerholmenshamn.web.app`;
 
     const authStr = Buffer.from(
       `${elksUsername.value()}:${elksPassword.value()}`

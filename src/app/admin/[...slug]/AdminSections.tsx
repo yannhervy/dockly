@@ -2814,17 +2814,7 @@ function InterestsTab({ initialEditId }: { initialEditId?: string }) {
         await handleStatusChange(selectedInterest.id, "Contacted");
       }
 
-      // Send SMS to the interest registrant
-      if (selectedInterest.phone) {
-        try {
-          const smsText = offerBerths.length > 0
-            ? `Hej ${selectedInterest.userName || ""}! Du har fått ett anbud på ${offerBerths.length === 1 ? "plats" : "platser"} ${offerBerths.map((ob) => ob.berthCode).join(", ")} från Stegerholmens hamn. Gå till Mina sidor för att se erbjudandet: https://stegerholmenshamn.web.app`
-            : `Hej ${selectedInterest.userName || ""}! Du har fått ett nytt meddelande om din intresseanmälan från Stegerholmens hamn. Gå till Mina sidor för att läsa svaret: https://stegerholmenshamn.web.app`;
-          await sendSms(selectedInterest.phone, smsText);
-        } catch (e) {
-          console.error("SMS to interest user failed:", e);
-        }
-      }
+      // SMS is handled by the onInterestReplyCreated Cloud Function trigger
 
       setReplyMessage("");
       setOfferBerths([]);

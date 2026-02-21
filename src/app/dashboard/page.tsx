@@ -2636,12 +2636,12 @@ function DashboardContent() {
                 await batch.commit();
                 // 4. SMS to winning manager
                 if (winnerPhone) {
-                  try { await sendSms(winnerPhone, `${profile?.name || "En anv\u00e4ndare"} har accepterat ditt erbjudande p\u00e5 plats ${ob.berthCode}. Kontakt: ${profile?.phone || profile?.email || ""}`); }
+                  try { await sendSms(winnerPhone, `${profile?.name || "En användare"} har accepterat ditt erbjudande på plats ${ob.berthCode}. Kontakt: ${profile?.phone || profile?.email || ""}`); }
                   catch (e) { console.error("SMS to winner failed:", e); }
                 }
                 // 5. SMS to other managers
                 if (otherManagerPhones.length > 0) {
-                  try { await sendSms(otherManagerPhones, `${profile?.name || "En anv\u00e4ndare"} har valt en annan plats (${ob.berthCode}) f\u00f6r sin intresseanm\u00e4lan.`); }
+                  try { await sendSms(otherManagerPhones, `${profile?.name || "En användare"} har valt en annan plats (${ob.berthCode}) för sin intresseanmälan.`); }
                   catch (e) { console.error("SMS to others failed:", e); }
                 }
                 // 6. Update local state
