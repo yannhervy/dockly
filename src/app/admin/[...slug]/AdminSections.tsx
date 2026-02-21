@@ -198,6 +198,9 @@ function UsersTab({ initialEditId }: { initialEditId?: string }) {
   const [adminPasswordError, setAdminPasswordError] = useState("");
   const [adminPasswordSuccess, setAdminPasswordSuccess] = useState("");
 
+  // Generic confirm dialog state
+  const [confirmDialog, setConfirmDialog] = useState<{ title: string; message: string; onConfirm: () => void } | null>(null);
+
   useEffect(() => {
     fetchUsers();
   }, []);
@@ -265,8 +268,12 @@ function UsersTab({ initialEditId }: { initialEditId?: string }) {
   };
 
   const handleDeleteUser = async (userId: string) => {
-    if (!confirm("Are you sure you want to delete this user? This will also remove their login.")) return;
-    try {
+    setConfirmDialog({
+      title: "Ta bort användare",
+      message: "Är du säker på att du vill ta bort denna användare? Detta tar även bort deras inloggning.",
+      onConfirm: async () => {
+        setConfirmDialog(null);
+        try {
       const token = await firebaseUser?.getIdToken();
       const res = await fetch(
         "https://deleteuser-srp7u2ucna-ew.a.run.app",
@@ -291,6 +298,8 @@ function UsersTab({ initialEditId }: { initialEditId?: string }) {
       setSuccessMsg("");
       alert(err instanceof Error ? err.message : "Failed to delete user");
     }
+      },
+    });
   };
 
   // Approve a pending user
@@ -959,6 +968,16 @@ function UsersTab({ initialEditId }: { initialEditId?: string }) {
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Reusable confirmation dialog */}
+      <Dialog open={!!confirmDialog} onClose={() => setConfirmDialog(null)}>
+        <DialogTitle>{confirmDialog?.title}</DialogTitle>
+        <DialogContent><Typography>{confirmDialog?.message}</Typography></DialogContent>
+        <DialogActions>
+          <Button onClick={() => setConfirmDialog(null)}>Avbryt</Button>
+          <Button variant="contained" color="error" onClick={() => confirmDialog?.onConfirm()}>Ja, fortsätt</Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }
@@ -980,6 +999,9 @@ function DocksTab({ initialEditId }: { initialEditId?: string }) {
   });
   const dockFileInputRef = useRef<HTMLInputElement>(null);
   const [uploadingDockId, setUploadingDockId] = useState<string | null>(null);
+
+  // Generic confirm dialog state
+  const [confirmDialog, setConfirmDialog] = useState<{ title: string; message: string; onConfirm: () => void } | null>(null);
 
   useEffect(() => {
     fetchData();
@@ -1034,15 +1056,21 @@ function DocksTab({ initialEditId }: { initialEditId?: string }) {
   };
 
   const handleDeleteDock = async (dockId: string) => {
-    if (!confirm("Are you sure you want to delete this dock?")) return;
-    try {
-      await deleteDoc(doc(db, "docks", dockId));
-      setSuccessMsg("Dock deleted.");
-      setTimeout(() => setSuccessMsg(""), 3000);
-      fetchData();
-    } catch (err) {
-      console.error("Error deleting dock:", err);
-    }
+    setConfirmDialog({
+      title: "Ta bort brygga",
+      message: "Är du säker på att du vill ta bort denna brygga?",
+      onConfirm: async () => {
+        setConfirmDialog(null);
+        try {
+          await deleteDoc(doc(db, "docks", dockId));
+          setSuccessMsg("Brygga borttagen!");
+          setTimeout(() => setSuccessMsg(""), 3000);
+          fetchData();
+        } catch (err) {
+          console.error("Error deleting dock:", err);
+        }
+      },
+    });
   };
 
   // Open manager assignment dialog
@@ -1506,6 +1534,16 @@ function DocksTab({ initialEditId }: { initialEditId?: string }) {
           </DialogActions>
         </Dialog>
       )}
+
+      {/* Reusable confirmation dialog */}
+      <Dialog open={!!confirmDialog} onClose={() => setConfirmDialog(null)}>
+        <DialogTitle>{confirmDialog?.title}</DialogTitle>
+        <DialogContent><Typography>{confirmDialog?.message}</Typography></DialogContent>
+        <DialogActions>
+          <Button onClick={() => setConfirmDialog(null)}>Avbryt</Button>
+          <Button variant="contained" color="error" onClick={() => confirmDialog?.onConfirm()}>Ja, fortsätt</Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }
@@ -3415,6 +3453,9 @@ function AbandonedObjectsTab({ initialEditId }: { initialEditId?: string }) {
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
   const [removedExistingImage, setRemovedExistingImage] = useState(false);
 
+  // Generic confirm dialog state
+  const [confirmDialog, setConfirmDialog] = useState<{ title: string; message: string; onConfirm: () => void } | null>(null);
+
   const [form, setForm] = useState({
     objectType: "Boat" as AbandonedObjectType,
     lat: "",
@@ -3526,17 +3567,23 @@ function AbandonedObjectsTab({ initialEditId }: { initialEditId?: string }) {
   }
 
   async function handleDelete(id: string) {
-    if (!confirm("Är du säker på att du vill ta bort detta objekt?")) return;
-    try {
-      const entry = entries.find((e) => e.id === id);
-      if (entry?.imageUrl) await deleteStorageFile(entry.imageUrl);
-      await deleteDoc(doc(db, "abandonedObjects", id));
-      setSuccessMsg("Borttagen!");
-      setTimeout(() => setSuccessMsg(""), 3000);
-      fetchEntries();
-    } catch (err) {
-      console.error("Error deleting abandoned object:", err);
-    }
+    setConfirmDialog({
+      title: "Ta bort objekt",
+      message: "Är du säker på att du vill ta bort detta objekt?",
+      onConfirm: async () => {
+        setConfirmDialog(null);
+        try {
+          const entry = entries.find((e) => e.id === id);
+          if (entry?.imageUrl) await deleteStorageFile(entry.imageUrl);
+          await deleteDoc(doc(db, "abandonedObjects", id));
+          setSuccessMsg("Borttagen!");
+          setTimeout(() => setSuccessMsg(""), 3000);
+          fetchEntries();
+        } catch (err) {
+          console.error("Error deleting abandoned object:", err);
+        }
+      },
+    });
   }
 
   function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -3549,21 +3596,26 @@ function AbandonedObjectsTab({ initialEditId }: { initialEditId?: string }) {
 
   // Remove an existing image from an abandoned object
   async function handleRemoveImage(entryId: string, imageUrl: string) {
-    if (!confirm("Vill du ta bort bilden?")) return;
-    try {
-      await deleteStorageFile(imageUrl);
-      await updateDoc(doc(db, "abandonedObjects", entryId), { imageUrl: "" });
-      setEntries((prev) =>
-        prev.map((e) => (e.id === entryId ? { ...e, imageUrl: "" } : e))
-      );
-      // Also clear preview if we're in the edit dialog
-      setPhotoPreview(null);
-      setRemovedExistingImage(true);
-      setSuccessMsg("Bilden har tagits bort.");
-      setTimeout(() => setSuccessMsg(""), 3000);
-    } catch (err) {
-      console.error("Error removing abandoned object image:", err);
-    }
+    setConfirmDialog({
+      title: "Ta bort bild",
+      message: "Vill du ta bort bilden?",
+      onConfirm: async () => {
+        setConfirmDialog(null);
+        try {
+          await deleteStorageFile(imageUrl);
+          await updateDoc(doc(db, "abandonedObjects", entryId), { imageUrl: "" });
+          setEntries((prev) =>
+            prev.map((e) => (e.id === entryId ? { ...e, imageUrl: "" } : e))
+          );
+          setPhotoPreview(null);
+          setRemovedExistingImage(true);
+          setSuccessMsg("Bilden har tagits bort.");
+          setTimeout(() => setSuccessMsg(""), 3000);
+        } catch (err) {
+          console.error("Error removing abandoned object image:", err);
+        }
+      },
+    });
   }
 
   function formatDate(ts: Timestamp | undefined): string {
@@ -3844,6 +3896,16 @@ function AbandonedObjectsTab({ initialEditId }: { initialEditId?: string }) {
           />
         )}
       </Dialog>
+
+      {/* Reusable confirmation dialog */}
+      <Dialog open={!!confirmDialog} onClose={() => setConfirmDialog(null)}>
+        <DialogTitle>{confirmDialog?.title}</DialogTitle>
+        <DialogContent><Typography>{confirmDialog?.message}</Typography></DialogContent>
+        <DialogActions>
+          <Button onClick={() => setConfirmDialog(null)}>Avbryt</Button>
+          <Button variant="contained" color="error" onClick={() => confirmDialog?.onConfirm()}>Ja, fortsätt</Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }
@@ -3861,6 +3923,9 @@ function POITab({ initialEditId }: { initialEditId?: string }) {
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
+
+  // Generic confirm dialog state
+  const [confirmDialog, setConfirmDialog] = useState<{ title: string; message: string; onConfirm: () => void } | null>(null);
 
   const [form, setForm] = useState({
     name: "",
@@ -3959,17 +4024,23 @@ function POITab({ initialEditId }: { initialEditId?: string }) {
   }
 
   async function handleDelete(id: string) {
-    if (!confirm("Är du säker på att du vill ta bort denna POI?")) return;
-    try {
-      const entry = entries.find((e) => e.id === id);
-      if (entry?.imageUrl) await deleteStorageFile(entry.imageUrl);
-      await deleteDoc(doc(db, "pois", id));
-      setSuccessMsg("POI borttagen!");
-      setTimeout(() => setSuccessMsg(""), 3000);
-      fetchEntries();
-    } catch (err) {
-      console.error("Error deleting POI:", err);
-    }
+    setConfirmDialog({
+      title: "Ta bort POI",
+      message: "Är du säker på att du vill ta bort denna POI?",
+      onConfirm: async () => {
+        setConfirmDialog(null);
+        try {
+          const entry = entries.find((e) => e.id === id);
+          if (entry?.imageUrl) await deleteStorageFile(entry.imageUrl);
+          await deleteDoc(doc(db, "pois", id));
+          setSuccessMsg("POI borttagen!");
+          setTimeout(() => setSuccessMsg(""), 3000);
+          fetchEntries();
+        } catch (err) {
+          console.error("Error deleting POI:", err);
+        }
+      },
+    });
   }
 
   const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -4188,6 +4259,16 @@ function POITab({ initialEditId }: { initialEditId?: string }) {
             sx={{ display: "block" }}
           />
         )}
+      </Dialog>
+
+      {/* Reusable confirmation dialog */}
+      <Dialog open={!!confirmDialog} onClose={() => setConfirmDialog(null)}>
+        <DialogTitle>{confirmDialog?.title}</DialogTitle>
+        <DialogContent><Typography>{confirmDialog?.message}</Typography></DialogContent>
+        <DialogActions>
+          <Button onClick={() => setConfirmDialog(null)}>Avbryt</Button>
+          <Button variant="contained" color="error" onClick={() => confirmDialog?.onConfirm()}>Ja, fortsätt</Button>
+        </DialogActions>
       </Dialog>
     </Box>
   );

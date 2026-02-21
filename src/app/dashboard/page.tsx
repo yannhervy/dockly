@@ -312,6 +312,9 @@ function DashboardContent() {
   const [pendingAcceptOffer, setPendingAcceptOffer] = useState<{ ob: OfferedBerth; reply: InterestReply; interest: BerthInterest } | null>(null);
   const [acceptingOffer, setAcceptingOffer] = useState(false);
 
+  // Generic confirmation dialog state (replaces native confirm())
+  const [confirmDialog, setConfirmDialog] = useState<{ title: string; message: string; onConfirm: () => void } | null>(null);
+
   useEffect(() => {
     if (!effectiveUid) return;
     const q = query(
@@ -467,7 +470,17 @@ function DashboardContent() {
   };
 
   const handleRejectUser = async (userId: string) => {
-    if (!confirm("Neka och radera detta konto?")) return;
+    setConfirmDialog({
+      title: "Neka konto",
+      message: "Neka och radera detta konto?",
+      onConfirm: async () => {
+        setConfirmDialog(null);
+        handleRejectUserConfirmed(userId);
+      },
+    });
+  };
+
+  const handleRejectUserConfirmed = async (userId: string) => {
     try {
       const token = await auth.currentUser?.getIdToken();
       const res = await fetch(
@@ -866,7 +879,14 @@ function DashboardContent() {
 
   // Delete land storage image
   const handleDeleteLandImage = async (entryId: string) => {
-    if (!confirm("Vill du ta bort bilden?")) return;
+    setConfirmDialog({
+      title: "Ta bort bild",
+      message: "Vill du ta bort bilden?",
+      onConfirm: () => { setConfirmDialog(null); handleDeleteLandImageConfirmed(entryId); },
+    });
+  };
+
+  const handleDeleteLandImageConfirmed = async (entryId: string) => {
     setUploading(entryId);
     try {
       await updateDoc(doc(db, "landStorage", entryId), {
@@ -1393,21 +1413,26 @@ function DashboardContent() {
                 color="error"
                 startIcon={<DeleteIcon />}
                 onClick={async () => {
-                  if (!confirm("Är du säker på att du vill radera ditt konto? Denna åtgärd kan inte ångras.")) return;
-                  if (!confirm("Ditt konto och all data kommer att raderas permanent. Fortsätt?")) return;
-                  try {
-                    const user = auth.currentUser;
-                    if (!user) return;
-                    await deleteDoc(doc(db, "users", user.uid));
-                    await firebaseDeleteUser(user);
-                  } catch (err: unknown) {
-                    if (err instanceof Error && 'code' in err && (err as { code: string }).code === "auth/requires-recent-login") {
-                      alert("Du behöver logga in igen innan du kan radera ditt konto. Logga ut och in igen och försök sedan.");
-                    } else {
-                      console.error("Error deleting account:", err);
-                      alert("Kunde inte radera kontot. Försök igen.");
-                    }
-                  }
+                  setConfirmDialog({
+                    title: "Radera konto",
+                    message: "Är du säker på att du vill radera ditt konto? Ditt konto och all data kommer att raderas permanent. Denna åtgärd kan inte ångras.",
+                    onConfirm: async () => {
+                      setConfirmDialog(null);
+                      try {
+                        const user = auth.currentUser;
+                        if (!user) return;
+                        await deleteDoc(doc(db, "users", user.uid));
+                        await firebaseDeleteUser(user);
+                      } catch (err: unknown) {
+                        if (err instanceof Error && 'code' in err && (err as { code: string }).code === "auth/requires-recent-login") {
+                          alert("Du behöver logga in igen innan du kan radera ditt konto. Logga ut och in igen och försök sedan.");
+                        } else {
+                          console.error("Error deleting account:", err);
+                          alert("Kunde inte radera kontot. Försök igen.");
+                        }
+                      }
+                    },
+                  });
                 }}
                 sx={{ mt: 2, textTransform: "none", opacity: 0.6, "&:hover": { opacity: 1 } }}
               >
@@ -1824,8 +1849,12 @@ function DashboardContent() {
                                   <IconButton
                                     size="small"
                                     onClick={async () => {
-                                      if (!confirm("Genom att ta bort din GPS-position bekräftar du att du inte längre har något uppställt på hamnens mark.")) return;
-                                      try {
+                                      setConfirmDialog({
+                                        title: "Ta bort GPS-position",
+                                        message: "Genom att ta bort din GPS-position bekräftar du att du inte längre har något uppställt på hamnens mark.",
+                                        onConfirm: async () => {
+                                          setConfirmDialog(null);
+                                          try {
                                         await updateDoc(doc(db, "landStorage", entry.id), {
                                           lat: deleteField(),
                                           lng: deleteField(),
@@ -1839,9 +1868,11 @@ function DashboardContent() {
                                         );
                                         setSuccessMsg("GPS-position borttagen!");
                                         setTimeout(() => setSuccessMsg(""), 3000);
-                                      } catch (err) {
-                                        console.error("Error deleting GPS:", err);
-                                      }
+                                          } catch (err) {
+                                            console.error("Error deleting GPS:", err);
+                                          }
+                                        },
+                                      });
                                     }}
                                     sx={{ color: "error.main", ml: -0.5 }}
                                   >
@@ -2216,8 +2247,12 @@ function DashboardContent() {
                           startIcon={<DeleteIcon />}
                           sx={{ textTransform: "none", opacity: 0.6, "&:hover": { opacity: 1 } }}
                           onClick={async () => {
-                            if (!confirm("Vill du ta bort denna intresseanmälan?")) return;
-                            try {
+                            setConfirmDialog({
+                              title: "Ta bort intresseanmälan",
+                              message: "Vill du ta bort denna intresseanmälan?",
+                              onConfirm: async () => {
+                                setConfirmDialog(null);
+                                try {
                               await deleteDoc(doc(db, "interests", interest.id));
                               setMyInterests((prev) => prev.filter((i) => i.id !== interest.id));
                               setSuccessMsg("Intresseanmälan borttagen.");
@@ -2225,7 +2260,9 @@ function DashboardContent() {
                             } catch (err) {
                               console.error("Error deleting interest:", err);
                               alert("Kunde inte ta bort intresseanmälan.");
-                            }
+                                }
+                              },
+                            });
                           }}
                         >
                           Ta bort
@@ -2664,6 +2701,20 @@ function DashboardContent() {
             }}
           >
             {acceptingOffer ? "Accepterar..." : "Ja, acceptera"}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Reusable confirmation dialog (replaces native confirm()) */}
+      <Dialog open={!!confirmDialog} onClose={() => setConfirmDialog(null)}>
+        <DialogTitle>{confirmDialog?.title}</DialogTitle>
+        <DialogContent>
+          <Typography>{confirmDialog?.message}</Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setConfirmDialog(null)}>Avbryt</Button>
+          <Button variant="contained" color="error" onClick={() => confirmDialog?.onConfirm()}>
+            Ja, fortsätt
           </Button>
         </DialogActions>
       </Dialog>
