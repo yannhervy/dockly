@@ -156,30 +156,6 @@ export default function WeatherPage() {
               mb: 4,
             }}
           >
-            {/* Water level stat */}
-            <Card
-              sx={{
-                bgcolor: "rgba(13, 33, 55, 0.6)",
-                backdropFilter: "blur(12px)",
-                border: "1px solid rgba(0,212,170,0.1)",
-              }}
-            >
-              <CardContent sx={{ p: 2, "&:last-child": { pb: 2 } }}>
-                <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
-                  <WaterIcon sx={{ fontSize: 18, color: "#00d4aa" }} />
-                  <Typography variant="caption" sx={{ fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: "text.secondary", fontSize: "0.65rem" }}>
-                    Vattenstånd
-                  </Typography>
-                </Box>
-                <Typography sx={{ fontFamily: "'JetBrains Mono', monospace", fontSize: "1.4rem", fontWeight: 700, color: "#00d4aa" }}>
-                  {levelSample?.Value || "—"} <Typography component="span" sx={{ fontSize: "0.85rem", fontWeight: 400, color: "text.secondary" }}>cm</Typography>
-                </Typography>
-                <Typography variant="caption" sx={{ color: "text.secondary", fontSize: "0.6rem", fontFamily: "'JetBrains Mono', monospace" }}>
-                  {levelSample ? formatVivaTime(levelSample.Updated) : ""}
-                </Typography>
-              </CardContent>
-            </Card>
-
             {/* Average wind stat */}
             <Card
               sx={{
@@ -224,6 +200,30 @@ export default function WeatherPage() {
                 </Typography>
                 <Typography variant="caption" sx={{ color: "text.secondary", fontSize: "0.6rem", fontFamily: "'JetBrains Mono', monospace" }}>
                   {gustSample ? formatVivaTime(gustSample.Updated) : ""}
+                </Typography>
+              </CardContent>
+            </Card>
+
+            {/* Water level stat */}
+            <Card
+              sx={{
+                bgcolor: "rgba(13, 33, 55, 0.6)",
+                backdropFilter: "blur(12px)",
+                border: "1px solid rgba(0,212,170,0.1)",
+              }}
+            >
+              <CardContent sx={{ p: 2, "&:last-child": { pb: 2 } }}>
+                <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
+                  <WaterIcon sx={{ fontSize: 18, color: "#00d4aa" }} />
+                  <Typography variant="caption" sx={{ fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: "text.secondary", fontSize: "0.65rem" }}>
+                    Vattenstånd
+                  </Typography>
+                </Box>
+                <Typography sx={{ fontFamily: "'JetBrains Mono', monospace", fontSize: "1.4rem", fontWeight: 700, color: "#00d4aa" }}>
+                  {levelSample?.Value || "—"} <Typography component="span" sx={{ fontSize: "0.85rem", fontWeight: 400, color: "text.secondary" }}>cm</Typography>
+                </Typography>
+                <Typography variant="caption" sx={{ color: "text.secondary", fontSize: "0.6rem", fontFamily: "'JetBrains Mono', monospace" }}>
+                  {levelSample ? formatVivaTime(levelSample.Updated) : ""}
                 </Typography>
               </CardContent>
             </Card>

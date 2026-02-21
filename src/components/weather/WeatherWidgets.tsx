@@ -227,8 +227,8 @@ export function CombinedWindWidget({ data }: { data: VivaStationData }) {
     const headingSample = getSampleByName(data, "Vindriktning");
     if (!gustSample || !avgSample || !headingSample) return;
 
-    const W = 340;
-    const H = 260;
+    const W = 400;
+    const H = 310;
     const ctx = setupCanvas(canvas, W, H);
 
     const gust = parseWindValue(gustSample.Value);
@@ -238,8 +238,8 @@ export function CombinedWindWidget({ data }: { data: VivaStationData }) {
 
     const cx = W / 2;
     const cy = H / 2;
-    const outerRadius = 82;
-    const innerRadius = 64;
+    const outerRadius = 100;
+    const innerRadius = 80;
 
     let startTime: number | null = null;
     const animDuration = 1400;
@@ -506,7 +506,7 @@ export function CombinedWindWidget({ data }: { data: VivaStationData }) {
   }, [render]);
 
   return (
-    <div style={{ width: "100%", maxWidth: 340, aspectRatio: "340 / 260" }}>
+    <div style={{ width: "100%", maxWidth: 400, aspectRatio: "400 / 310" }}>
       <canvas ref={canvasRef} />
     </div>
   );
@@ -528,8 +528,8 @@ export function CombinedWaterWidget({ data }: { data: VivaStationData }) {
     const tempSample = getSampleByType(data, "watertemp");
     if (!levelSample || !tempSample) return;
 
-    const W = 340;
-    const H = 220;
+    const W = 400;
+    const H = 260;
     const ctx = setupCanvas(canvas, W, H);
 
     const level = parseFloat(levelSample.Value);
@@ -556,15 +556,15 @@ export function CombinedWaterWidget({ data }: { data: VivaStationData }) {
 
     const tempColor = getTempColor(temp);
 
-    const barX = 40;
-    const barW = 60;
+    const barX = 50;
+    const barW = 70;
     const barTop = 20;
     const barBottom = H - 30;
     const barH = barBottom - barTop;
 
     const arcCx = W * 0.68;
     const arcCy = H / 2 + 10;
-    const arcRadius = 68;
+    const arcRadius = 80;
 
     let startTime: number | null = null;
     const animDuration = 1400;
@@ -754,7 +754,7 @@ export function CombinedWaterWidget({ data }: { data: VivaStationData }) {
   }, [render]);
 
   return (
-    <div style={{ width: "100%", maxWidth: 340, aspectRatio: "340 / 220" }}>
+    <div style={{ width: "100%", maxWidth: 400, aspectRatio: "400 / 260" }}>
       <canvas ref={canvasRef} />
     </div>
   );
