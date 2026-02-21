@@ -180,6 +180,7 @@ function UsersTab({ initialEditId }: { initialEditId?: string }) {
     phone: "",
     role: "Tenant" as User["role"],
     internalComment: "",
+    isPublic: true,
   });
   const [editSaving, setEditSaving] = useState(false);
   const [approvingId, setApprovingId] = useState<string | null>(null);
@@ -347,6 +348,7 @@ function UsersTab({ initialEditId }: { initialEditId?: string }) {
       phone: user.phone || "",
       role: user.role,
       internalComment: user.internalComment || "",
+      isPublic: user.isPublic ?? true,
     });
     setMsgText("");
     setMsgSendSms(false);
@@ -416,11 +418,12 @@ function UsersTab({ initialEditId }: { initialEditId?: string }) {
         phone: editForm.phone.trim(),
         role: editForm.role,
         internalComment: editForm.internalComment.trim(),
+        isPublic: editForm.isPublic,
       });
       setUsers((prev) =>
         prev.map((u) =>
           u.id === editUser.id
-            ? { ...u, name: editForm.name.trim(), email: editForm.email.trim(), phone: editForm.phone.trim(), role: editForm.role, internalComment: editForm.internalComment.trim() }
+            ? { ...u, name: editForm.name.trim(), email: editForm.email.trim(), phone: editForm.phone.trim(), role: editForm.role, internalComment: editForm.internalComment.trim(), isPublic: editForm.isPublic }
             : u
         )
       );
@@ -823,6 +826,20 @@ function UsersTab({ initialEditId }: { initialEditId?: string }) {
             onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
             sx={{ mb: 2 }}
           />
+
+          <FormControlLabel
+            control={
+              <Switch
+                checked={editForm.isPublic}
+                onChange={(e) => setEditForm({ ...editForm, isPublic: e.target.checked })}
+              />
+            }
+            label="Publik profil"
+            sx={{ mb: 1 }}
+          />
+          <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 2, ml: 2 }}>
+            Publik profil gör att kontaktuppgifter visas även för ej inloggade besökare.
+          </Typography>
 
           <Divider sx={{ my: 2 }} />
 
