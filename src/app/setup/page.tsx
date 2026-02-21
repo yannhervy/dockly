@@ -238,7 +238,9 @@ export default function ProfileSetupPage() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ phone: normalizePhone(phone.trim()) }),
         });
-        const data = await res.json();
+        const text = await res.text();
+        let data;
+        try { data = JSON.parse(text); } catch { data = { error: text }; }
         if (!res.ok) {
           throw new Error(data.error || "Kunde inte skicka SMS.");
         }
@@ -270,7 +272,9 @@ export default function ProfileSetupPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ verificationId, code: smsCode.trim() }),
       });
-      const data = await res.json();
+      const text = await res.text();
+      let data;
+      try { data = JSON.parse(text); } catch { data = { error: text }; }
       if (!res.ok) {
         throw new Error(data.error || "Verifiering misslyckades.");
       }
@@ -297,7 +301,9 @@ export default function ProfileSetupPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ phone: normalizePhone(phone.trim()) }),
       });
-      const data = await res.json();
+      const text = await res.text();
+      let data;
+      try { data = JSON.parse(text); } catch { data = { error: text }; }
       if (!res.ok) {
         throw new Error(data.error || "Kunde inte skicka SMS.");
       }

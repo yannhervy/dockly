@@ -833,14 +833,18 @@ export const sendVerificationSms = onRequest(
     const normalized = normalizePhone(phone);
 
     // Rate limit: max 3 codes per phone per hour
-    const oneHourAgo = admin.firestore.Timestamp.fromMillis(Date.now() - 60 * 60 * 1000);
+    const oneHourAgoMs = Date.now() - 60 * 60 * 1000;
     const recentSnap = await admin.firestore()
       .collection("smsVerifications")
       .where("phone", "==", normalized)
-      .where("createdAt", ">=", oneHourAgo)
       .get();
 
-    if (recentSnap.size >= 3) {
+    const recentCount = recentSnap.docs.filter((d) => {
+      const ts = d.data().createdAt?.toMillis?.() || 0;
+      return ts >= oneHourAgoMs;
+    }).length;
+
+    if (recentCount >= 3) {
       res.status(429).json({ error: "För många försök. Vänta en stund och försök igen." });
       return;
     }
