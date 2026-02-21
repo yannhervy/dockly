@@ -188,22 +188,27 @@ export interface MarketplaceListing {
   abandonedObjectId?: string;  // Links listing to an abandoned object
 }
 
-// ─── News ─────────────────────────────────────────────────
+// ─── News & Reports ──────────────────────────────────────
 // Configurable list of reaction emojis — edit this array to change available reactions
 export const REACTION_EMOJIS = ["🐟", "🦀", "🧜", "🌊", "⚓", "☠️"];
 
 // Reactions stored as a map of emoji -> array of user IDs
 export type ReactionMap = Record<string, string[]>;
 
+export type PostType = "news" | "report";
+
 export interface NewsPost {
   id: string;
+  postType: PostType;              // "news" (admin only) or "report" (any user)
   title: string;
   body: string;
-  imageUrls: string[]; // Multiple images supported
+  imageUrls: string[];             // Multiple images supported
   authorId: string;
   authorName: string;
   createdAt: Timestamp;
   reactions: ReactionMap;
+  linkedDockIds?: string[];        // Docks related to the report
+  linkedBerthCodes?: string[];     // Berth marking codes e.g. "D-9"
 }
 
 // ─── Berth Interest Registration ──────────────────────────

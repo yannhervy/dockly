@@ -23,7 +23,7 @@ import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { resizeImage, deleteStorageFile } from "@/lib/storage";
 import { db, storage } from "@/lib/firebase";
 import { useAuth } from "@/context/AuthContext";
-import type { NewsPost, ReactionMap } from "@/lib/types";
+import type { NewsPost, ReactionMap, PostType, Dock, Resource } from "@/lib/types";
 import { REACTION_EMOJIS } from "@/lib/types";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
@@ -41,7 +41,9 @@ import Chip from "@mui/material/Chip";
 import CircularProgress from "@mui/material/CircularProgress";
 import LinearProgress from "@mui/material/LinearProgress";
 import Tooltip from "@mui/material/Tooltip";
+import Autocomplete from "@mui/material/Autocomplete";
 import NewspaperIcon from "@mui/icons-material/Newspaper";
+import ReportProblemIcon from "@mui/icons-material/ReportProblem";
 import AddIcon from "@mui/icons-material/Add";
 import AddPhotoAlternateIcon from "@mui/icons-material/AddPhotoAlternate";
 import CloseIcon from "@mui/icons-material/Close";
@@ -62,17 +64,28 @@ export default function NewsPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [form, setForm] = useState({ title: "", body: "" });
+  const [formPostType, setFormPostType] = useState<PostType>("report");
+  const [formDockIds, setFormDockIds] = useState<string[]>([]);
+  const [formBerthCodes, setFormBerthCodes] = useState<string[]>([]);
   const [imageFiles, setImageFiles] = useState<File[]>([]);
   const [imagePreviews, setImagePreviews] = useState<string[]>([]);
   const [editingPost, setEditingPost] = useState<NewsPost | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
 
+  // Lightbox
+  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
+
+  // Dock & berth data for linking
+  const [docks, setDocks] = useState<Dock[]>([]);
+  const [berths, setBerths] = useState<Resource[]>([]);
+
   const canManage =
     profile?.role === "Superadmin" || profile?.role === "Dock Manager";
 
   useEffect(() => {
     fetchPosts();
+    fetchDocksAndBerths();
   }, []);
 
   async function fetchPosts() {
@@ -98,6 +111,28 @@ export default function NewsPage() {
     }
   }
 
+  async function fetchDocksAndBerths() {
+    try {
+      const dockSnap = await getDocs(collection(db, "docks"));
+      setDocks(dockSnap.docs.map((d) => ({ id: d.id, ...d.data() }) as Dock));
+      const resSnap = await getDocs(collection(db, "resources"));
+      setBerths(
+        resSnap.docs
+          .map((d) => ({ id: d.id, ...d.data() }) as Resource)
+          .filter((r) => r.type === "Berth")
+      );
+    } catch (err) {
+      console.error("Error fetching docks/berths:", err);
+    }
+  }
+
+  // Get available berth codes, filtered by selected docks if any
+  const availableBerthCodes = (
+    formDockIds.length > 0
+      ? berths.filter((b) => b.dockId && formDockIds.includes(b.dockId))
+      : berths
+  ).map((b) => b.markingCode);
+
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
     setImageFiles((prev) => [...prev, ...files]);
@@ -105,7 +140,6 @@ export default function NewsPage() {
       ...prev,
       ...files.map((f) => URL.createObjectURL(f)),
     ]);
-    // Reset input so the same file can be re-selected
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
@@ -114,8 +148,10 @@ export default function NewsPage() {
     setImagePreviews((prev) => prev.filter((_, i) => i !== index));
   };
 
-  const handleCreate = async () => {
-    if (!firebaseUser || !profile || !canManage) return;
+  const handleSave = async () => {
+    if (!firebaseUser || !profile) return;
+    // Only managers can create/edit news, but any user can create reports
+    if (formPostType === "news" && !canManage) return;
     setUploading(true);
 
     try {
@@ -133,17 +169,18 @@ export default function NewsPage() {
       }
 
       if (editingPost) {
-        // Update existing post
         const allImages = [...(editingPost.imageUrls || []), ...imageUrls];
         await updateDoc(doc(db, "news", editingPost.id), {
           title: form.title,
           body: form.body,
           imageUrls: allImages,
+          linkedDockIds: formDockIds.length > 0 ? formDockIds : [],
+          linkedBerthCodes: formBerthCodes.length > 0 ? formBerthCodes : [],
         });
-        setSuccess("Nyhet uppdaterad!");
+        setSuccess(editingPost.postType === "report" ? "Rapport uppdaterad!" : "Nyhet uppdaterad!");
       } else {
-        // Create new post
         await addDoc(collection(db, "news"), {
+          postType: formPostType,
           title: form.title,
           body: form.body,
           imageUrls,
@@ -151,8 +188,10 @@ export default function NewsPage() {
           authorName: profile.name,
           createdAt: Timestamp.now(),
           reactions: {},
+          linkedDockIds: formDockIds.length > 0 ? formDockIds : [],
+          linkedBerthCodes: formBerthCodes.length > 0 ? formBerthCodes : [],
         });
-        setSuccess("Nyhet publicerad!");
+        setSuccess(formPostType === "report" ? "Rapport publicerad!" : "Nyhet publicerad!");
       }
 
       setDialogOpen(false);
@@ -161,7 +200,7 @@ export default function NewsPage() {
       setTimeout(() => setSuccess(""), 3000);
       fetchPosts();
     } catch (err) {
-      console.error("Error saving news:", err);
+      console.error("Error saving post:", err);
     } finally {
       setUploading(false);
     }
@@ -169,15 +208,28 @@ export default function NewsPage() {
 
   const resetForm = () => {
     setForm({ title: "", body: "" });
+    setFormPostType("report");
+    setFormDockIds([]);
+    setFormBerthCodes([]);
     setImageFiles([]);
     setImagePreviews([]);
   };
 
   const openEditDialog = (post: NewsPost) => {
     setEditingPost(post);
+    setFormPostType(post.postType || "news");
     setForm({ title: post.title, body: post.body });
+    setFormDockIds(post.linkedDockIds || []);
+    setFormBerthCodes(post.linkedBerthCodes || []);
     setImageFiles([]);
     setImagePreviews([]);
+    setDialogOpen(true);
+  };
+
+  const openCreateDialog = (type: PostType) => {
+    setEditingPost(null);
+    resetForm();
+    setFormPostType(type);
     setDialogOpen(true);
   };
 
@@ -185,7 +237,6 @@ export default function NewsPage() {
     setDeleting(true);
     try {
       const post = posts.find((p) => p.id === postId);
-      // Delete all images from storage
       if (post?.imageUrls) {
         for (const url of post.imageUrls) {
           await deleteStorageFile(url);
@@ -193,15 +244,22 @@ export default function NewsPage() {
       }
       await deleteDoc(doc(db, "news", postId));
       setConfirmDeleteId(null);
-      setSuccess("Nyhet raderad!");
+      const wasReport = (post?.postType || "news") === "report";
+      setSuccess(wasReport ? "Rapport raderad!" : "Nyhet raderad!");
       setTimeout(() => setSuccess(""), 3000);
       fetchPosts();
     } catch (err) {
-      console.error("Error deleting news:", err);
+      console.error("Error deleting post:", err);
     } finally {
       setDeleting(false);
     }
   };
+
+  const canDeletePost = (post: NewsPost) =>
+    canManage || post.authorId === firebaseUser?.uid;
+
+  const canEditPost = (post: NewsPost) =>
+    canManage || post.authorId === firebaseUser?.uid;
 
   const handleReaction = async (postId: string, emoji: string) => {
     if (!firebaseUser) return;
@@ -212,15 +270,12 @@ export default function NewsPage() {
     const users = reactions[emoji] || [];
 
     if (users.includes(firebaseUser.uid)) {
-      // Remove reaction
       reactions[emoji] = users.filter((u) => u !== firebaseUser.uid);
       if (reactions[emoji].length === 0) delete reactions[emoji];
     } else {
-      // Add reaction
       reactions[emoji] = [...users, firebaseUser.uid];
     }
 
-    // Optimistic update
     setPosts((prev) =>
       prev.map((p) => (p.id === postId ? { ...p, reactions } : p))
     );
@@ -229,8 +284,178 @@ export default function NewsPage() {
       await updateDoc(doc(db, "news", postId), { reactions });
     } catch (err) {
       console.error("Error updating reaction:", err);
-      fetchPosts(); // Revert on error
+      fetchPosts();
     }
+  };
+
+  // Resolve dock names from IDs
+  const dockNameMap = Object.fromEntries(docks.map((d) => [d.id, d.name]));
+
+  // Separate reports and news
+  const reports = posts.filter((p) => p.postType === "report");
+  const news = posts.filter((p) => (p.postType || "news") === "news");
+
+  // ─── Render a single post card ───
+  const renderPost = (post: NewsPost) => {
+    const isReport = post.postType === "report";
+    return (
+      <Card
+        key={post.id}
+        sx={{
+          mb: 3,
+          bgcolor: "rgba(13, 33, 55, 0.6)",
+          backdropFilter: "blur(12px)",
+          border: isReport
+            ? "1px solid rgba(255, 183, 77, 0.2)"
+            : "1px solid rgba(79,195,247,0.08)",
+        }}
+      >
+        <CardContent sx={{ p: 3 }}>
+          {/* Title & meta + actions */}
+          <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+            <Box>
+              <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 0.5 }}>
+                {isReport && (
+                  <ReportProblemIcon sx={{ fontSize: 20, color: "warning.main" }} />
+                )}
+                <Typography variant="h5" sx={{ fontWeight: 700 }}>
+                  {post.title}
+                </Typography>
+              </Box>
+              <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: "block" }}>
+                {post.authorName} · {formatDate(post.createdAt)}
+              </Typography>
+              {/* Linked docks/berths */}
+              {((post.linkedDockIds && post.linkedDockIds.length > 0) ||
+                (post.linkedBerthCodes && post.linkedBerthCodes.length > 0)) && (
+                <Box sx={{ display: "flex", gap: 0.5, flexWrap: "wrap", mb: 1.5 }}>
+                  {post.linkedDockIds?.map((dId) => (
+                    <Chip
+                      key={dId}
+                      label={dockNameMap[dId] || dId}
+                      size="small"
+                      variant="outlined"
+                      sx={{ borderColor: "rgba(79,195,247,0.3)" }}
+                    />
+                  ))}
+                  {post.linkedBerthCodes?.map((code) => (
+                    <Chip
+                      key={code}
+                      label={code}
+                      size="small"
+                      variant="outlined"
+                      sx={{ borderColor: "rgba(255,183,77,0.3)" }}
+                    />
+                  ))}
+                </Box>
+              )}
+            </Box>
+            <Box sx={{ display: "flex", gap: 0.5 }}>
+              {canEditPost(post) && (
+                <IconButton size="small" onClick={() => openEditDialog(post)}>
+                  <EditIcon fontSize="small" />
+                </IconButton>
+              )}
+              {canDeletePost(post) && (
+                <IconButton size="small" color="error" onClick={() => setConfirmDeleteId(post.id)}>
+                  <DeleteIcon fontSize="small" />
+                </IconButton>
+              )}
+            </Box>
+          </Box>
+
+          {/* Body */}
+          <Box
+            sx={{
+              lineHeight: 1.8,
+              mb: 2,
+              "& p": { color: "text.secondary", my: 0.5 },
+              "& a": { color: "primary.main" },
+              "& strong": { color: "text.primary" },
+              "& ul, & ol": { color: "text.secondary", pl: 2 },
+              "& li": { mb: 0.3 },
+            }}
+          >
+            <MDPreview source={post.body} style={{ background: "transparent", color: "inherit" }} />
+          </Box>
+
+          {/* Images gallery */}
+          {post.imageUrls && post.imageUrls.length > 0 && (
+            <Box
+              sx={{
+                display: "flex",
+                gap: 1,
+                flexWrap: "wrap",
+                mb: 2,
+              }}
+            >
+              {post.imageUrls.map((url, i) => (
+                <Box
+                  key={i}
+                  component="img"
+                  src={url}
+                  alt={`${post.title} - bild ${i + 1}`}
+                  sx={{
+                    width: post.imageUrls.length === 1 ? "100%" : { xs: "100%", sm: "calc(50% - 4px)" },
+                    maxHeight: 400,
+                    objectFit: "cover",
+                    borderRadius: 2,
+                    cursor: "pointer",
+                    transition: "transform 0.2s",
+                    "&:hover": { transform: "scale(1.01)" },
+                  }}
+                  onClick={() => setLightboxUrl(url)}
+                />
+              ))}
+            </Box>
+          )}
+
+          {/* Emoji reactions */}
+          <Box sx={{ display: "flex", gap: 0.5, flexWrap: "wrap", alignItems: "center" }}>
+            {REACTION_EMOJIS.map((emoji) => {
+              const reactors = post.reactions?.[emoji] || [];
+              const hasReacted = firebaseUser
+                ? reactors.includes(firebaseUser.uid)
+                : false;
+              const count = reactors.length;
+
+              return (
+                <Tooltip
+                  key={emoji}
+                  title={firebaseUser ? (hasReacted ? "Ta bort reaktion" : "Reagera") : "Logga in för att reagera"}
+                >
+                  <span>
+                    <Chip
+                      label={`${emoji}${count > 0 ? ` ${count}` : ""}`}
+                      size="small"
+                      clickable={!!firebaseUser}
+                      onClick={() => handleReaction(post.id, emoji)}
+                      disabled={!firebaseUser}
+                      variant={hasReacted ? "filled" : "outlined"}
+                      sx={{
+                        fontSize: "1rem",
+                        borderColor: hasReacted
+                          ? "primary.main"
+                          : "rgba(79,195,247,0.15)",
+                        bgcolor: hasReacted
+                          ? "rgba(79,195,247,0.15)"
+                          : "transparent",
+                        "&:hover": {
+                          bgcolor: "rgba(79,195,247,0.1)",
+                        },
+                        ...(count === 0 && !firebaseUser
+                          ? { display: "none" }
+                          : {}),
+                      }}
+                    />
+                  </span>
+                </Tooltip>
+              );
+            })}
+          </Box>
+        </CardContent>
+      </Card>
+    );
   };
 
   return (
@@ -249,22 +474,35 @@ export default function NewsPage() {
         <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
           <NewspaperIcon sx={{ fontSize: 36, color: "primary.main" }} />
           <Typography variant="h4" sx={{ fontWeight: 800 }}>
-            Nyheter
+            Nyheter & Rapporter
           </Typography>
         </Box>
-        {canManage && (
-          <Button
-            variant="contained"
-            startIcon={<AddIcon />}
-            onClick={() => { setEditingPost(null); resetForm(); setDialogOpen(true); }}
-            sx={{ textTransform: "none", borderRadius: 2 }}
-          >
-            Skapa nyhet
-          </Button>
-        )}
+        <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
+          {firebaseUser && (
+            <Button
+              variant="contained"
+              color="warning"
+              startIcon={<ReportProblemIcon />}
+              onClick={() => openCreateDialog("report")}
+              sx={{ textTransform: "none", borderRadius: 2 }}
+            >
+              Rapportera
+            </Button>
+          )}
+          {canManage && (
+            <Button
+              variant="contained"
+              startIcon={<AddIcon />}
+              onClick={() => openCreateDialog("news")}
+              sx={{ textTransform: "none", borderRadius: 2 }}
+            >
+              Skapa nyhet
+            </Button>
+          )}
+        </Box>
       </Box>
       <Typography variant="body1" color="text.secondary" sx={{ mb: 4, maxWidth: 600 }}>
-        Senaste nytt från Stegerholmens Hamn.
+        Rapporter från medlemmar och nyheter från styrelsen.
       </Typography>
 
       {success && (
@@ -277,142 +515,43 @@ export default function NewsPage() {
         <Box sx={{ display: "flex", justifyContent: "center", py: 8 }}>
           <CircularProgress />
         </Box>
-      ) : posts.length === 0 ? (
-        <Box sx={{ textAlign: "center", py: 8 }}>
-          <Typography color="text.secondary">
-            Inga nyheter ännu.
-          </Typography>
-        </Box>
       ) : (
-        posts.map((post) => (
-          <Card
-            key={post.id}
-            sx={{
-              mb: 3,
-              bgcolor: "rgba(13, 33, 55, 0.6)",
-              backdropFilter: "blur(12px)",
-              border: "1px solid rgba(79,195,247,0.08)",
-            }}
-          >
-            <CardContent sx={{ p: 3 }}>
-              {/* Title & meta + admin actions */}
-              <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                <Box>
-                  <Typography variant="h5" sx={{ fontWeight: 700, mb: 0.5 }}>
-                    {post.title}
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary" sx={{ mb: 2, display: "block" }}>
-                    {post.authorName} · {formatDate(post.createdAt)}
-                  </Typography>
-                </Box>
-                {canManage && (
-                  <Box sx={{ display: "flex", gap: 0.5 }}>
-                    <IconButton size="small" onClick={() => openEditDialog(post)}>
-                      <EditIcon fontSize="small" />
-                    </IconButton>
-                    <IconButton size="small" color="error" onClick={() => setConfirmDeleteId(post.id)}>
-                      <DeleteIcon fontSize="small" />
-                    </IconButton>
-                  </Box>
-                )}
+        <>
+          {/* ─── Reports Section ─── */}
+          {reports.length > 0 && (
+            <Box sx={{ mb: 5 }}>
+              <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 2 }}>
+                <ReportProblemIcon sx={{ color: "warning.main" }} />
+                <Typography variant="h5" sx={{ fontWeight: 700 }}>
+                  Rapporter ({reports.length})
+                </Typography>
               </Box>
+              {reports.map(renderPost)}
+            </Box>
+          )}
 
-              {/* Body */}
-              <Box
-                sx={{
-                  lineHeight: 1.8,
-                  mb: 2,
-                  "& p": { color: "text.secondary", my: 0.5 },
-                  "& a": { color: "primary.main" },
-                  "& strong": { color: "text.primary" },
-                  "& ul, & ol": { color: "text.secondary", pl: 2 },
-                  "& li": { mb: 0.3 },
-                }}
-              >
-                <MDPreview source={post.body} style={{ background: "transparent", color: "inherit" }} />
+          {/* ─── News Section ─── */}
+          <Box>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 2 }}>
+              <NewspaperIcon sx={{ color: "primary.main" }} />
+              <Typography variant="h5" sx={{ fontWeight: 700 }}>
+                Nyheter ({news.length})
+              </Typography>
+            </Box>
+            {news.length === 0 ? (
+              <Box sx={{ textAlign: "center", py: 4 }}>
+                <Typography color="text.secondary">
+                  Inga nyheter ännu.
+                </Typography>
               </Box>
-
-              {/* Images gallery */}
-              {post.imageUrls && post.imageUrls.length > 0 && (
-                <Box
-                  sx={{
-                    display: "flex",
-                    gap: 1,
-                    flexWrap: "wrap",
-                    mb: 2,
-                  }}
-                >
-                  {post.imageUrls.map((url, i) => (
-                    <Box
-                      key={i}
-                      component="img"
-                      src={url}
-                      alt={`${post.title} - bild ${i + 1}`}
-                      sx={{
-                        width: post.imageUrls.length === 1 ? "100%" : { xs: "100%", sm: "calc(50% - 4px)" },
-                        maxHeight: 400,
-                        objectFit: "cover",
-                        borderRadius: 2,
-                        cursor: "pointer",
-                        transition: "transform 0.2s",
-                        "&:hover": { transform: "scale(1.01)" },
-                      }}
-                      onClick={() => window.open(url, "_blank")}
-                    />
-                  ))}
-                </Box>
-              )}
-
-              {/* Emoji reactions */}
-              <Box sx={{ display: "flex", gap: 0.5, flexWrap: "wrap", alignItems: "center" }}>
-                {REACTION_EMOJIS.map((emoji) => {
-                  const reactors = post.reactions?.[emoji] || [];
-                  const hasReacted = firebaseUser
-                    ? reactors.includes(firebaseUser.uid)
-                    : false;
-                  const count = reactors.length;
-
-                  return (
-                    <Tooltip
-                      key={emoji}
-                      title={firebaseUser ? (hasReacted ? "Ta bort reaktion" : "Reagera") : "Logga in för att reagera"}
-                    >
-                      <span>
-                        <Chip
-                          label={`${emoji}${count > 0 ? ` ${count}` : ""}`}
-                          size="small"
-                          clickable={!!firebaseUser}
-                          onClick={() => handleReaction(post.id, emoji)}
-                          disabled={!firebaseUser}
-                          variant={hasReacted ? "filled" : "outlined"}
-                          sx={{
-                            fontSize: "1rem",
-                            borderColor: hasReacted
-                              ? "primary.main"
-                              : "rgba(79,195,247,0.15)",
-                            bgcolor: hasReacted
-                              ? "rgba(79,195,247,0.15)"
-                              : "transparent",
-                            "&:hover": {
-                              bgcolor: "rgba(79,195,247,0.1)",
-                            },
-                            // Hide emojis with 0 reactions unless user can interact
-                            ...(count === 0 && !firebaseUser
-                              ? { display: "none" }
-                              : {}),
-                          }}
-                        />
-                      </span>
-                    </Tooltip>
-                  );
-                })}
-              </Box>
-            </CardContent>
-          </Card>
-        ))
+            ) : (
+              news.map(renderPost)
+            )}
+          </Box>
+        </>
       )}
 
-      {/* Create News Dialog */}
+      {/* ─── Create / Edit Dialog ─── */}
       <Dialog
         open={dialogOpen}
         onClose={() => {
@@ -423,7 +562,15 @@ export default function NewsPage() {
         maxWidth="sm"
         fullWidth
       >
-        <DialogTitle>{editingPost ? "Redigera nyhet" : "Ny nyhet"}</DialogTitle>
+        <DialogTitle>
+          {editingPost
+            ? editingPost.postType === "report"
+              ? "Redigera rapport"
+              : "Redigera nyhet"
+            : formPostType === "report"
+              ? "Ny rapport"
+              : "Ny nyhet"}
+        </DialogTitle>
         <DialogContent>
           {uploading && <LinearProgress sx={{ mb: 2 }} />}
 
@@ -443,6 +590,43 @@ export default function NewsPage() {
               preview="edit"
             />
           </Box>
+
+          {/* Dock & Berth linking */}
+          <Typography variant="subtitle2" sx={{ mb: 1, color: "text.secondary" }}>
+            Plats (valfritt)
+          </Typography>
+          <Autocomplete
+            multiple
+            options={docks}
+            getOptionLabel={(d) => d.name}
+            value={docks.filter((d) => formDockIds.includes(d.id))}
+            onChange={(_, vals) => {
+              const ids = vals.map((v) => v.id);
+              setFormDockIds(ids);
+              // Remove berth codes that no longer belong to selected docks
+              if (ids.length > 0) {
+                const validBerths = berths
+                  .filter((b) => b.dockId && ids.includes(b.dockId))
+                  .map((b) => b.markingCode);
+                setFormBerthCodes((prev) => prev.filter((c) => validBerths.includes(c)));
+              }
+            }}
+            renderInput={(params) => (
+              <TextField {...params} label="Brygga" size="small" />
+            )}
+            sx={{ mb: 1.5 }}
+          />
+          <Autocomplete
+            multiple
+            freeSolo
+            options={availableBerthCodes}
+            value={formBerthCodes}
+            onChange={(_, vals) => setFormBerthCodes(vals as string[])}
+            renderInput={(params) => (
+              <TextField {...params} label="Båtplats (t.ex. D-9)" size="small" />
+            )}
+            sx={{ mb: 2 }}
+          />
 
           {/* Multi-image upload */}
           <Box sx={{ mb: 2 }}>
@@ -555,7 +739,7 @@ export default function NewsPage() {
           </Button>
           <Button
             variant="contained"
-            onClick={handleCreate}
+            onClick={handleSave}
             disabled={!form.title.trim() || !form.body.trim() || uploading}
           >
             {uploading ? "Sparar..." : editingPost ? "Uppdatera" : "Publicera"}
@@ -569,10 +753,10 @@ export default function NewsPage() {
         onClose={() => setConfirmDeleteId(null)}
         maxWidth="xs"
       >
-        <DialogTitle>Radera nyhet?</DialogTitle>
+        <DialogTitle>Radera?</DialogTitle>
         <DialogContent>
           <Typography color="text.secondary">
-            Är du säker? Nyheten och alla tillhörande bilder tas bort permanent.
+            Är du säker? Inlägget och alla tillhörande bilder tas bort permanent.
           </Typography>
         </DialogContent>
         <DialogActions>
@@ -588,6 +772,50 @@ export default function NewsPage() {
             {deleting ? "Raderar..." : "Radera"}
           </Button>
         </DialogActions>
+      </Dialog>
+
+      {/* Image Lightbox */}
+      <Dialog
+        open={!!lightboxUrl}
+        onClose={() => setLightboxUrl(null)}
+        maxWidth="lg"
+        PaperProps={{
+          sx: {
+            bgcolor: "transparent",
+            boxShadow: "none",
+            overflow: "visible",
+          },
+        }}
+      >
+        <Box sx={{ position: "relative" }}>
+          <IconButton
+            onClick={() => setLightboxUrl(null)}
+            sx={{
+              position: "absolute",
+              top: -40,
+              right: 0,
+              color: "#fff",
+              bgcolor: "rgba(0,0,0,0.5)",
+              "&:hover": { bgcolor: "rgba(0,0,0,0.7)" },
+            }}
+          >
+            <CloseIcon />
+          </IconButton>
+          {lightboxUrl && (
+            <Box
+              component="img"
+              src={lightboxUrl}
+              alt="Full size"
+              sx={{
+                maxWidth: "90vw",
+                maxHeight: "85vh",
+                objectFit: "contain",
+                borderRadius: 2,
+                display: "block",
+              }}
+            />
+          )}
+        </Box>
       </Dialog>
     </Box>
   );

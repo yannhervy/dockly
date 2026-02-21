@@ -8,6 +8,8 @@ import Grid from "@mui/material/Grid";
 import Card from "@mui/material/Card";
 import CardContent from "@mui/material/CardContent";
 import CardMedia from "@mui/material/CardMedia";
+import Dialog from "@mui/material/Dialog";
+import IconButton from "@mui/material/IconButton";
 import SailingIcon from "@mui/icons-material/Sailing";
 import InfoIcon from "@mui/icons-material/Info";
 import DirectionsBoatIcon from "@mui/icons-material/DirectionsBoat";
@@ -16,11 +18,13 @@ import PlaceIcon from "@mui/icons-material/Place";
 import PersonAddIcon from "@mui/icons-material/PersonAdd";
 import LoginIcon from "@mui/icons-material/Login";
 import NewspaperIcon from "@mui/icons-material/Newspaper";
+import ReportProblemIcon from "@mui/icons-material/ReportProblem";
 import ArrowForwardIcon from "@mui/icons-material/ArrowForward";
+import CloseIcon from "@mui/icons-material/Close";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { db } from "@/lib/firebase";
-import { collection, query, orderBy, limit, getDocs, Timestamp } from "firebase/firestore";
+import { collection, query, orderBy, limit, getDocs, where, Timestamp } from "firebase/firestore";
 import type { NewsPost } from "@/lib/types";
 
 export default function HomePage() {
@@ -44,25 +48,37 @@ export default function HomePage() {
     return () => clearInterval(timer);
   }, [advanceSlide, slideCount]);
 
-  // ── Fetch latest news posts ──
-  const [newsPosts, setNewsPosts] = useState<NewsPost[]>([]);
+  // ── Fetch latest posts (news + reports) ──
+  const [allPosts, setAllPosts] = useState<NewsPost[]>([]);
+  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
+
   useEffect(() => {
     (async () => {
       try {
         const q = query(
           collection(db, "news"),
           orderBy("createdAt", "desc"),
-          limit(3)
+          limit(20)
         );
         const snap = await getDocs(q);
-        setNewsPosts(
+        setAllPosts(
           snap.docs.map((d) => ({ id: d.id, ...d.data() }) as NewsPost)
         );
       } catch (err) {
-        console.error("Error fetching news for homepage:", err);
+        console.error("Error fetching posts for homepage:", err);
       }
     })();
   }, []);
+
+  // Reports from last 2 days
+  const twoDaysAgo = Date.now() - 2 * 24 * 60 * 60 * 1000;
+  const recentReports = allPosts.filter(
+    (p) => p.postType === "report" && p.createdAt?.toMillis?.() > twoDaysAgo
+  );
+  // Latest 3 news posts
+  const latestNews = allPosts
+    .filter((p) => (p.postType || "news") === "news")
+    .slice(0, 3);
 
   return (
     <Box>
@@ -340,8 +356,86 @@ export default function HomePage() {
         </Grid>
       </Box>
 
+      {/* ─── Recent Reports (last 2 days) ────────────────── */}
+      {recentReports.length > 0 && (
+        <Box sx={{ maxWidth: 1100, mx: "auto", px: 3, py: 4 }}>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 2 }}>
+            <ReportProblemIcon sx={{ color: "warning.main" }} />
+            <Typography variant="h5" sx={{ fontWeight: 700 }}>
+              Rapporter
+            </Typography>
+          </Box>
+          <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+            {recentReports.map((report) => (
+              <Card
+                key={report.id}
+                onClick={() => router.push("/news")}
+                sx={{
+                  cursor: "pointer",
+                  bgcolor: "rgba(13, 33, 55, 0.6)",
+                  backdropFilter: "blur(12px)",
+                  border: "1px solid rgba(255, 183, 77, 0.2)",
+                  transition: "all 0.3s",
+                  "&:hover": {
+                    border: "1px solid rgba(255, 183, 77, 0.4)",
+                    boxShadow: "0 4px 24px rgba(255, 183, 77, 0.08)",
+                  },
+                }}
+              >
+                <CardContent sx={{ p: 3 }}>
+                  <Box sx={{ display: "flex", gap: 2, alignItems: "flex-start" }}>
+                    <ReportProblemIcon sx={{ color: "warning.main", mt: 0.3, flexShrink: 0 }} />
+                    <Box sx={{ flex: 1, minWidth: 0 }}>
+                      <Typography variant="h6" sx={{ fontWeight: 700, mb: 0.5 }}>
+                        {report.title}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1 }}>
+                        {report.authorName} ·{" "}
+                        {report.createdAt?.toDate?.()?.toLocaleDateString("sv-SE") || ""}
+                      </Typography>
+                      <Typography
+                        variant="body2"
+                        color="text.secondary"
+                        sx={{
+                          display: "-webkit-box",
+                          WebkitLineClamp: 2,
+                          WebkitBoxOrient: "vertical",
+                          overflow: "hidden",
+                          lineHeight: 1.6,
+                        }}
+                      >
+                        {report.body.replace(/[#*_~`>\[\]()!]/g, "").slice(0, 200)}
+                      </Typography>
+                    </Box>
+                    {report.imageUrls?.[0] && (
+                      <Box
+                        component="img"
+                        src={report.imageUrls[0]}
+                        alt={report.title}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setLightboxUrl(report.imageUrls[0]);
+                        }}
+                        sx={{
+                          width: 100,
+                          height: 80,
+                          objectFit: "cover",
+                          borderRadius: 2,
+                          flexShrink: 0,
+                          cursor: "pointer",
+                        }}
+                      />
+                    )}
+                  </Box>
+                </CardContent>
+              </Card>
+            ))}
+          </Box>
+        </Box>
+      )}
+
       {/* ─── Latest News Section ───────────────────────────── */}
-      {newsPosts.length > 0 && (
+      {latestNews.length > 0 && (
         <Box sx={{ maxWidth: 1100, mx: "auto", px: 3, py: 6 }}>
           <Box
             sx={{
@@ -367,7 +461,7 @@ export default function HomePage() {
           </Box>
 
           <Grid container spacing={3}>
-            {newsPosts.map((post) => (
+            {latestNews.map((post) => (
               <Grid size={{ xs: 12, md: 4 }} key={post.id}>
                 <Card
                   onClick={() => router.push("/news")}
@@ -460,6 +554,50 @@ export default function HomePage() {
 
       {/* Bottom spacer */}
       <Box sx={{ height: 40 }} />
+
+      {/* Image Lightbox */}
+      <Dialog
+        open={!!lightboxUrl}
+        onClose={() => setLightboxUrl(null)}
+        maxWidth="lg"
+        PaperProps={{
+          sx: {
+            bgcolor: "transparent",
+            boxShadow: "none",
+            overflow: "visible",
+          },
+        }}
+      >
+        <Box sx={{ position: "relative" }}>
+          <IconButton
+            onClick={() => setLightboxUrl(null)}
+            sx={{
+              position: "absolute",
+              top: -40,
+              right: 0,
+              color: "#fff",
+              bgcolor: "rgba(0,0,0,0.5)",
+              "&:hover": { bgcolor: "rgba(0,0,0,0.7)" },
+            }}
+          >
+            <CloseIcon />
+          </IconButton>
+          {lightboxUrl && (
+            <Box
+              component="img"
+              src={lightboxUrl}
+              alt="Full size"
+              sx={{
+                maxWidth: "90vw",
+                maxHeight: "85vh",
+                objectFit: "contain",
+                borderRadius: 2,
+                display: "block",
+              }}
+            />
+          )}
+        </Box>
+      </Dialog>
     </Box>
   );
 }
