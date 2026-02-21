@@ -31,6 +31,7 @@ const PUBLIC_NAV = [
   { label: "Nyheter", path: "/news" },
   { label: "Bryggor", path: "/docks" },
   { label: "Karta", path: "/map", requiresAuth: true },
+  { label: "Väder", path: "/weather" },
   { label: "Info", path: "/info" },
   { label: "FAQ", path: "/faq" },
   { label: "Köp & Sälj", path: "/marketplace" },

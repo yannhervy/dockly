@@ -55,6 +55,9 @@ export default function PublicFooter() {
           <Link href="/marketplace" underline="hover" color="text.secondary" variant="body2">
             Köp &amp; Sälj
           </Link>
+          <Link href="/weather" underline="hover" color="text.secondary" variant="body2">
+            Väder
+          </Link>
           <Link
             href="https://www.facebook.com/groups/batsamverkanstegerholmen"
             target="_blank"
