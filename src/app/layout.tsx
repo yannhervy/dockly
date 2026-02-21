@@ -1,12 +1,21 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import ThemeRegistry from "@/theme/ThemeRegistry";
 import { AuthProvider } from "@/context/AuthContext";
 import LayoutRouter from "@/components/LayoutRouter";
+
+export const viewport: Viewport = {
+  themeColor: "#0a1929",
+};
 
 export const metadata: Metadata = {
   title: "Stegerholmens Hamn – Båtplatser & Hamnförening",
   description:
     "Stegerholmens Hamn – Båtplatser, bryggförvaltning och hamnservice i skärgården. Intresseanmälan, köp & sälj, och mer.",
+  manifest: "/manifest.json",
+  other: {
+    "apple-mobile-web-app-capable": "yes",
+    "apple-mobile-web-app-status-bar-style": "black-translucent",
+  },
 };
 
 export default function RootLayout({

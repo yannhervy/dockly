@@ -1,0 +1,16 @@
+{
+  "name": "Stegerholmens Hamn",
+  "short_name": "Hamnen",
+  "description": "Båtplatser, bryggförvaltning och hamnservice",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0a1929",
+  "theme_color": "#0a1929",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}
