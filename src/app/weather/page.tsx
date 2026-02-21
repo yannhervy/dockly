@@ -12,6 +12,7 @@ import RefreshIcon from "@mui/icons-material/Refresh";
 import WaterIcon from "@mui/icons-material/Water";
 import AirIcon from "@mui/icons-material/Air";
 import ThermostatIcon from "@mui/icons-material/Thermostat";
+import TimelineIcon from "@mui/icons-material/Timeline";
 import {
   useVivaStation,
   getSampleByType,
@@ -19,14 +20,17 @@ import {
   parseWindValue,
   formatVivaTime,
 } from "@/hooks/useVivaStation";
+import { useVivaHistory } from "@/hooks/useVivaHistory";
 import {
   WaterLevelWidget,
   CombinedWindWidget,
   CombinedWaterWidget,
 } from "@/components/weather/WeatherWidgets";
+import { WindHistoryChart, WaterLevelHistoryChart } from "@/components/weather/HistoryCharts";
 
 export default function WeatherPage() {
   const { data, loading, error, lastFetched, refetch } = useVivaStation(114);
+  const { data: historyData, loading: historyLoading } = useVivaHistory(114);
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -368,6 +372,85 @@ export default function WeatherPage() {
                 </Box>
               </CardContent>
             </Card>
+          </Box>
+
+          {/* ─── Historical Charts ──────────────────────── */}
+          <Box sx={{ mt: 5 }}>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 3 }}>
+              <TimelineIcon sx={{ fontSize: 20, color: "#00d4aa" }} />
+              <Typography
+                variant="h6"
+                sx={{
+                  fontWeight: 700,
+                  letterSpacing: "-0.01em",
+                  background: "linear-gradient(135deg, #e2e8f0 0%, #00d4aa 100%)",
+                  WebkitBackgroundClip: "text",
+                  WebkitTextFillColor: "transparent",
+                  backgroundClip: "text",
+                }}
+              >
+                Historik (24h)
+              </Typography>
+            </Box>
+
+            {historyLoading && !historyData && (
+              <Box sx={{ display: "flex", justifyContent: "center", py: 4 }}>
+                <CircularProgress size={24} sx={{ color: "#00d4aa" }} />
+              </Box>
+            )}
+
+            {historyData && (
+              <Box sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                {/* Wind History */}
+                <Card
+                  sx={{
+                    bgcolor: "rgba(15, 30, 56, 0.65)",
+                    backdropFilter: "blur(16px)",
+                    border: "1px solid rgba(255,255,255,0.06)",
+                  }}
+                >
+                  <CardContent sx={{ p: 2.5 }}>
+                    <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 1 }}>
+                      <Typography variant="caption" sx={{ fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.08em", color: "text.secondary" }}>
+                        Vindhistorik
+                      </Typography>
+                      <Box sx={{ width: 28, height: 28, borderRadius: 1, bgcolor: "rgba(59,130,246,0.12)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.9rem" }}>
+                        💨
+                      </Box>
+                    </Box>
+                    <WindHistoryChart
+                      avgWind={historyData.avgWind}
+                      gustWind={historyData.gustWind}
+                      direction={historyData.direction}
+                    />
+                  </CardContent>
+                </Card>
+
+                {/* Water Level History */}
+                <Card
+                  sx={{
+                    bgcolor: "rgba(15, 30, 56, 0.65)",
+                    backdropFilter: "blur(16px)",
+                    border: "1px solid rgba(255,255,255,0.06)",
+                  }}
+                >
+                  <CardContent sx={{ p: 2.5 }}>
+                    <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 1 }}>
+                      <Typography variant="caption" sx={{ fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.08em", color: "text.secondary" }}>
+                        Vattenstånd historik
+                      </Typography>
+                      <Box sx={{ width: 28, height: 28, borderRadius: 1, bgcolor: "rgba(0,212,170,0.12)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.9rem" }}>
+                        🌊
+                      </Box>
+                    </Box>
+                    <WaterLevelHistoryChart
+                      waterLevel={historyData.waterLevel}
+                      waterLevelRef={historyData.waterLevelRef}
+                    />
+                  </CardContent>
+                </Card>
+              </Box>
+            )}
           </Box>
 
           {/* Data source attribution */}
