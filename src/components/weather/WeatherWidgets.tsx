@@ -202,7 +202,7 @@ export function WaterLevelWidget({ data }: { data: VivaStationData }) {
     return () => cancelAnimationFrame(animRef.current);
   }, [render]);
 
-  return <canvas ref={canvasRef} style={{ maxWidth: "100%", height: "auto" }} />;
+  return <canvas ref={canvasRef} style={{ maxWidth: "100%", height: "auto", aspectRatio: "340 / 180" }} />;
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -500,7 +500,7 @@ export function CombinedWindWidget({ data }: { data: VivaStationData }) {
     return () => cancelAnimationFrame(animRef.current);
   }, [render]);
 
-  return <canvas ref={canvasRef} style={{ maxWidth: "100%", height: "auto" }} />;
+  return <canvas ref={canvasRef} style={{ maxWidth: "100%", height: "auto", aspectRatio: "340 / 260" }} />;
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -744,5 +744,5 @@ export function CombinedWaterWidget({ data }: { data: VivaStationData }) {
     return () => cancelAnimationFrame(animRef.current);
   }, [render]);
 
-  return <canvas ref={canvasRef} style={{ maxWidth: "100%", height: "auto" }} />;
+  return <canvas ref={canvasRef} style={{ maxWidth: "100%", height: "auto", aspectRatio: "340 / 220" }} />;
 }
