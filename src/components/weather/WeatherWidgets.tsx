@@ -13,8 +13,9 @@ function setupCanvas(
   const dpr = window.devicePixelRatio || 1;
   canvas.width = width * dpr;
   canvas.height = height * dpr;
-  canvas.style.width = width + "px";
-  canvas.style.height = height + "px";
+  // Let the parent container handle CSS sizing for responsiveness
+  canvas.style.width = "100%";
+  canvas.style.height = "100%";
   const ctx = canvas.getContext("2d")!;
   ctx.scale(dpr, dpr);
   return ctx;
@@ -202,7 +203,11 @@ export function WaterLevelWidget({ data }: { data: VivaStationData }) {
     return () => cancelAnimationFrame(animRef.current);
   }, [render]);
 
-  return <canvas ref={canvasRef} style={{ maxWidth: "100%", height: "auto", aspectRatio: "340 / 180" }} />;
+  return (
+    <div style={{ width: "100%", maxWidth: 340, aspectRatio: "340 / 180" }}>
+      <canvas ref={canvasRef} />
+    </div>
+  );
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -500,7 +505,11 @@ export function CombinedWindWidget({ data }: { data: VivaStationData }) {
     return () => cancelAnimationFrame(animRef.current);
   }, [render]);
 
-  return <canvas ref={canvasRef} style={{ maxWidth: "100%", height: "auto", aspectRatio: "340 / 260" }} />;
+  return (
+    <div style={{ width: "100%", maxWidth: 340, aspectRatio: "340 / 260" }}>
+      <canvas ref={canvasRef} />
+    </div>
+  );
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -744,5 +753,9 @@ export function CombinedWaterWidget({ data }: { data: VivaStationData }) {
     return () => cancelAnimationFrame(animRef.current);
   }, [render]);
 
-  return <canvas ref={canvasRef} style={{ maxWidth: "100%", height: "auto", aspectRatio: "340 / 220" }} />;
+  return (
+    <div style={{ width: "100%", maxWidth: 340, aspectRatio: "340 / 220" }}>
+      <canvas ref={canvasRef} />
+    </div>
+  );
 }
