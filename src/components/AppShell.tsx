@@ -258,8 +258,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               sx={{
                 width: 36,
                 height: 36,
-                bgcolor: "primary.main",
-                color: "primary.contrastText",
+                bgcolor: isViewingAs ? "error.main" : "primary.main",
+                color: isViewingAs ? "error.contrastText" : "primary.contrastText",
                 fontSize: 14,
                 fontWeight: 700,
               }}
@@ -288,6 +288,20 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               )}
             </Box>
           </Box>
+          {isViewingAs && (
+            <ListItemButton
+              onClick={stopViewingAs}
+              sx={{ borderRadius: 2, py: 0.5, color: "error.main", mb: 0.5 }}
+            >
+              <ListItemIcon sx={{ minWidth: 36, color: "error.main" }}>
+                <LogoutIcon fontSize="small" />
+              </ListItemIcon>
+              <ListItemText
+                primary="Sluta impersonifiera"
+                primaryTypographyProps={{ variant: "body2", fontWeight: 600 }}
+              />
+            </ListItemButton>
+          )}
           <ListItemButton
             onClick={logout}
             sx={{ borderRadius: 2, py: 0.5 }}

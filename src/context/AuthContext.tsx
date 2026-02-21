@@ -27,6 +27,7 @@ import { User, UserRole } from "@/lib/types";
 interface AuthContextValue {
   firebaseUser: FirebaseUser | null;
   profile: User | null;
+  effectiveUid: string | null;
   realProfile: User | null; // Always the actual admin profile (even during view-as)
   loading: boolean;
   needsSetup: boolean;
@@ -148,6 +149,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const profile = viewingAsProfile || realProfile;
   const isViewingAs = !!viewingAsProfile;
 
+  // Effective UID: impersonated user's ID during view-as, otherwise the real Firebase UID
+  const effectiveUid = viewingAsProfile?.id || firebaseUser?.uid || null;
+
   // Role helpers
   const hasRole = (role: UserRole) => profile?.role === role;
   const isSuperadmin = profile?.role === "Superadmin";
@@ -166,6 +170,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     () => ({
       firebaseUser,
       profile,
+      effectiveUid,
       realProfile,
       loading,
       needsSetup,
@@ -186,7 +191,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       stopViewingAs,
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [firebaseUser, profile, realProfile, loading, needsSetup, needsApproval, isViewingAs, viewingAsProfile]
+    [firebaseUser, profile, realProfile, loading, needsSetup, needsApproval, isViewingAs, viewingAsProfile, effectiveUid]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

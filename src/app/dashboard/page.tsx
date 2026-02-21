@@ -242,7 +242,7 @@ function MyObjectsMapContent({
 }
 
 function DashboardContent() {
-  const { profile, firebaseUser, refreshProfile } = useAuth();
+  const { profile, firebaseUser, refreshProfile, effectiveUid, isViewingAs } = useAuth();
   const [isPublic, setIsPublic] = useState(profile?.isPublic ?? false);
   const [allowMapSms, setAllowMapSms] = useState(profile?.allowMapSms ?? true);
   const [resources, setResources] = useState<Resource[]>([]);
@@ -303,11 +303,15 @@ function DashboardContent() {
   const [deletingListingId, setDeletingListingId] = useState<string | null>(null);
   const [interestReplies, setInterestReplies] = useState<Record<string, InterestReply[]>>({});
 
+  // Lookup maps for resolving dock/berth IDs to human-readable names
+  const [interestDockNames, setInterestDockNames] = useState<Record<string, string>>({});
+  const [interestBerthCodes, setInterestBerthCodes] = useState<Record<string, string>>({});
+
   useEffect(() => {
-    if (!firebaseUser) return;
+    if (!effectiveUid) return;
     const q = query(
       collection(db, "interests"),
-      where("userId", "==", firebaseUser.uid),
+      where("userId", "==", effectiveUid),
       orderBy("createdAt", "desc")
     );
     const unsub = onSnapshot(q, async (snap) => {
@@ -324,16 +328,46 @@ function DashboardContent() {
         })
       );
       setInterestReplies(repliesMap);
+
+      // Resolve dock names and berth marking codes
+      const dockIds = [...new Set(interests.map((i) => i.preferredDockId).filter(Boolean))] as string[];
+      const berthIds = [...new Set(interests.map((i) => i.preferredBerthId).filter(Boolean))] as string[];
+
+      const dockMap: Record<string, string> = {};
+      await Promise.all(
+        dockIds.map(async (dockId) => {
+          try {
+            const dockSnap = await getDoc(doc(db, "docks", dockId));
+            if (dockSnap.exists()) {
+              dockMap[dockId] = dockSnap.data().name || dockId;
+            }
+          } catch { /* ignore */ }
+        })
+      );
+      setInterestDockNames(dockMap);
+
+      const berthMap: Record<string, string> = {};
+      await Promise.all(
+        berthIds.map(async (berthId) => {
+          try {
+            const berthSnap = await getDoc(doc(db, "resources", berthId));
+            if (berthSnap.exists()) {
+              berthMap[berthId] = berthSnap.data().markingCode || berthId;
+            }
+          } catch { /* ignore */ }
+        })
+      );
+      setInterestBerthCodes(berthMap);
     });
     return () => unsub();
-  }, [firebaseUser]);
+  }, [effectiveUid]);
 
   // Fetch user's marketplace listings
   useEffect(() => {
-    if (!firebaseUser) return;
+    if (!effectiveUid) return;
     const q = query(
       collection(db, "marketplace"),
-      where("createdBy", "==", firebaseUser.uid),
+      where("createdBy", "==", effectiveUid),
       orderBy("createdAt", "desc")
     );
     const unsub = onSnapshot(q, (snap) => {
@@ -342,7 +376,7 @@ function DashboardContent() {
       );
     });
     return () => unsub();
-  }, [firebaseUser]);
+  }, [effectiveUid]);
 
   const handleDeleteListing = async (listingId: string) => {
     try {
@@ -463,10 +497,10 @@ function DashboardContent() {
 
   // Auto-match and fetch all the user's resources + land storage
   const fetchAndMatch = useCallback(async () => {
-    if (!firebaseUser || !profile) return;
+    if (!effectiveUid || !profile) return;
     setLoading(true);
 
-    const uid = firebaseUser.uid;
+    const uid = effectiveUid;
     const userPhone = normalizePhone(profile.phone || "");
     const userEmail = (profile.email || "").trim().toLowerCase();
 
@@ -598,7 +632,7 @@ function DashboardContent() {
     } finally {
       setLoading(false);
     }
-  }, [firebaseUser, profile]);
+  }, [effectiveUid, profile]);
 
   useEffect(() => {
     fetchAndMatch();
@@ -2011,8 +2045,8 @@ function DashboardContent() {
                         <Box>
                           <Typography variant="body2" sx={{ fontWeight: 600 }}>
                             {interest.boatWidth}×{interest.boatLength}m
-                            {interest.preferredDockId && ` · Brygga ${interest.preferredDockId}`}
-                            {interest.preferredBerthId && ` plats ${interest.preferredBerthId}`}
+                            {interest.preferredDockId && ` · Brygga ${interestDockNames[interest.preferredDockId] || interest.preferredDockId}`}
+                            {interest.preferredBerthId && ` plats ${interestBerthCodes[interest.preferredBerthId] || interest.preferredBerthId}`}
                           </Typography>
                           <Typography variant="caption" color="text.secondary">
                             {interest.createdAt.toDate().toLocaleDateString("sv-SE")}

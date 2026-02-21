@@ -25,6 +25,7 @@ import DashboardIcon from "@mui/icons-material/Dashboard";
 import LogoutIcon from "@mui/icons-material/Logout";
 import AdminPanelSettingsIcon from "@mui/icons-material/AdminPanelSettings";
 import LockOutlinedIcon from "@mui/icons-material/LockOutlined";
+import PersonOffIcon from "@mui/icons-material/PersonOff";
 
 const PUBLIC_NAV = [
   { label: "Hem", path: "/" },
@@ -40,7 +41,7 @@ const PUBLIC_NAV = [
 export default function PublicNavbar() {
   const router = useRouter();
   const pathname = usePathname();
-  const { firebaseUser, profile, logout } = useAuth();
+  const { firebaseUser, profile, logout, isViewingAs, stopViewingAs, viewingAsProfile } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
 
@@ -133,7 +134,7 @@ export default function PublicNavbar() {
                   sx={{
                     width: 34,
                     height: 34,
-                    bgcolor: "primary.main",
+                    bgcolor: isViewingAs ? "error.main" : "primary.main",
                     fontSize: 14,
                     fontWeight: 700,
                   }}
@@ -169,6 +170,18 @@ export default function PublicNavbar() {
                   </MenuItem>
                 )}
                 <Divider />
+                {isViewingAs && (
+                  <MenuItem
+                    onClick={() => {
+                      handleUserMenuClose();
+                      stopViewingAs();
+                    }}
+                    sx={{ color: "error.main" }}
+                  >
+                    <PersonOffIcon fontSize="small" sx={{ mr: 1 }} />
+                    Sluta impersonifiera
+                  </MenuItem>
+                )}
                 <MenuItem
                   onClick={() => {
                     handleUserMenuClose();
@@ -252,6 +265,19 @@ export default function PublicNavbar() {
                 <ListItem disablePadding>
                   <ListItemButton onClick={() => handleNav("/admin")} sx={{ borderRadius: 1, mx: 1 }}>
                     <ListItemText primary="Administration" />
+                  </ListItemButton>
+                </ListItem>
+              )}
+              {isViewingAs && (
+                <ListItem disablePadding>
+                  <ListItemButton
+                    onClick={() => {
+                      setMobileOpen(false);
+                      stopViewingAs();
+                    }}
+                    sx={{ borderRadius: 1, mx: 1, color: "error.main" }}
+                  >
+                    <ListItemText primary="Sluta impersonifiera" />
                   </ListItemButton>
                 </ListItem>
               )}
