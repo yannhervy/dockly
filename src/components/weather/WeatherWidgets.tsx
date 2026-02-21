@@ -529,7 +529,7 @@ export function CombinedWaterWidget({ data }: { data: VivaStationData }) {
     if (!levelSample || !tempSample) return;
 
     const W = 400;
-    const H = 260;
+    const H = 310;
     const ctx = setupCanvas(canvas, W, H);
 
     const level = parseFloat(levelSample.Value);
@@ -556,15 +556,15 @@ export function CombinedWaterWidget({ data }: { data: VivaStationData }) {
 
     const tempColor = getTempColor(temp);
 
-    const barX = 50;
+    const barX = 70;
     const barW = 70;
-    const barTop = 20;
-    const barBottom = H - 30;
+    const barTop = 25;
+    const barBottom = H - 35;
     const barH = barBottom - barTop;
 
-    const arcCx = W * 0.68;
-    const arcCy = H / 2 + 10;
-    const arcRadius = 80;
+    const arcCx = W * 0.62;
+    const arcCy = H / 2;
+    const arcRadius = 85;
 
     let startTime: number | null = null;
     const animDuration = 1400;
@@ -754,7 +754,7 @@ export function CombinedWaterWidget({ data }: { data: VivaStationData }) {
   }, [render]);
 
   return (
-    <div style={{ width: "100%", maxWidth: 400, aspectRatio: "400 / 260" }}>
+    <div style={{ width: "100%", maxWidth: 400, aspectRatio: "400 / 310" }}>
       <canvas ref={canvasRef} />
     </div>
   );

@@ -26,6 +26,7 @@ import { useAuth } from "@/context/AuthContext";
 import { db } from "@/lib/firebase";
 import { collection, query, orderBy, limit, getDocs, where, Timestamp } from "firebase/firestore";
 import type { NewsPost } from "@/lib/types";
+import WeatherStrip from "@/components/weather/WeatherStrip";
 
 export default function HomePage() {
   const router = useRouter();
@@ -299,6 +300,11 @@ export default function HomePage() {
             </Box>
           )}
         </Box>
+      </Box>
+
+      {/* ─── Weather Strip ─────────────────────────────────── */}
+      <Box sx={{ maxWidth: 1100, mx: "auto", px: 3, pt: 4, pb: 0 }}>
+        <WeatherStrip />
       </Box>
 
       {/* ─── Quick Links Section ──────────────────────────── */}

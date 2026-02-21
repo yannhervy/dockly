@@ -275,7 +275,7 @@ export default function WeatherPage() {
                 },
               }}
             >
-              <CardContent sx={{ p: 2.5 }}>
+              <CardContent sx={{ p: 2.5, display: "flex", flexDirection: "column", height: "100%" }}>
                 <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 1 }}>
                   <Typography variant="caption" sx={{ fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.08em", color: "text.secondary" }}>
                     Vind
@@ -287,7 +287,7 @@ export default function WeatherPage() {
                 <Box sx={{ display: "flex", justifyContent: "center" }}>
                   <CombinedWindWidget data={data} />
                 </Box>
-                <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mt: 1, pt: 1, borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+                <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mt: "auto", pt: 1, borderTop: "1px solid rgba(255,255,255,0.06)" }}>
                   <Typography sx={{ fontFamily: "'JetBrains Mono', monospace", fontSize: "1rem", fontWeight: 500 }}>
                     {avgWind ? `${avgWind.direction} ${avgWind.speed.toFixed(1)} - ${gustWind?.speed.toFixed(1)} m/s` : "—"}
                   </Typography>
@@ -312,7 +312,7 @@ export default function WeatherPage() {
                 },
               }}
             >
-              <CardContent sx={{ p: 2.5 }}>
+              <CardContent sx={{ p: 2.5, display: "flex", flexDirection: "column", height: "100%" }}>
                 <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 1 }}>
                   <Typography variant="caption" sx={{ fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.08em", color: "text.secondary" }}>
                     Vatten
@@ -324,7 +324,7 @@ export default function WeatherPage() {
                 <Box sx={{ display: "flex", justifyContent: "center" }}>
                   <CombinedWaterWidget data={data} />
                 </Box>
-                <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mt: 1, pt: 1, borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+                <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mt: "auto", pt: 1, borderTop: "1px solid rgba(255,255,255,0.06)" }}>
                   <Typography sx={{ fontFamily: "'JetBrains Mono', monospace", fontSize: "1rem", fontWeight: 500 }}>
                     {levelSample ? `${levelSample.Value} cm  /  ${tempSample?.Value} °C` : "—"}
                   </Typography>
