@@ -4,7 +4,7 @@ import React, { useEffect, useState, useRef } from "react";
 import { db } from "@/lib/firebase";
 import { useAuth } from "@/context/AuthContext";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { User, Dock, Resource, BerthInterest, InterestReply, OfferedBerth, Berth, SeaHut, LandStorageEntry, UserMessage, AbandonedObject, AbandonedObjectType, POI, UserRole } from "@/lib/types";
+import { User, Dock, Resource, BerthInterest, InterestReply, OfferedBerth, Berth, BerthTenant, SeaHut, LandStorageEntry, UserMessage, AbandonedObject, AbandonedObjectType, POI, UserRole } from "@/lib/types";
 import { normalizePhone } from "@/lib/phoneUtils";
 import { sendSms } from "@/lib/sms";
 import {
@@ -57,6 +57,8 @@ import Autocomplete from "@mui/material/Autocomplete";
 import CircularProgress from "@mui/material/CircularProgress";
 import Grid from "@mui/material/Grid";
 import Switch from "@mui/material/Switch";
+import Radio from "@mui/material/Radio";
+import RadioGroup from "@mui/material/RadioGroup";
 import FormControlLabel from "@mui/material/FormControlLabel";
 import AdminPanelSettingsIcon from "@mui/icons-material/AdminPanelSettings";
 import AddIcon from "@mui/icons-material/Add";
@@ -1848,6 +1850,9 @@ function ResourcesTab({ initialEditId }: { initialEditId?: string }) {
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [filterType, setFilterType] = useState<"all" | Resource["type"]>("all");
+
+  // Generic confirm dialog state
+  const [confirmDialog, setConfirmDialog] = useState<{ title: string; message: string; onConfirm: () => void } | null>(null);
   const [form, setForm] = useState({
     type: "Berth" as Resource["type"],
     markingCode: "",
@@ -2147,6 +2152,19 @@ function ResourcesTab({ initialEditId }: { initialEditId?: string }) {
                   <TableCell>
                     {(() => {
                       const b = r as Berth;
+                      // First try to show invoice-responsible from tenants array
+                      if (b.tenants && b.tenants.length > 0 && b.invoiceResponsibleId) {
+                        const responsible = b.tenants.find(t => t.uid === b.invoiceResponsibleId);
+                        if (responsible) {
+                          return (
+                            <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                              <Typography variant="body2">{responsible.name}</Typography>
+                              <Chip label="F" size="small" color="primary" sx={{ height: 20, fontSize: 11 }} title="Faktureringsansvarig" />
+                            </Box>
+                          );
+                        }
+                      }
+                      // Fallback to legacy occupant fields
                       const name = [b.occupantFirstName, b.occupantLastName].filter(Boolean).join(" ");
                       if (!name) return <Typography variant="caption" color="text.secondary">—</Typography>;
                       const matched = users.some(
@@ -2671,6 +2689,78 @@ function ResourcesTab({ initialEditId }: { initialEditId?: string }) {
                   </Button>
                 )}
               </Grid>
+
+              {/* ── Section 7: Tenants (berths only) ── */}
+              {editResource.type === "Berth" && (
+                <>
+                  <Grid size={12}><Divider sx={{ borderColor: 'rgba(79,195,247,0.15)' }} /></Grid>
+                  <Grid size={12}>
+                    <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 700 }}>Hyresgäster</Typography>
+                    {(editResource.tenants as BerthTenant[] || []).length === 0 ? (
+                      <Typography variant="body2" color="text.secondary" sx={{ fontStyle: "italic" }}>Inga hyresgäster registrerade</Typography>
+                    ) : (
+                      <>
+                        <RadioGroup
+                          value={editResource.invoiceResponsibleId || ""}
+                          onChange={(e) => setEditResource({ ...editResource, invoiceResponsibleId: e.target.value })}
+                        >
+                          {(editResource.tenants as BerthTenant[]).map((t: BerthTenant) => (
+                            <Box key={t.uid} sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1, p: 1, borderRadius: 1, bgcolor: "rgba(79,195,247,0.05)", border: "1px solid rgba(79,195,247,0.1)" }}>
+                              <FormControlLabel
+                                value={t.uid}
+                                control={<Radio size="small" />}
+                                label=""
+                                sx={{ mr: 0 }}
+                              />
+                              <Box sx={{ flex: 1, minWidth: 0 }}>
+                                <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                                  {t.name}
+                                  {editResource.invoiceResponsibleId === t.uid && (
+                                    <Chip label="Faktureringsansvarig" size="small" color="primary" sx={{ ml: 1, height: 20, fontSize: 11 }} />
+                                  )}
+                                </Typography>
+                                <Typography variant="caption" color="text.secondary">
+                                  {t.phone} &middot; {t.email}
+                                </Typography>
+                              </Box>
+                              <IconButton
+                                size="small"
+                                color="error"
+                                onClick={() => {
+                                  setConfirmDialog({
+                                    title: "Ta bort hyresgäst",
+                                    message: `Vill du ta bort ${t.name} från denna plats?`,
+                                    onConfirm: () => {
+                                      setConfirmDialog(null);
+                                      const updatedTenants = (editResource.tenants as BerthTenant[]).filter((x: BerthTenant) => x.uid !== t.uid);
+                                      const updatedOccupantIds = (editResource.occupantIds || []).filter((id: string) => id !== t.uid);
+                                      const newInvoiceId = editResource.invoiceResponsibleId === t.uid
+                                        ? (updatedTenants.length > 0 ? updatedTenants[0].uid : undefined)
+                                        : editResource.invoiceResponsibleId;
+                                      setEditResource({
+                                        ...editResource,
+                                        tenants: updatedTenants,
+                                        occupantIds: updatedOccupantIds,
+                                        invoiceResponsibleId: newInvoiceId,
+                                        status: updatedOccupantIds.length > 0 ? "Occupied" : "Available",
+                                      });
+                                    },
+                                  });
+                                }}
+                              >
+                                <DeleteIcon fontSize="small" />
+                              </IconButton>
+                            </Box>
+                          ))}
+                        </RadioGroup>
+                        <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5 }}>
+                          Välj faktureringsansvarig med radioknappen
+                        </Typography>
+                      </>
+                    )}
+                  </Grid>
+                </>
+              )}
             </Grid>
           </DialogContent>
           <DialogActions>
@@ -2696,6 +2786,16 @@ function ResourcesTab({ initialEditId }: { initialEditId?: string }) {
           >
             Delete
           </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Reusable confirmation dialog */}
+      <Dialog open={!!confirmDialog} onClose={() => setConfirmDialog(null)}>
+        <DialogTitle>{confirmDialog?.title}</DialogTitle>
+        <DialogContent><Typography>{confirmDialog?.message}</Typography></DialogContent>
+        <DialogActions>
+          <Button onClick={() => setConfirmDialog(null)}>Avbryt</Button>
+          <Button variant="contained" color="error" onClick={() => confirmDialog?.onConfirm()}>Ja, fortsätt</Button>
         </DialogActions>
       </Dialog>
     </Box>

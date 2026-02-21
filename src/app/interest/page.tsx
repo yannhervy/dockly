@@ -871,10 +871,17 @@ function InterestCard({
               const { ob, reply } = pendingAccept;
               setAccepting(true);
               try {
-                // 1. Update berth: set occupied + add user
+                // 1. Update berth: set occupied + add user + write tenant data
                 const berthUpdate: Record<string, unknown> = {
                   status: "Occupied",
                   occupantIds: arrayUnion(firebaseUser!.uid),
+                  tenants: arrayUnion({
+                    uid: firebaseUser!.uid,
+                    name: profile?.name || "",
+                    phone: profile?.phone || "",
+                    email: profile?.email || "",
+                  }),
+                  invoiceResponsibleId: firebaseUser!.uid,
                 };
                 if (ob.price != null) {
                   berthUpdate[`prices.${new Date().getFullYear()}`] = ob.price;

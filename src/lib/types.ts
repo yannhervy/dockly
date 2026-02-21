@@ -83,6 +83,14 @@ export interface Resource {
 // ─── Resource subtypes ────────────────────────────────────
 export type BerthDirection = "inside" | "outside";
 
+// Denormalized tenant info stored on berth document
+export interface BerthTenant {
+  uid: string;
+  name: string;
+  phone: string;
+  email: string;
+}
+
 export interface Berth extends Resource {
   type: "Berth";
   dockId: string; // Required for berths
@@ -112,6 +120,8 @@ export interface Berth extends Resource {
   occupantPostalAddress?: string;
   comment?: string;
   secret?: boolean; // When true, only superadmin can see occupant info
+  tenants?: BerthTenant[]; // Denormalized tenant info (from accepted offers)
+  invoiceResponsibleId?: string; // UID of the invoice-responsible tenant
 }
 
 export type SeaHutSize = "Large" | "Small";

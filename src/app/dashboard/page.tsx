@@ -2637,10 +2637,17 @@ function DashboardContent() {
               const { ob, reply, interest } = pendingAcceptOffer;
               setAcceptingOffer(true);
               try {
-                // 1. Update berth: set occupied + add user
+                // 1. Update berth: set occupied + add user + write tenant data
                 const berthUpdate: Record<string, unknown> = {
                   status: "Occupied",
                   occupantIds: arrayUnion(effectiveUid),
+                  tenants: arrayUnion({
+                    uid: effectiveUid,
+                    name: profile?.name || "",
+                    phone: profile?.phone || "",
+                    email: profile?.email || "",
+                  }),
+                  invoiceResponsibleId: effectiveUid,
                 };
                 if (ob.price != null) {
                   berthUpdate[`prices.${new Date().getFullYear()}`] = ob.price;
