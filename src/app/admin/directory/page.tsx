@@ -75,11 +75,12 @@ export default function DirectoryPage() {
     occupantAddress: "",
     occupantPostalAddress: "",
     comment: "",
-    price2026: "",
+    priceCurrentYear: "",
     secret: false,
     allowSecondHand: false,
     invoiceSecondHandTenantDirectly: false,
   });
+  const currentYear = new Date().getFullYear().toString();
   const [saving, setSaving] = useState(false);
   const [successMsg, setSuccessMsg] = useState("");
 
@@ -222,7 +223,7 @@ export default function DirectoryPage() {
       occupantAddress: berth.occupantAddress || "",
       occupantPostalAddress: berth.occupantPostalAddress || "",
       comment: berth.comment || "",
-      price2026: String(berth.price2026 || ""),
+      priceCurrentYear: String(berth.prices?.[currentYear] ?? berth.price2026 ?? ""),
       secret: berth.secret || false,
       allowSecondHand: berth.allowSecondHand || false,
       invoiceSecondHandTenantDirectly: berth.invoiceSecondHandTenantDirectly || false,
@@ -243,7 +244,7 @@ export default function DirectoryPage() {
         occupantAddress: editForm.occupantAddress,
         occupantPostalAddress: editForm.occupantPostalAddress,
         comment: editForm.comment,
-        price2026: editForm.price2026 ? parseInt(editForm.price2026) : null,
+        [`prices.${currentYear}`]: editForm.priceCurrentYear ? parseInt(editForm.priceCurrentYear) : null,
         secret: editForm.secret,
         allowSecondHand: editForm.allowSecondHand,
         invoiceSecondHandTenantDirectly: editForm.allowSecondHand ? editForm.invoiceSecondHandTenantDirectly : false,
@@ -261,9 +262,12 @@ export default function DirectoryPage() {
                 occupantAddress: editForm.occupantAddress,
                 occupantPostalAddress: editForm.occupantPostalAddress,
                 comment: editForm.comment,
-                price2026: editForm.price2026
-                  ? parseInt(editForm.price2026)
-                  : undefined,
+                prices: {
+                  ...(b.prices || {}),
+                  [currentYear]: editForm.priceCurrentYear
+                    ? parseInt(editForm.priceCurrentYear)
+                    : undefined,
+                } as Record<string, number>,
                 secret: editForm.secret,
                 allowSecondHand: editForm.allowSecondHand,
                 invoiceSecondHandTenantDirectly: editForm.allowSecondHand ? editForm.invoiceSecondHandTenantDirectly : false,
@@ -572,7 +576,7 @@ export default function DirectoryPage() {
                 {canSeePersonalInfo(berths[0] || {}) && (
                   <TableCell>Phone</TableCell>
                 )}
-                {canSeePrices() && <TableCell>Price 2026</TableCell>}
+                {canSeePrices() && <TableCell>Pris {currentYear}</TableCell>}
                 {isManager && <TableCell>Comment</TableCell>}
                 <TableCell>Image</TableCell>
                 {isManager && <TableCell align="right">Actions</TableCell>}
@@ -646,7 +650,10 @@ export default function DirectoryPage() {
                     )}
                     {canSeePrices() && (
                       <TableCell>
-                        {b.price2026 ? `${b.price2026} kr` : "—"}
+                        {(() => {
+                          const p = b.prices?.[currentYear] ?? (currentYear === "2026" ? b.price2026 : undefined);
+                          return p ? `${p} kr` : "—";
+                        })()}
                       </TableCell>
                     )}
                     {isManager && (
@@ -793,11 +800,11 @@ export default function DirectoryPage() {
             <Grid size={{ xs: 6 }}>
               <TextField
                 fullWidth
-                label="Price 2026 (kr)"
+                label={`Pris ${currentYear} (kr)`}
                 type="number"
-                value={editForm.price2026}
+                value={editForm.priceCurrentYear}
                 onChange={(e) =>
-                  setEditForm({ ...editForm, price2026: e.target.value })
+                  setEditForm({ ...editForm, priceCurrentYear: e.target.value })
                 }
               />
             </Grid>

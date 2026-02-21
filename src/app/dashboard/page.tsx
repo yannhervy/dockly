@@ -5,8 +5,9 @@ import { useAuth } from "@/context/AuthContext";
 import { db, auth } from "@/lib/firebase";
 import { deleteUser as firebaseDeleteUser, reauthenticateWithCredential, EmailAuthProvider, updatePassword } from "firebase/auth";
 import { uploadBoatImage, uploadProfileImage, uploadLandStorageImage, deleteStorageFile } from "@/lib/storage";
-import { Resource, Berth, Dock, LandStorageEntry, UserMessage, User, EngagementType, BerthInterest, InterestReply, MarketplaceListing, ListingCategory } from "@/lib/types";
+import { Resource, Berth, Dock, LandStorageEntry, UserMessage, User, EngagementType, BerthInterest, InterestReply, OfferedBerth, MarketplaceListing, ListingCategory } from "@/lib/types";
 import { normalizePhone } from "@/lib/phoneUtils";
+import { sendSms } from "@/lib/sms";
 import { APIProvider, Map as GMap, AdvancedMarker, useMap, useMapsLibrary } from "@vis.gl/react-google-maps";
 import { computeBoatHull, HARBOR_CENTER } from "@/lib/mapUtils";
 import useMediaQuery from "@mui/material/useMediaQuery";
@@ -306,6 +307,10 @@ function DashboardContent() {
   // Lookup maps for resolving dock/berth IDs to human-readable names
   const [interestDockNames, setInterestDockNames] = useState<Record<string, string>>({});
   const [interestBerthCodes, setInterestBerthCodes] = useState<Record<string, string>>({});
+
+  // Accept offer dialog state
+  const [pendingAcceptOffer, setPendingAcceptOffer] = useState<{ ob: OfferedBerth; reply: InterestReply; interest: BerthInterest } | null>(null);
+  const [acceptingOffer, setAcceptingOffer] = useState(false);
 
   useEffect(() => {
     if (!effectiveUid) return;
@@ -2082,6 +2087,14 @@ function DashboardContent() {
                         <Box sx={{ mt: 1.5, pt: 1.5, borderTop: "1px solid rgba(255,255,255,0.08)" }}>
                           {replies.map((reply) => {
                             const isNew = !interest.lastSeenRepliesAt || reply.createdAt.toMillis() > interest.lastSeenRepliesAt.toMillis();
+                            const offeredBerths = reply.offeredBerths
+                              ?? (reply.offeredBerthId
+                                ? [{ berthId: reply.offeredBerthId, berthCode: reply.offeredBerthCode || reply.offeredBerthId, dockName: reply.offeredDockName || "", price: reply.offeredPrice }]
+                                : []);
+                            const isOffer = offeredBerths.length > 0;
+                            const isResolved = interest.status === "Resolved";
+                            const isAccepted = reply.offerStatus === "accepted";
+                            const isDeclined = reply.offerStatus === "declined";
                             return (
                               <Box
                                 key={reply.id}
@@ -2089,14 +2102,80 @@ function DashboardContent() {
                                   p: 1.5,
                                   mb: 1,
                                   borderRadius: 1.5,
-                                  bgcolor: isNew ? "rgba(255, 183, 77, 0.08)" : "rgba(79, 195, 247, 0.08)",
-                                  borderLeft: isNew ? "3px solid #FFB74D" : "3px solid #4FC3F7",
+                                  bgcolor: isOffer
+                                    ? isAccepted
+                                      ? "rgba(102, 187, 106, 0.12)"
+                                      : isDeclined
+                                      ? "rgba(255,255,255,0.03)"
+                                      : "rgba(102, 187, 106, 0.06)"
+                                    : isNew
+                                    ? "rgba(255, 183, 77, 0.08)"
+                                    : "rgba(79, 195, 247, 0.08)",
+                                  borderLeft: isOffer
+                                    ? isAccepted
+                                      ? "3px solid #66BB6A"
+                                      : isDeclined
+                                      ? "3px solid #666"
+                                      : "3px solid #66BB6A"
+                                    : isNew
+                                    ? "3px solid #FFB74D"
+                                    : "3px solid #4FC3F7",
+                                  opacity: isDeclined ? 0.5 : 1,
                                 }}
                               >
                                 <Typography variant="body2" sx={{ fontWeight: 600, mb: 0.5 }}>
                                   {reply.authorName}
-                                  {isNew && " 🆕"}
+                                  {isNew && !isOffer && " 🆕"}
                                 </Typography>
+                                {/* Multi-berth offer cards */}
+                                {isOffer && (
+                                  <Box sx={{ display: "flex", flexDirection: "column", gap: 1, mb: 1 }}>
+                                    {offeredBerths.map((ob) => (
+                                      <Box
+                                        key={ob.berthId}
+                                        sx={{
+                                          p: 1.5,
+                                          borderRadius: 1.5,
+                                          bgcolor: "rgba(102, 187, 106, 0.08)",
+                                          border: "1px solid rgba(102, 187, 106, 0.15)",
+                                        }}
+                                      >
+                                        <Box sx={{ display: "flex", alignItems: "center", gap: 2, flexWrap: "wrap" }}>
+                                          <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                                            ⚓ {ob.berthCode}
+                                          </Typography>
+                                          {ob.dockName && (
+                                            <Typography variant="body2" color="text.secondary">
+                                              {ob.dockName}
+                                            </Typography>
+                                          )}
+                                          {ob.price != null && (
+                                            <Typography variant="body2" sx={{ fontWeight: 600, color: "#66BB6A" }}>
+                                              {ob.price.toLocaleString("sv-SE")} kr/år
+                                            </Typography>
+                                          )}
+                                          {isAccepted && interest.acceptedBerthId === ob.berthId && (
+                                            <Chip label="Accepterat" size="small" color="success" />
+                                          )}
+                                        </Box>
+                                        {/* Accept button per berth */}
+                                        {reply.offerStatus === "pending" && !isResolved && (
+                                          <Button
+                                            variant="contained"
+                                            size="small"
+                                            color="success"
+                                            onClick={() => setPendingAcceptOffer({ ob, reply, interest })}
+                                          >
+                                            ✅ Acceptera {ob.berthCode}
+                                          </Button>
+                                        )}
+                                      </Box>
+                                    ))}
+                                    {isDeclined && (
+                                      <Chip label="Avböjt" size="small" variant="outlined" sx={{ alignSelf: "flex-start" }} />
+                                    )}
+                                  </Box>
+                                )}
                                 <Typography variant="body2">{reply.message}</Typography>
                                 <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: "block" }}>
                                   {reply.createdAt.toDate().toLocaleString("sv-SE")}
@@ -2497,6 +2576,94 @@ function DashboardContent() {
             }}
           >
             {gpsLandSaving ? "Sparar..." : "Spara"}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Accept offer confirmation dialog */}
+      <Dialog open={!!pendingAcceptOffer} onClose={() => setPendingAcceptOffer(null)}>
+        <DialogTitle>Acceptera plats?</DialogTitle>
+        <DialogContent>
+          <Typography>
+            Vill du acceptera platsen <strong>{pendingAcceptOffer?.ob.berthCode}</strong>?
+            Du kommer automatiskt s{"\u00e4"}ttas upp p{"\u00e5"} platsen.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setPendingAcceptOffer(null)} disabled={acceptingOffer}>Avbryt</Button>
+          <Button
+            variant="contained"
+            color="success"
+            disabled={acceptingOffer}
+            onClick={async () => {
+              if (!pendingAcceptOffer) return;
+              const { ob, reply, interest } = pendingAcceptOffer;
+              setAcceptingOffer(true);
+              try {
+                // 1. Update berth: set occupied + add user
+                const berthUpdate: Record<string, unknown> = {
+                  status: "Occupied",
+                  occupantIds: arrayUnion(effectiveUid),
+                };
+                if (ob.price != null) {
+                  berthUpdate[`prices.${new Date().getFullYear()}`] = ob.price;
+                }
+                await updateDoc(doc(db, "resources", ob.berthId), berthUpdate);
+                // 2. Mark interest as resolved
+                await updateDoc(doc(db, "interests", interest.id), {
+                  status: "Resolved",
+                  acceptedOfferId: reply.id,
+                  acceptedBerthId: ob.berthId,
+                  acceptedBerthCode: ob.berthCode,
+                });
+                // 3. Update all offer replies
+                const allRepliesSnap = await getDocs(collection(db, "interests", interest.id, "replies"));
+                const batch = writeBatch(db);
+                const otherManagerPhones: string[] = [];
+                let winnerPhone = "";
+                allRepliesSnap.docs.forEach((rDoc) => {
+                  const rData = rDoc.data();
+                  if (rData.offeredBerths?.length || rData.offeredBerthId) {
+                    if (rDoc.id === reply.id) {
+                      batch.update(rDoc.ref, { offerStatus: "accepted" });
+                      winnerPhone = rData.authorPhone || "";
+                    } else {
+                      batch.update(rDoc.ref, { offerStatus: "declined" });
+                      if (rData.authorPhone) otherManagerPhones.push(rData.authorPhone);
+                    }
+                  }
+                });
+                await batch.commit();
+                // 4. SMS to winning manager
+                if (winnerPhone) {
+                  try { await sendSms(winnerPhone, `${profile?.name || "En anv\u00e4ndare"} har accepterat ditt erbjudande p\u00e5 plats ${ob.berthCode}. Kontakt: ${profile?.phone || profile?.email || ""}`); }
+                  catch (e) { console.error("SMS to winner failed:", e); }
+                }
+                // 5. SMS to other managers
+                if (otherManagerPhones.length > 0) {
+                  try { await sendSms(otherManagerPhones, `${profile?.name || "En anv\u00e4ndare"} har valt en annan plats (${ob.berthCode}) f\u00f6r sin intresseanm\u00e4lan.`); }
+                  catch (e) { console.error("SMS to others failed:", e); }
+                }
+                // 6. Update local state
+                setMyInterests((prev) =>
+                  prev.map((i) =>
+                    i.id === interest.id
+                      ? { ...i, status: "Resolved" as const, acceptedOfferId: reply.id, acceptedBerthId: ob.berthId, acceptedBerthCode: ob.berthCode }
+                      : i
+                  )
+                );
+                setSuccessMsg(`Du har accepterat plats ${ob.berthCode}!`);
+                setTimeout(() => setSuccessMsg(""), 5000);
+                setPendingAcceptOffer(null);
+              } catch (err) {
+                console.error("Error accepting offer:", err);
+                alert("N\u00e5got gick fel vid acceptering. F\u00f6rs\u00f6k igen.");
+              } finally {
+                setAcceptingOffer(false);
+              }
+            }}
+          >
+            {acceptingOffer ? "Accepterar..." : "Ja, acceptera"}
           </Button>
         </DialogActions>
       </Dialog>

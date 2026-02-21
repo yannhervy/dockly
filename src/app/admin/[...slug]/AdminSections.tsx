@@ -4,7 +4,7 @@ import React, { useEffect, useState, useRef } from "react";
 import { db } from "@/lib/firebase";
 import { useAuth } from "@/context/AuthContext";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { User, Dock, Resource, BerthInterest, InterestReply, Berth, SeaHut, LandStorageEntry, UserMessage, AbandonedObject, AbandonedObjectType, POI, UserRole } from "@/lib/types";
+import { User, Dock, Resource, BerthInterest, InterestReply, OfferedBerth, Berth, SeaHut, LandStorageEntry, UserMessage, AbandonedObject, AbandonedObjectType, POI, UserRole } from "@/lib/types";
 import { normalizePhone } from "@/lib/phoneUtils";
 import { sendSms } from "@/lib/sms";
 import {
@@ -2460,19 +2460,124 @@ function ResourcesTab({ initialEditId }: { initialEditId?: string }) {
 
               {/* ── Section 5: Pricing ── */}
               <Grid size={12}><Divider sx={{ borderColor: 'rgba(79,195,247,0.15)' }} /></Grid>
-              <Grid size={{ xs: 6, md: 3 }}>
-                <TextField
-                  fullWidth label="Price 2025" type="number"
-                  value={editResource.price2025 ?? ""}
-                  onChange={(e) => setEditResource({ ...editResource, price2025: e.target.value ? Number(e.target.value) : undefined })}
-                />
-              </Grid>
-              <Grid size={{ xs: 6, md: 3 }}>
-                <TextField
-                  fullWidth label="Price 2026" type="number"
-                  value={editResource.price2026 ?? ""}
-                  onChange={(e) => setEditResource({ ...editResource, price2026: e.target.value ? Number(e.target.value) : undefined })}
-                />
+              <Grid size={12}>
+                <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 700 }}>Prisutveckling</Typography>
+                {(() => {
+                  // Merge legacy price fields with prices map
+                  const pricesMap: Record<string, number> = { ...(editResource.prices || {}) };
+                  if (editResource.price2025 && !pricesMap["2025"]) pricesMap["2025"] = editResource.price2025;
+                  if (editResource.price2026 && !pricesMap["2026"]) pricesMap["2026"] = editResource.price2026;
+                  const years = Object.keys(pricesMap).sort();
+                  const currentYear = new Date().getFullYear().toString();
+                  const prevYear = (parseInt(currentYear) - 1).toString();
+                  const hasCurrentYear = years.includes(currentYear);
+
+                  return (
+                    <Box>
+                      <Table size="small" sx={{ mb: 1, "& td, & th": { borderColor: "rgba(79,195,247,0.1)" } }}>
+                        <TableHead>
+                          <TableRow>
+                            <TableCell sx={{ fontWeight: 700, width: 100 }}>År</TableCell>
+                            <TableCell sx={{ fontWeight: 700 }}>Pris (kr)</TableCell>
+                            <TableCell sx={{ fontWeight: 700, width: 60 }} align="right">Ändring</TableCell>
+                            <TableCell sx={{ width: 50 }} />
+                          </TableRow>
+                        </TableHead>
+                        <TableBody>
+                          {years.map((year, idx) => {
+                            const price = pricesMap[year];
+                            const prevPrice = idx > 0 ? pricesMap[years[idx - 1]] : null;
+                            const change = prevPrice != null && prevPrice > 0
+                              ? ((price - prevPrice) / prevPrice * 100).toFixed(0)
+                              : null;
+                            return (
+                              <TableRow key={year}>
+                                <TableCell sx={{ fontWeight: 600 }}>{year}</TableCell>
+                                <TableCell>
+                                  <TextField
+                                    size="small"
+                                    type="number"
+                                    value={price}
+                                    onChange={(e) => {
+                                      const newPrices = { ...pricesMap, [year]: e.target.value ? Number(e.target.value) : 0 };
+                                      setEditResource({ ...editResource, prices: newPrices, price2025: undefined, price2026: undefined });
+                                    }}
+                                    slotProps={{ htmlInput: { min: 0, step: 100 } }}
+                                    sx={{ width: 140 }}
+                                  />
+                                </TableCell>
+                                <TableCell align="right">
+                                  {change != null && (
+                                    <Typography
+                                      variant="caption"
+                                      sx={{
+                                        fontWeight: 600,
+                                        color: parseInt(change) > 0 ? "#EF5350" : parseInt(change) < 0 ? "#66BB6A" : "text.secondary",
+                                      }}
+                                    >
+                                      {parseInt(change) > 0 ? "+" : ""}{change}%
+                                    </Typography>
+                                  )}
+                                </TableCell>
+                                <TableCell>
+                                  <IconButton
+                                    size="small"
+                                    color="error"
+                                    onClick={() => {
+                                      const { [year]: _, ...rest } = pricesMap;
+                                      setEditResource({ ...editResource, prices: rest, price2025: undefined, price2026: undefined });
+                                    }}
+                                    title="Ta bort"
+                                  >
+                                    <DeleteIcon fontSize="small" />
+                                  </IconButton>
+                                </TableCell>
+                              </TableRow>
+                            );
+                          })}
+                          {years.length === 0 && (
+                            <TableRow>
+                              <TableCell colSpan={4}>
+                                <Typography variant="body2" color="text.secondary" sx={{ fontStyle: "italic" }}>
+                                  Inga priser registrerade
+                                </Typography>
+                              </TableCell>
+                            </TableRow>
+                          )}
+                        </TableBody>
+                      </Table>
+                      <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
+                        {!hasCurrentYear && pricesMap[prevYear] && (
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            color="success"
+                            sx={{ textTransform: "none" }}
+                            onClick={() => {
+                              const newPrices = { ...pricesMap, [currentYear]: pricesMap[prevYear] };
+                              setEditResource({ ...editResource, prices: newPrices, price2025: undefined, price2026: undefined });
+                            }}
+                          >
+                            Samma pris {currentYear} ({pricesMap[prevYear]} kr)
+                          </Button>
+                        )}
+                        {!hasCurrentYear && (
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            sx={{ textTransform: "none" }}
+                            onClick={() => {
+                              const newPrices = { ...pricesMap, [currentYear]: 0 };
+                              setEditResource({ ...editResource, prices: newPrices, price2025: undefined, price2026: undefined });
+                            }}
+                          >
+                            + Nytt pris {currentYear}
+                          </Button>
+                        )}
+                      </Box>
+                    </Box>
+                  );
+                })()}
               </Grid>
 
               {/* ── Section 6: Photo ── */}
@@ -2564,6 +2669,7 @@ function InterestsTab({ initialEditId }: { initialEditId?: string }) {
   const { firebaseUser, profile } = useAuth();
   const [interests, setInterests] = useState<BerthInterest[]>([]);
   const [docks, setDocks] = useState<Dock[]>([]);
+  const [resources, setResources] = useState<Resource[]>([]);
   const [loading, setLoading] = useState(true);
   const [successMsg, setSuccessMsg] = useState("");
 
@@ -2575,6 +2681,11 @@ function InterestsTab({ initialEditId }: { initialEditId?: string }) {
   const [sendingReply, setSendingReply] = useState(false);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
+  // Offer form state — multi-berth
+  const [offerBerths, setOfferBerths] = useState<OfferedBerth[]>([]);
+  const currentYear = new Date().getFullYear().toString();
+  const prevYear = String(parseInt(currentYear) - 1);
+
   const isSuperadmin = profile?.role === "Superadmin";
 
   useEffect(() => {
@@ -2585,12 +2696,14 @@ function InterestsTab({ initialEditId }: { initialEditId?: string }) {
   async function fetchData() {
     setLoading(true);
     try {
-      const [iSnap, dSnap] = await Promise.all([
+      const [iSnap, dSnap, rSnap] = await Promise.all([
         getDocs(query(collection(db, "interests"), orderBy("createdAt", "desc"))),
         getDocs(collection(db, "docks")),
+        getDocs(collection(db, "resources")),
       ]);
       const allDocks = dSnap.docs.map((d) => ({ id: d.id, ...d.data() }) as Dock);
       setDocks(allDocks);
+      setResources(rSnap.docs.map((d) => ({ id: d.id, ...d.data() }) as Resource));
 
       let allInterests = iSnap.docs.map((d) => ({ id: d.id, ...d.data() }) as BerthInterest);
 
@@ -2644,6 +2757,7 @@ function InterestsTab({ initialEditId }: { initialEditId?: string }) {
   const openDetail = (interest: BerthInterest) => {
     setSelectedInterest(interest);
     setReplyMessage("");
+    setOfferBerths([]);
     fetchReplies(interest.id);
   };
 
@@ -2671,7 +2785,8 @@ function InterestsTab({ initialEditId }: { initialEditId?: string }) {
     if (!firebaseUser || !profile || !selectedInterest || !replyMessage.trim()) return;
     setSendingReply(true);
     try {
-      await addDoc(collection(db, "interests", selectedInterest.id, "replies"), {
+      // Build the reply document
+      const replyDoc: Record<string, unknown> = {
         interestId: selectedInterest.id,
         authorId: firebaseUser.uid,
         authorName: profile.name,
@@ -2679,14 +2794,40 @@ function InterestsTab({ initialEditId }: { initialEditId?: string }) {
         authorPhone: profile.phone || "",
         message: replyMessage.trim(),
         createdAt: Timestamp.now(),
-      });
+      };
+
+      // Include berth offers if any berths are selected
+      if (offerBerths.length > 0) {
+        replyDoc.offeredBerths = offerBerths;
+        // Legacy compat: set single-berth fields from first offer
+        replyDoc.offeredBerthId = offerBerths[0].berthId;
+        replyDoc.offeredBerthCode = offerBerths[0].berthCode;
+        replyDoc.offeredDockName = offerBerths[0].dockName;
+        replyDoc.offeredPrice = offerBerths[0].price ?? null;
+        replyDoc.offerStatus = "pending";
+      }
+
+      await addDoc(collection(db, "interests", selectedInterest.id, "replies"), replyDoc);
 
       // Move status to Contacted if still Pending
       if (selectedInterest.status === "Pending") {
         await handleStatusChange(selectedInterest.id, "Contacted");
       }
 
+      // Send SMS to the interest registrant
+      if (selectedInterest.phone) {
+        try {
+          const smsText = offerBerths.length > 0
+            ? `Hej ${selectedInterest.userName || ""}! Du har fått ett anbud på ${offerBerths.length === 1 ? "plats" : "platser"} ${offerBerths.map((ob) => ob.berthCode).join(", ")} från Stegerholmens hamn. Gå till Mina sidor för att se erbjudandet: https://stegerholmenshamn.web.app`
+            : `Hej ${selectedInterest.userName || ""}! Du har fått ett nytt meddelande om din intresseanmälan från Stegerholmens hamn. Gå till Mina sidor för att läsa svaret: https://stegerholmenshamn.web.app`;
+          await sendSms(selectedInterest.phone, smsText);
+        } catch (e) {
+          console.error("SMS to interest user failed:", e);
+        }
+      }
+
       setReplyMessage("");
+      setOfferBerths([]);
       setSuccessMsg("Svar skickat!");
       setTimeout(() => setSuccessMsg(""), 3000);
       fetchReplies(selectedInterest.id);
@@ -2700,6 +2841,9 @@ function InterestsTab({ initialEditId }: { initialEditId?: string }) {
   const getDockName = (dockId?: string) =>
     dockId ? docks.find((d) => d.id === dockId)?.name || "—" : "Ingen";
 
+  const getBerthCode = (berthId?: string) =>
+    berthId ? resources.find((r) => r.id === berthId)?.markingCode || "—" : "—";
+
   const formatDate = (ts: Timestamp) =>
     ts.toDate().toLocaleDateString("sv-SE");
 
@@ -2708,6 +2852,24 @@ function InterestsTab({ initialEditId }: { initialEditId?: string }) {
 
   const statusColor = (status: string): "warning" | "info" | "success" =>
     status === "Pending" ? "warning" : status === "Contacted" ? "info" : "success";
+
+  // Compute available berths the current manager can offer
+  const availableOfferBerths = (() => {
+    if (!firebaseUser) return [];
+    // Superadmins can offer from any dock; managers only from their docks
+    const managedDockIds = isSuperadmin
+      ? docks.map((d) => d.id)
+      : docks.filter((d) => d.managerIds?.includes(firebaseUser.uid)).map((d) => d.id);
+    return (resources as Berth[])
+      .filter(
+        (r) =>
+          r.type === "Berth" &&
+          r.status === "Available" &&
+          r.dockId &&
+          managedDockIds.includes(r.dockId)
+      )
+      .sort((a, b) => (a.markingCode || "").localeCompare(b.markingCode || ""));
+  })();
 
   return (
     <Box>
@@ -2739,6 +2901,7 @@ function InterestsTab({ initialEditId }: { initialEditId?: string }) {
                 <TableCell>Telefon</TableCell>
                 <TableCell>Båt (B×L)</TableCell>
                 <TableCell>Önskad brygga</TableCell>
+                <TableCell>Önskad plats</TableCell>
                 <TableCell>Datum</TableCell>
                 <TableCell>Status</TableCell>
                 <TableCell align="right">Åtgärd</TableCell>
@@ -2765,6 +2928,7 @@ function InterestsTab({ initialEditId }: { initialEditId?: string }) {
                     {interest.boatWidth}×{interest.boatLength} m
                   </TableCell>
                   <TableCell>{getDockName(interest.preferredDockId)}</TableCell>
+                  <TableCell>{getBerthCode(interest.preferredBerthId)}</TableCell>
                   <TableCell>{formatDate(interest.createdAt)}</TableCell>
                   <TableCell>
                     <Select
@@ -2897,6 +3061,16 @@ function InterestsTab({ initialEditId }: { initialEditId?: string }) {
                       {getDockName(selectedInterest.preferredDockId)}
                     </Typography>
                   </Grid>
+                  {selectedInterest.preferredBerthId && (
+                    <Grid size={{ xs: 6 }}>
+                      <Typography variant="caption" color="text.secondary">
+                        Önskad plats
+                      </Typography>
+                      <Typography variant="body2">
+                        {getBerthCode(selectedInterest.preferredBerthId)}
+                      </Typography>
+                    </Grid>
+                  )}
                   <Grid size={{ xs: 6 }}>
                     <Typography variant="caption" color="text.secondary">
                       Skickat
@@ -2963,8 +3137,12 @@ function InterestsTab({ initialEditId }: { initialEditId?: string }) {
                       key={reply.id}
                       variant="outlined"
                       sx={{
-                        bgcolor: "rgba(79,195,247,0.04)",
-                        border: "1px solid rgba(79,195,247,0.12)",
+                        bgcolor: (reply.offeredBerths?.length || reply.offeredBerthId)
+                          ? "rgba(102, 187, 106, 0.06)"
+                          : "rgba(79,195,247,0.04)",
+                        border: (reply.offeredBerths?.length || reply.offeredBerthId)
+                          ? "1px solid rgba(102, 187, 106, 0.25)"
+                          : "1px solid rgba(79,195,247,0.12)",
                       }}
                     >
                       <CardContent sx={{ p: 2, "&:last-child": { pb: 2 } }}>
@@ -2979,10 +3157,67 @@ function InterestsTab({ initialEditId }: { initialEditId?: string }) {
                           <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
                             {reply.authorName}
                           </Typography>
-                          <Typography variant="caption" color="text.secondary">
-                            {formatDateTime(reply.createdAt)}
-                          </Typography>
+                          <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                            {reply.offerStatus && (
+                              <Chip
+                                label={
+                                  reply.offerStatus === "pending" ? "Anbud"
+                                  : reply.offerStatus === "accepted" ? "Accepterat"
+                                  : "Avböjt"
+                                }
+                                size="small"
+                                color={
+                                  reply.offerStatus === "pending" ? "info"
+                                  : reply.offerStatus === "accepted" ? "success"
+                                  : "default"
+                                }
+                                variant={reply.offerStatus === "pending" ? "filled" : "outlined"}
+                              />
+                            )}
+                            <Typography variant="caption" color="text.secondary">
+                              {formatDateTime(reply.createdAt)}
+                            </Typography>
+                          </Box>
                         </Box>
+                        {/* Berth offer details — multi-berth with legacy fallback */}
+                        {(() => {
+                          const berths: OfferedBerth[] = reply.offeredBerths
+                            ?? (reply.offeredBerthId
+                              ? [{ berthId: reply.offeredBerthId, berthCode: reply.offeredBerthCode || reply.offeredBerthId, dockName: reply.offeredDockName || "", price: reply.offeredPrice }]
+                              : []);
+                          return berths.length > 0 ? (
+                            <Box sx={{ display: "flex", flexDirection: "column", gap: 0.75, mb: 1 }}>
+                              {berths.map((ob) => (
+                                <Box
+                                  key={ob.berthId}
+                                  sx={{
+                                    p: 1.5,
+                                    borderRadius: 1.5,
+                                    bgcolor: "rgba(102, 187, 106, 0.08)",
+                                    border: "1px solid rgba(102, 187, 106, 0.15)",
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: 2,
+                                  }}
+                                >
+                                  <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                                    ⚓ {ob.berthCode}
+                                  </Typography>
+                                  {ob.dockName && (
+                                    <Typography variant="body2" color="text.secondary">
+                                      {ob.dockName}
+                                    </Typography>
+                                  )}
+                                  {ob.price != null && (
+                                    <Typography variant="body2" sx={{ fontWeight: 600, color: "#66BB6A" }}>
+                                      {ob.price.toLocaleString("sv-SE")} kr/år
+                                    </Typography>
+                                  )}
+                                </Box>
+                              ))}
+                            </Box>
+                          ) : null;
+                        })()}
                         <Typography variant="body2" sx={{ whiteSpace: "pre-wrap", mb: 1 }}>
                           {reply.message}
                         </Typography>
@@ -3029,6 +3264,116 @@ function InterestsTab({ initialEditId }: { initialEditId?: string }) {
                   Dina kontaktuppgifter ({profile?.name}, {profile?.email || firebaseUser?.email},{" "}
                   {profile?.phone || "ingen telefon"}) bifogas automatiskt.
                 </Typography>
+
+                {/* Multi-berth offer selector */}
+                <Box
+                  sx={{
+                    p: 1.5,
+                    mb: 2,
+                    borderRadius: 1.5,
+                    bgcolor: offerBerths.length > 0 ? "rgba(102, 187, 106, 0.06)" : "rgba(79,195,247,0.03)",
+                    border: offerBerths.length > 0 ? "1px solid rgba(102, 187, 106, 0.2)" : "1px solid rgba(79,195,247,0.08)",
+                  }}
+                >
+                  <Typography variant="caption" sx={{ fontWeight: 700, color: "primary.light", mb: 1, display: "block" }}>
+                    ⚓ Erbjud lediga platser (valfritt)
+                  </Typography>
+
+                  {/* List of added berths */}
+                  {offerBerths.length > 0 && (
+                    <Box sx={{ display: "flex", flexDirection: "column", gap: 1, mb: 1.5 }}>
+                      {offerBerths.map((ob, idx) => (
+                        <Box
+                          key={ob.berthId}
+                          sx={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 1,
+                            p: 1,
+                            borderRadius: 1,
+                            bgcolor: "rgba(102, 187, 106, 0.08)",
+                            border: "1px solid rgba(102, 187, 106, 0.15)",
+                          }}
+                        >
+                          <Typography variant="body2" sx={{ fontWeight: 700, whiteSpace: "nowrap" }}>
+                            ⚓ {ob.berthCode}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary" sx={{ whiteSpace: "nowrap" }}>
+                            {ob.dockName}
+                          </Typography>
+                          <TextField
+                            size="small"
+                            label="Pris (kr/år)"
+                            type="number"
+                            value={ob.price ?? ""}
+                            onChange={(e) => {
+                              const updated = [...offerBerths];
+                              updated[idx] = { ...ob, price: e.target.value ? Number(e.target.value) : undefined };
+                              setOfferBerths(updated);
+                            }}
+                            slotProps={{ htmlInput: { min: 0, step: 100 } }}
+                            sx={{ width: 130, ml: "auto" }}
+                          />
+                          <IconButton
+                            size="small"
+                            color="error"
+                            onClick={() => setOfferBerths(offerBerths.filter((_, i) => i !== idx))}
+                            title="Ta bort"
+                          >
+                            <DeleteIcon fontSize="small" />
+                          </IconButton>
+                        </Box>
+                      ))}
+                    </Box>
+                  )}
+
+                  {/* Dropdown to add more berths */}
+                  {(() => {
+                    const selectedIds = new Set(offerBerths.map((ob) => ob.berthId));
+                    const remaining = availableOfferBerths.filter((b) => !selectedIds.has(b.id));
+                    return remaining.length > 0 ? (
+                      <FormControl fullWidth size="small">
+                        <InputLabel>Lägg till plats</InputLabel>
+                        <Select
+                          value=""
+                          label="Lägg till plats"
+                          onChange={(e) => {
+                            const berthId = e.target.value;
+                            if (!berthId) return;
+                            const berth = resources.find((r) => r.id === berthId) as Berth | undefined;
+                            const dock = berth?.dockId ? docks.find((d) => d.id === berth.dockId) : null;
+                            // Default price: currentYear > prevYear > empty
+                            const defaultPrice = (berth as Berth)?.prices?.[currentYear]
+                              ?? (berth as Berth)?.prices?.[prevYear]
+                              ?? (berth as Berth)?.price2026
+                              ?? (berth as Berth)?.price2025
+                              ?? undefined;
+                            setOfferBerths([
+                              ...offerBerths,
+                              {
+                                berthId,
+                                berthCode: berth?.markingCode || berthId,
+                                dockName: dock?.name || "",
+                                price: defaultPrice,
+                              },
+                            ]);
+                          }}
+                        >
+                          <MenuItem value="" disabled>Välj plats...</MenuItem>
+                          {remaining.map((b) => (
+                            <MenuItem key={b.id} value={b.id}>
+                              {b.markingCode}
+                              {" — "}
+                              {docks.find((d) => d.id === b.dockId)?.name || ""}
+                              {b.maxWidth && b.maxLength ? ` (${b.maxLength}×${b.maxWidth}m)` : ""}
+                            </MenuItem>
+                          ))}
+                        </Select>
+                      </FormControl>
+                    ) : null;
+                  })()}
+                </Box>
+
                 <TextField
                   fullWidth
                   multiline
@@ -3045,7 +3390,7 @@ function InterestsTab({ initialEditId }: { initialEditId?: string }) {
                   disabled={!replyMessage.trim() || sendingReply}
                   sx={{ textTransform: "none" }}
                 >
-                  {sendingReply ? "Skickar..." : "Skicka svar"}
+                  {sendingReply ? "Skickar..." : offerBerths.length > 0 ? `Skicka anbud (${offerBerths.length} platser)` : "Skicka svar"}
                 </Button>
               </Box>
             </DialogContent>

@@ -1077,10 +1077,15 @@ export default function MapPage() {
           const heading = obj.kind !== "landStorage" ? (obj.data as Resource).heading : undefined;
 
           // Pricing — never show for berths
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const price2025 = obj.kind !== "berth" ? (obj.data as any).price2025 : undefined;
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const price2026 = obj.kind !== "berth" ? (obj.data as any).price2026 : undefined;
+          const pricesMap: Record<string, number> = {};
+          if (obj.kind !== "berth") {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const d = obj.data as any;
+            if (d.prices) Object.assign(pricesMap, d.prices);
+            if (d.price2025 && !pricesMap["2025"]) pricesMap["2025"] = d.price2025;
+            if (d.price2026 && !pricesMap["2026"]) pricesMap["2026"] = d.price2026;
+          }
+          const priceYears = Object.keys(pricesMap).sort();
 
           // SeaHut size
           const seaHutSize = obj.kind === "resource" && obj.data.type === "SeaHut" ? (obj.data as SeaHut).size : undefined;
@@ -1161,12 +1166,15 @@ export default function MapPage() {
               )}
 
               {/* Pricing — never for berths */}
-              {(price2025 || price2026) && (
+              {priceYears.length > 0 && (
                 <Typography variant="body2" color="text.secondary">
                   <strong>Pris:</strong>{" "}
-                  {price2025 ? `${price2025} kr (2025)` : ""}
-                  {price2025 && price2026 ? " / " : ""}
-                  {price2026 ? `${price2026} kr (2026)` : ""}
+                  {priceYears.map((y, i) => (
+                    <span key={y}>
+                      {i > 0 && " / "}
+                      {pricesMap[y]} kr ({y})
+                    </span>
+                  ))}
                 </Typography>
               )}
 

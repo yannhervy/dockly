@@ -7,6 +7,9 @@ import {
   getDocs,
   addDoc,
   deleteDoc,
+  updateDoc,
+  writeBatch,
+  arrayUnion,
   doc,
   query,
   where,
@@ -17,7 +20,8 @@ import { db, storage } from "@/lib/firebase";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { resizeImage, deleteStorageFile } from "@/lib/storage";
 import { useAuth } from "@/context/AuthContext";
-import type { Dock, Berth, BerthInterest, InterestReply } from "@/lib/types";
+import { sendSms } from "@/lib/sms";
+import type { Dock, Berth, BerthInterest, InterestReply, OfferedBerth } from "@/lib/types";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 import Card from "@mui/material/Card";
@@ -585,10 +589,14 @@ function InterestCard({
   docks: Dock[];
   onDelete: (id: string) => Promise<void>;
 }) {
+  const { firebaseUser, profile } = useAuth();
   const [replies, setReplies] = useState<InterestReply[]>([]);
   const [loadingReplies, setLoadingReplies] = useState(true);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [accepting, setAccepting] = useState(false);
+  const [localInterest, setLocalInterest] = useState(interest);
+  const [pendingAccept, setPendingAccept] = useState<{ ob: OfferedBerth; reply: InterestReply } | null>(null);
 
   useEffect(() => {
     async function fetchReplies() {
@@ -720,25 +728,107 @@ function InterestCard({
             <Typography variant="caption" sx={{ fontWeight: 700, color: "primary.light", mb: 1, display: "block" }}>
               Svar ({replies.length})
             </Typography>
-            {replies.map((reply) => (
+            {replies.map((reply) => {
+              const offeredBerths: OfferedBerth[] = reply.offeredBerths
+                ?? (reply.offeredBerthId
+                  ? [{ berthId: reply.offeredBerthId, berthCode: reply.offeredBerthCode || reply.offeredBerthId, dockName: reply.offeredDockName || "", price: reply.offeredPrice }]
+                  : []);
+              const isOffer = offeredBerths.length > 0;
+              const isResolved = localInterest.status === "Resolved";
+              const isAccepted = reply.offerStatus === "accepted";
+              const isDeclined = reply.offerStatus === "declined";
+              return (
               <Box
                 key={reply.id}
                 sx={{
                   mb: 1.5,
                   p: 1.5,
-                  bgcolor: "rgba(79,195,247,0.04)",
+                  bgcolor: isOffer
+                    ? isAccepted ? "rgba(102, 187, 106, 0.12)" : isDeclined ? "rgba(255,255,255,0.03)" : "rgba(102, 187, 106, 0.06)"
+                    : "rgba(79,195,247,0.04)",
                   borderRadius: 1.5,
-                  border: "1px solid rgba(79,195,247,0.1)",
+                  border: isOffer
+                    ? isAccepted ? "1px solid rgba(102, 187, 106, 0.3)" : isDeclined ? "1px solid rgba(255,255,255,0.05)" : "1px solid rgba(102, 187, 106, 0.2)"
+                    : "1px solid rgba(79,195,247,0.1)",
+                  opacity: isDeclined ? 0.5 : 1,
                 }}
               >
                 <Box sx={{ display: "flex", justifyContent: "space-between", mb: 0.5 }}>
                   <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
                     {reply.authorName}
                   </Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    {formatDateTime(reply.createdAt)}
-                  </Typography>
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                    {reply.offerStatus && (
+                      <Chip
+                        label={
+                          reply.offerStatus === "pending" ? "Anbud"
+                          : reply.offerStatus === "accepted" ? "Accepterat"
+                          : "Avböjt"
+                        }
+                        size="small"
+                        color={
+                          reply.offerStatus === "pending" ? "info"
+                          : reply.offerStatus === "accepted" ? "success"
+                          : "default"
+                        }
+                        variant={reply.offerStatus === "pending" ? "filled" : "outlined"}
+                      />
+                    )}
+                    <Typography variant="caption" color="text.secondary">
+                      {formatDateTime(reply.createdAt)}
+                    </Typography>
+                  </Box>
                 </Box>
+                {/* Multi-berth offer cards */}
+                {isOffer && (
+                  <Box sx={{ display: "flex", flexDirection: "column", gap: 1, mb: 1 }}>
+                    {offeredBerths.map((ob) => (
+                      <Box
+                        key={ob.berthId}
+                        sx={{
+                          p: 1.5,
+                          borderRadius: 1.5,
+                          bgcolor: "rgba(102, 187, 106, 0.08)",
+                          border: "1px solid rgba(102, 187, 106, 0.15)",
+                        }}
+                      >
+                        <Box sx={{ display: "flex", alignItems: "center", gap: 2, flexWrap: "wrap" }}>
+                          <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                            ⚓ {ob.berthCode}
+                          </Typography>
+                          {ob.dockName && (
+                            <Typography variant="body2" color="text.secondary">
+                              {ob.dockName}
+                            </Typography>
+                          )}
+                          {ob.price != null && (
+                            <Typography variant="body2" sx={{ fontWeight: 600, color: "#66BB6A" }}>
+                              {ob.price.toLocaleString("sv-SE")} kr/år
+                            </Typography>
+                          )}
+                          {isAccepted && localInterest.acceptedBerthId === ob.berthId && (
+                            <Chip label="Accepterat" size="small" color="success" />
+                          )}
+                        </Box>
+                        {reply.offerStatus === "pending" && !isResolved && (
+                          <Button
+                            variant="contained"
+                            size="small"
+                            color="success"
+                            disabled={accepting}
+                            sx={{ mt: 1, textTransform: "none", fontWeight: 700 }}
+                            onClick={() => setPendingAccept({ ob, reply })}
+                          >
+                            {accepting ? "Accepterar..." : `✅ Acceptera ${ob.berthCode}`}
+                          </Button>
+                        )}
+                      </Box>
+                    ))}
+                    {isDeclined && (
+                      <Chip label="Avböjt" size="small" variant="outlined" sx={{ alignSelf: "flex-start" }} />
+                    )}
+                  </Box>
+                )}
                 <Typography variant="body2" sx={{ whiteSpace: "pre-wrap", mb: 1 }}>
                   {reply.message}
                 </Typography>
@@ -755,10 +845,92 @@ function InterestCard({
                   )}
                 </Box>
               </Box>
-            ))}
+              );
+            })}
           </Box>
         )}
       </CardContent>
+
+      {/* Accept offer confirmation dialog */}
+      <Dialog open={!!pendingAccept} onClose={() => setPendingAccept(null)}>
+        <DialogTitle>Acceptera plats?</DialogTitle>
+        <DialogContent>
+          <Typography>
+            Vill du acceptera platsen <strong>{pendingAccept?.ob.berthCode}</strong>?
+            Du kommer automatiskt sättas upp på platsen.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setPendingAccept(null)} disabled={accepting}>Avbryt</Button>
+          <Button
+            variant="contained"
+            color="success"
+            disabled={accepting}
+            onClick={async () => {
+              if (!pendingAccept) return;
+              const { ob, reply } = pendingAccept;
+              setAccepting(true);
+              try {
+                // 1. Update berth: set occupied + add user
+                const berthUpdate: Record<string, unknown> = {
+                  status: "Occupied",
+                  occupantIds: arrayUnion(firebaseUser!.uid),
+                };
+                if (ob.price != null) {
+                  berthUpdate[`prices.${new Date().getFullYear()}`] = ob.price;
+                }
+                await updateDoc(doc(db, "resources", ob.berthId), berthUpdate);
+                // 2. Mark interest as resolved
+                await updateDoc(doc(db, "interests", interest.id), {
+                  status: "Resolved",
+                  acceptedOfferId: reply.id,
+                  acceptedBerthId: ob.berthId,
+                  acceptedBerthCode: ob.berthCode,
+                });
+                // 3. Update all offer replies
+                const allRepliesSnap = await getDocs(collection(db, "interests", interest.id, "replies"));
+                const batch = writeBatch(db);
+                const otherManagerPhones: string[] = [];
+                let winnerPhone = "";
+                allRepliesSnap.docs.forEach((rDoc) => {
+                  const rData = rDoc.data();
+                  if (rData.offeredBerths?.length || rData.offeredBerthId) {
+                    if (rDoc.id === reply.id) {
+                      batch.update(rDoc.ref, { offerStatus: "accepted" });
+                      winnerPhone = rData.authorPhone || "";
+                    } else {
+                      batch.update(rDoc.ref, { offerStatus: "declined" });
+                      if (rData.authorPhone) otherManagerPhones.push(rData.authorPhone);
+                    }
+                  }
+                });
+                await batch.commit();
+                // 4. SMS to winning manager
+                if (winnerPhone) {
+                  try { await sendSms(winnerPhone, `${profile?.name || "En användare"} har accepterat ditt erbjudande på plats ${ob.berthCode}. Kontakt: ${profile?.phone || profile?.email || ""}`); }
+                  catch (e) { console.error("SMS to winner failed:", e); }
+                }
+                // 5. SMS to other managers
+                if (otherManagerPhones.length > 0) {
+                  try { await sendSms(otherManagerPhones, `${profile?.name || "En användare"} har valt en annan plats (${ob.berthCode}) för sin intresseanmälan.`); }
+                  catch (e) { console.error("SMS to others failed:", e); }
+                }
+                // 6. Update local state
+                setLocalInterest((prev) => ({ ...prev, status: "Resolved" as const, acceptedOfferId: reply.id, acceptedBerthId: ob.berthId, acceptedBerthCode: ob.berthCode }));
+                setReplies((prev) => prev.map((r) => (r.offeredBerths?.length || r.offeredBerthId) ? { ...r, offerStatus: r.id === reply.id ? "accepted" as const : "declined" as const } : r));
+                setPendingAccept(null);
+              } catch (err) {
+                console.error("Error accepting offer:", err);
+                alert("Något gick fel vid acceptering. Försök igen.");
+              } finally {
+                setAccepting(false);
+              }
+            }}
+          >
+            {accepting ? "Accepterar..." : "Ja, acceptera"}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Card>
   );
 }

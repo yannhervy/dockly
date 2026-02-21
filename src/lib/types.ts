@@ -96,7 +96,10 @@ export interface Berth extends Resource {
   heading?: number; // Orientation in degrees (0-360)
   lat?: number; // GPS latitude for map positioning
   lng?: number; // GPS longitude for map positioning
+  prices?: Record<string, number>;  // Yearly price map, e.g. { "2025": 3500, "2026": 4000 }
+  /** @deprecated Use prices map instead */
   price2025?: number;
+  /** @deprecated Use prices map instead */
   price2026?: number;
   allowSecondHand?: boolean; // Allow tenant to sublet this berth
   invoiceSecondHandTenantDirectly?: boolean; // Invoice the second-hand tenant directly (only relevant if allowSecondHand is true)
@@ -229,6 +232,18 @@ export interface BerthInterest {
   createdAt: Timestamp;
   lastSeenRepliesAt?: Timestamp; // When the user last viewed replies
   status: InterestStatus;
+  // Accepted offer tracking
+  acceptedOfferId?: string;     // ID of the accepted reply
+  acceptedBerthId?: string;     // FK to the accepted berth resource
+  acceptedBerthCode?: string;   // Denormalized marking code e.g. "D-9"
+}
+
+// Single berth offer within a reply (supports multi-berth offers)
+export interface OfferedBerth {
+  berthId: string;
+  berthCode: string;
+  dockName: string;
+  price?: number;
 }
 
 // Reply on an interest registration (subcollection: interests/{id}/replies)
@@ -241,6 +256,14 @@ export interface InterestReply {
   authorPhone: string;
   message: string;
   createdAt: Timestamp;
+  // Multi-berth offer (new format)
+  offeredBerths?: OfferedBerth[];
+  // Legacy single-berth offer fields (backwards compat)
+  offeredBerthId?: string;
+  offeredBerthCode?: string;
+  offeredDockName?: string;
+  offeredPrice?: number;
+  offerStatus?: "pending" | "accepted" | "declined";
 }
 
 // ─── Abandoned Objects ────────────────────────────────────
