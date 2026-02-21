@@ -25,6 +25,7 @@ export interface User {
   engagement?: EngagementType[]; // Harbor engagement (selected during setup)
   registrationNote?: string; // Free-text note from registration (e.g. berth/seahut details)
   approved?: boolean; // false until approved by manager/superadmin (missing = approved for legacy users)
+  phoneVerified?: boolean; // true when phone number has been verified via SMS code
   lastLogin?: Timestamp; // Updated each time the user signs in
   createdAt: Timestamp;
 }

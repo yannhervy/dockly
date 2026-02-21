@@ -68,11 +68,12 @@ export default function ProtectedRoute({
           ⏳ Väntar på godkännande
         </Typography>
         <Typography variant="body1" color="text.secondary" sx={{ maxWidth: 500 }}>
-          Ditt konto har skapats men behöver godkännas av en bryggansvarig innan
-          du kan använda tjänsten. Du får ett SMS när ditt konto är godkänt.
+          Ditt konto har skapats men behöver godkännas av en bryggansvarig.
+          Du kommer få ett SMS när ditt konto är godkänt — ladda då om
+          sidan för att se ändringarna.
         </Typography>
         <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 500, mt: 1 }}>
-          Under tiden kan du utforska sidan som gäst.
+          Under tiden kan du fortsätta att utforska sidan som gäst.
         </Typography>
         <a href="/" style={{ color: "#4FC3F7", fontWeight: 600, textDecoration: "none" }}>
           Gå till startsidan →

@@ -420,7 +420,7 @@ export const approveUser = onRequest(
     const userPhone = userDoc.data()?.phone;
     if (userPhone) {
       const normalized = normalizePhone(userPhone);
-      const message = "Ditt konto på Stegerholmens Hamn är nu godkänt! Logga in på stegerholmenshamn.web.app";
+      const message = "Ditt konto på Stegerholmens Hamn är nu godkänt! Ladda om sidan för att se ändringarna. stegerholmenshamn.web.app";
       const authStr = Buffer.from(
         `${elksUsername.value()}:${elksPassword.value()}`
       ).toString("base64");
@@ -804,5 +804,142 @@ export const adminSetPassword = onRequest(
       console.error(`Failed to set password for ${targetUid}:`, err);
       res.status(500).json({ error: "Kunde inte uppdatera lösenordet." });
     }
+  }
+);
+
+/**
+ * Send a 4-digit SMS verification code to a phone number.
+ * No auth required — this is called before the user has a profile.
+ * Rate limited: max 3 codes per phone per hour.
+ *
+ * POST /sendVerificationSms
+ * Body: { "phone": "+46701234567" }
+ * Returns: { "verificationId": "docId" }
+ */
+export const sendVerificationSms = onRequest(
+  { cors: true, region: "europe-west1" },
+  async (req, res) => {
+    if (req.method !== "POST") {
+      res.status(405).json({ error: "Method not allowed" });
+      return;
+    }
+
+    const { phone } = req.body;
+    if (!phone || typeof phone !== "string") {
+      res.status(400).json({ error: "Missing required field: phone" });
+      return;
+    }
+
+    const normalized = normalizePhone(phone);
+
+    // Rate limit: max 3 codes per phone per hour
+    const oneHourAgo = admin.firestore.Timestamp.fromMillis(Date.now() - 60 * 60 * 1000);
+    const recentSnap = await admin.firestore()
+      .collection("smsVerifications")
+      .where("phone", "==", normalized)
+      .where("createdAt", ">=", oneHourAgo)
+      .get();
+
+    if (recentSnap.size >= 3) {
+      res.status(429).json({ error: "För många försök. Vänta en stund och försök igen." });
+      return;
+    }
+
+    // Generate 4-digit code
+    const code = String(Math.floor(1000 + Math.random() * 9000));
+
+    // Store verification in Firestore
+    const docRef = await admin.firestore().collection("smsVerifications").add({
+      phone: normalized,
+      code,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    // Send SMS
+    const authStr = Buffer.from(
+      `${elksUsername.value()}:${elksPassword.value()}`
+    ).toString("base64");
+
+    try {
+      const body = new URLSearchParams({
+        from: DEFAULT_SENDER,
+        to: normalized,
+        message: `Din verifieringskod för Stegerholmens Hamn: ${code}`,
+      });
+      const response = await fetch(API_URL, {
+        method: "POST",
+        body: body.toString(),
+        headers: {
+          Authorization: `Basic ${authStr}`,
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+      });
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`Verification SMS to ${normalized} failed: ${errorText}`);
+        res.status(500).json({ error: "Kunde inte skicka SMS. Försök igen." });
+        return;
+      }
+    } catch (err) {
+      console.error(`Error sending verification SMS to ${normalized}:`, err);
+      res.status(500).json({ error: "Kunde inte skicka SMS. Försök igen." });
+      return;
+    }
+
+    res.status(200).json({ verificationId: docRef.id });
+  }
+);
+
+/**
+ * Verify a phone verification code.
+ * No auth required — this is called before the user has a profile.
+ * Code expires after 5 minutes.
+ *
+ * POST /verifyPhoneCode
+ * Body: { "verificationId": "docId", "code": "1234" }
+ * Returns: { "success": true } or { "error": "..." }
+ */
+export const verifyPhoneCode = onRequest(
+  { cors: true, region: "europe-west1" },
+  async (req, res) => {
+    if (req.method !== "POST") {
+      res.status(405).json({ error: "Method not allowed" });
+      return;
+    }
+
+    const { verificationId, code } = req.body;
+    if (!verificationId || !code) {
+      res.status(400).json({ error: "Missing required fields: verificationId, code" });
+      return;
+    }
+
+    const docRef = admin.firestore().doc(`smsVerifications/${verificationId}`);
+    const docSnap = await docRef.get();
+
+    if (!docSnap.exists) {
+      res.status(404).json({ error: "Ogiltig verifiering." });
+      return;
+    }
+
+    const data = docSnap.data()!;
+
+    // Check 5-minute expiry
+    const createdAt = data.createdAt?.toMillis?.() || 0;
+    const fiveMinutes = 5 * 60 * 1000;
+    if (Date.now() - createdAt > fiveMinutes) {
+      await docRef.delete();
+      res.status(410).json({ error: "Koden har gått ut. Begär en ny kod." });
+      return;
+    }
+
+    // Check code
+    if (data.code !== code) {
+      res.status(400).json({ error: "Felaktig kod. Försök igen." });
+      return;
+    }
+
+    // Success — delete the verification doc
+    await docRef.delete();
+    res.status(200).json({ success: true });
   }
 );
