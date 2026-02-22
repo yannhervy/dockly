@@ -73,6 +73,28 @@ export default function DocksPage() {
         för frågor om lediga platser.
       </Typography>
 
+      {/* Interest registration CTA */}
+      <Button
+        component={Link}
+        href="/interest"
+        variant="contained"
+        size="large"
+        sx={{
+          mb: 3,
+          px: 4,
+          py: 1.2,
+          textTransform: "none",
+          borderRadius: 3,
+          fontSize: "0.95rem",
+          background: "linear-gradient(135deg, #4FC3F7, #0288D1)",
+          "&:hover": {
+            background: "linear-gradient(135deg, #29B6F6, #0277BD)",
+          },
+        }}
+      >
+        Intresseanmälan för båtplats
+      </Button>
+
       {/* Login prompt for unauthenticated visitors */}
       {!isLoggedIn && !loading && (
         <Alert

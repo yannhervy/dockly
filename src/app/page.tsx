@@ -83,8 +83,8 @@ export default function HomePage() {
 
   return (
     <Box>
-      {/* ─── Hero Section ─────────────────────────────────── */}
-      <Box
+      {/* ─── Hero Section (hidden for logged-in users) ───── */}
+      {!isLoggedIn && <Box
         sx={{
           position: "relative",
           minHeight: { xs: 420, md: 520 },
@@ -300,7 +300,7 @@ export default function HomePage() {
             </Box>
           )}
         </Box>
-      </Box>
+      </Box>}
 
       {/* ─── Weather Strip ─────────────────────────────────── */}
       <Box sx={{ maxWidth: 1100, mx: "auto", px: 3, pt: 4, pb: 0 }}>
@@ -526,8 +526,8 @@ export default function HomePage() {
         </Box>
       )}
 
-      {/* ─── Map Section ──────────────────────────────────── */}
-      <Box sx={{ maxWidth: 1100, mx: "auto", px: 3, py: 4 }}>
+      {/* ─── Map Section (hidden for logged-in users) ──────── */}
+      {!isLoggedIn && <Box sx={{ maxWidth: 1100, mx: "auto", px: 3, py: 4 }}>
         <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 2 }}>
           <PlaceIcon sx={{ color: "primary.main" }} />
           <Typography variant="h5" sx={{ fontWeight: 700 }}>
@@ -556,7 +556,7 @@ export default function HomePage() {
         <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: "block" }}>
           Stegerholmens småbåtshamn, Göteborgs skärgård
         </Typography>
-      </Box>
+      </Box>}
 
       {/* Bottom spacer */}
       <Box sx={{ height: 40 }} />
