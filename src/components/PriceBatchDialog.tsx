@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useCallback } from "react";
 import Dialog from "@mui/material/Dialog";
 import DialogTitle from "@mui/material/DialogTitle";
 import DialogContent from "@mui/material/DialogContent";
@@ -37,7 +37,7 @@ interface PriceBatchDialogProps {
   onUpdated: (updatedResources: Resource[]) => void;
 }
 
-type PriceAction = "copy" | "increase" | "remove";
+type PriceAction = "copy" | "increase" | "fixed" | "remove";
 
 const currentYear = new Date().getFullYear().toString();
 const lastYear = (new Date().getFullYear() - 1).toString();
@@ -54,21 +54,33 @@ export default function PriceBatchDialog({
 
   const [action, setAction] = useState<PriceAction>("copy");
   const [increasePercent, setIncreasePercent] = useState<string>("5");
+  const [fixedAmount, setFixedAmount] = useState<string>("100");
   const [saving, setSaving] = useState(false);
   const [confirmRemove, setConfirmRemove] = useState(false);
+
+  // Manual price overrides: resourceId → edited price (or null to clear)
+  const [overrides, setOverrides] = useState<Record<string, number | null>>({});
 
   // Reset state when dialog opens
   React.useEffect(() => {
     if (open) {
       setAction("copy");
       setIncreasePercent("5");
+      setFixedAmount("100");
       setConfirmRemove(false);
+      setOverrides({});
     }
   }, [open]);
 
-  // Compute preview rows
-  const previewRows = useMemo(() => {
+  // Clear overrides when action/params change (user recalculates)
+  React.useEffect(() => {
+    setOverrides({});
+  }, [action, increasePercent, fixedAmount]);
+
+  // Compute base preview rows (before manual overrides)
+  const baseRows = useMemo(() => {
     const pct = parseFloat(increasePercent) || 0;
+    const fixed = parseInt(fixedAmount) || 0;
 
     return resources.map((r) => {
       const b = r as Berth;
@@ -76,41 +88,68 @@ export default function PriceBatchDialog({
       const priceThisYear = b.prices?.[currentYear] ?? undefined;
       const hasExistingPrice = priceThisYear != null;
 
-      let newPrice: number | undefined;
+      let calculatedPrice: number | undefined;
       switch (action) {
         case "copy":
-          newPrice = priceLastYear != null ? Math.round(priceLastYear) : undefined;
+          calculatedPrice = priceLastYear != null ? Math.round(priceLastYear) : undefined;
           break;
-        case "increase":
-          // Increase from last year's price (or this year if no last year)
+        case "increase": {
           const base = priceLastYear ?? priceThisYear;
-          newPrice = base != null ? Math.round(base * (1 + pct / 100)) : undefined;
+          calculatedPrice = base != null ? Math.round(base * (1 + pct / 100)) : undefined;
           break;
+        }
+        case "fixed": {
+          const base = priceLastYear ?? priceThisYear;
+          calculatedPrice = base != null ? Math.round(base + fixed) : undefined;
+          break;
+        }
         case "remove":
-          newPrice = undefined;
+          calculatedPrice = undefined;
           break;
       }
-
-      const willChange = action === "remove"
-        ? hasExistingPrice
-        : newPrice != null && newPrice !== priceThisYear;
 
       return {
         id: r.id,
         markingCode: r.markingCode,
         priceLastYear,
         priceThisYear,
-        newPrice,
+        calculatedPrice,
         hasExistingPrice,
-        willChange,
-        noSource: action !== "remove" && newPrice == null,
+        noSource: action !== "remove" && calculatedPrice == null,
       };
     });
-  }, [resources, action, increasePercent]);
+  }, [resources, action, increasePercent, fixedAmount]);
+
+  // Merge overrides into final preview
+  const previewRows = useMemo(() => {
+    return baseRows.map((row) => {
+      const hasOverride = row.id in overrides;
+      const newPrice = hasOverride ? (overrides[row.id] ?? undefined) : row.calculatedPrice;
+
+      const willChange = action === "remove"
+        ? row.hasExistingPrice
+        : newPrice != null && newPrice !== row.priceThisYear;
+
+      return {
+        ...row,
+        newPrice,
+        willChange,
+        isOverridden: hasOverride,
+      };
+    });
+  }, [baseRows, overrides, action]);
 
   const changedRows = previewRows.filter((r) => r.willChange);
   const overwriteRows = previewRows.filter((r) => r.willChange && r.hasExistingPrice);
-  const noSourceRows = previewRows.filter((r) => r.noSource);
+  const noSourceRows = previewRows.filter((r) => r.noSource && !r.isOverridden);
+
+  // Handle manual price edit
+  const handlePriceEdit = useCallback((id: string, value: string) => {
+    const parsed = value === "" ? null : Math.round(parseFloat(value));
+    if (value === "" || (!isNaN(parsed!) && parsed! >= 0)) {
+      setOverrides((prev) => ({ ...prev, [id]: parsed }));
+    }
+  }, []);
 
   // Save prices
   const handleSave = async () => {
@@ -127,7 +166,6 @@ export default function PriceBatchDialog({
 
         let newPrices: Record<string, number>;
         if (action === "remove") {
-          // Remove the current year entry
           newPrices = { ...existingPrices };
           delete newPrices[currentYear];
         } else {
@@ -178,12 +216,16 @@ export default function PriceBatchDialog({
             exclusive
             onChange={(_e, val) => { if (val) { setAction(val); setConfirmRemove(false); } }}
             size="small"
+            sx={{ flexWrap: "wrap" }}
           >
             <ToggleButton value="copy">
               Kopiera förra årets pris ({lastYear})
             </ToggleButton>
             <ToggleButton value="increase">
               Procentuell ökning
+            </ToggleButton>
+            <ToggleButton value="fixed">
+              Fast påslag (SEK)
             </ToggleButton>
             <ToggleButton value="remove" sx={{ color: "error.main" }}>
               Ta bort årets pris
@@ -209,6 +251,24 @@ export default function PriceBatchDialog({
           </Box>
         )}
 
+        {/* Fixed amount input */}
+        {action === "fixed" && (
+          <Box sx={{ mb: 3 }}>
+            <TextField
+              label="Påslag (SEK)"
+              type="number"
+              value={fixedAmount}
+              onChange={(e) => setFixedAmount(e.target.value)}
+              size="small"
+              sx={{ width: 150 }}
+              slotProps={{ htmlInput: { step: 50 } }}
+            />
+            <Typography variant="caption" color="text.secondary" sx={{ ml: 2 }}>
+              Läggs till på förra årets pris ({lastYear}). Om det saknas används nuvarande årets pris. Negativt värde = rabatt.
+            </Typography>
+          </Box>
+        )}
+
         {/* Warnings */}
         {overwriteRows.length > 0 && action !== "remove" && (
           <Alert severity="warning" sx={{ mb: 2 }} icon={<WarningAmberIcon />}>
@@ -219,7 +279,7 @@ export default function PriceBatchDialog({
 
         {noSourceRows.length > 0 && action !== "remove" && (
           <Alert severity="info" sx={{ mb: 2 }}>
-            {noSourceRows.length} plats(er) saknar källpris och kommer inte att uppdateras.
+            {noSourceRows.length} plats(er) saknar källpris. Ange pris manuellt i tabellen nedan.
           </Alert>
         )}
 
@@ -233,6 +293,11 @@ export default function PriceBatchDialog({
         {/* Preview table */}
         <Typography variant="subtitle2" sx={{ mb: 1 }}>
           Förhandsgranskning
+          {action !== "remove" && (
+            <Typography component="span" variant="caption" color="text.secondary" sx={{ ml: 1 }}>
+              — redigera enskilda priser direkt i kolumnen
+            </Typography>
+          )}
         </Typography>
         <TableContainer component={Paper} sx={{ bgcolor: "background.paper", backgroundImage: "none", maxHeight: 400 }}>
           <Table size="small" stickyHeader>
@@ -286,18 +351,21 @@ export default function PriceBatchDialog({
                       ) : (
                         <Typography variant="caption" color="text.secondary">Inget pris</Typography>
                       )
-                    ) : row.newPrice != null ? (
-                      <Typography
-                        variant="body2"
-                        sx={{
-                          fontWeight: 700,
-                          color: row.willChange ? "success.main" : "text.primary",
-                        }}
-                      >
-                        {row.newPrice.toLocaleString("sv-SE")} kr
-                      </Typography>
                     ) : (
-                      <Typography variant="caption" color="text.secondary">Saknar källpris</Typography>
+                      <TextField
+                        type="number"
+                        size="small"
+                        value={row.newPrice != null ? row.newPrice : ""}
+                        onChange={(e) => handlePriceEdit(row.id, e.target.value)}
+                        placeholder="—"
+                        slotProps={{ htmlInput: { min: 0, step: 50, style: { textAlign: "right", width: 80 } } }}
+                        variant="outlined"
+                        sx={{
+                          "& .MuiOutlinedInput-root": {
+                            bgcolor: row.isOverridden ? "rgba(100, 181, 246, 0.08)" : undefined,
+                          },
+                        }}
+                      />
                     )}
                   </TableCell>
                   <TableCell>
@@ -310,6 +378,19 @@ export default function PriceBatchDialog({
                           color: "warning.main",
                           fontWeight: 600,
                           fontSize: "0.7rem",
+                        }}
+                      />
+                    )}
+                    {row.isOverridden && (
+                      <Chip
+                        label="Manuellt"
+                        size="small"
+                        sx={{
+                          bgcolor: "rgba(100, 181, 246, 0.15)",
+                          color: "info.main",
+                          fontWeight: 600,
+                          fontSize: "0.7rem",
+                          ml: 0.5,
                         }}
                       />
                     )}
