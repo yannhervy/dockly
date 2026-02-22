@@ -87,7 +87,8 @@ export default function SmsBatchDialog({
   const [swishPhone, setSwishPhone] = useState(defaultSwishPhone);
   const [includeSwish, setIncludeSwish] = useState(true);
   const [lastPaymentDate, setLastPaymentDate] = useState("");
-  const [sending, setSending] = useState(false);
+  const [sendingTest, setSendingTest] = useState(false);
+  const [sendingAll, setSendingAll] = useState(false);
   const [sendResult, setSendResult] = useState<{ sent: number; failed: number; skipped: number } | null>(null);
   const [testSent, setTestSent] = useState(false);
 
@@ -121,10 +122,10 @@ export default function SmsBatchDialog({
     setMessage((prev) => prev + placeholder);
   };
 
-  // Send test SMS to self
+  // Send test SMS to self (only to the logged-in user's phone)
   const handleTestSms = async () => {
     if (previewRows.length === 0 || !defaultSwishPhone) return;
-    setSending(true);
+    setSendingTest(true);
     try {
       const first = previewRows[0];
       await sendSms(defaultSwishPhone, `[TEST] ${first.fullMessage}`);
@@ -133,13 +134,15 @@ export default function SmsBatchDialog({
     } catch (err) {
       console.error("Test SMS failed:", err);
     } finally {
-      setSending(false);
+      setSendingTest(false);
     }
   };
 
+  const busy = sendingTest || sendingAll;
+
   // Send all SMS
   const handleSendAll = async () => {
-    setSending(true);
+    setSendingAll(true);
     let sent = 0;
     let failed = 0;
     let skipped = 0;
@@ -156,13 +159,13 @@ export default function SmsBatchDialog({
       }
     }
     setSendResult({ sent, failed, skipped });
-    setSending(false);
+    setSendingAll(false);
   };
 
   return (
     <Dialog
       open={open}
-      onClose={sending ? undefined : onClose}
+      onClose={busy ? undefined : onClose}
       maxWidth="lg"
       fullWidth
       fullScreen={isMobile}
@@ -304,7 +307,7 @@ export default function SmsBatchDialog({
 
       {!sendResult && (
         <DialogActions sx={{ px: 3, py: 2, gap: 1, flexWrap: "wrap" }}>
-          <Button onClick={onClose} disabled={sending}>
+          <Button onClick={onClose} disabled={busy}>
             Avbryt
           </Button>
           <Box sx={{ flex: 1 }} />
@@ -314,16 +317,16 @@ export default function SmsBatchDialog({
           <Button
             variant="outlined"
             onClick={handleTestSms}
-            disabled={sending || previewRows.length === 0 || !message.trim()}
-            startIcon={sending ? <CircularProgress size={16} /> : undefined}
+            disabled={busy || previewRows.length === 0 || !message.trim()}
+            startIcon={sendingTest ? <CircularProgress size={16} /> : undefined}
           >
             Skicka test-SMS
           </Button>
           <Button
             variant="contained"
             onClick={handleSendAll}
-            disabled={sending || sendableRows.length === 0 || !message.trim()}
-            startIcon={sending ? <CircularProgress size={16} /> : <SendIcon />}
+            disabled={busy || sendableRows.length === 0 || !message.trim()}
+            startIcon={sendingAll ? <CircularProgress size={16} /> : <SendIcon />}
           >
             Skicka alla ({sendableRows.length} st)
           </Button>
