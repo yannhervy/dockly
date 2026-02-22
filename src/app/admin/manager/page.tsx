@@ -326,7 +326,7 @@ function ManagerContent() {
           disabled={selectedIds.size === 0}
           sx={{ textTransform: "none", fontWeight: 600 }}
         >
-          Skicka SMS / Betalning{selectedIds.size > 0 ? ` (${selectedIds.size} st)` : ""}
+          Komponera SMS / Swish-betalning{selectedIds.size > 0 ? ` (${selectedIds.size} st)` : ""}
         </Button>
         <Button
           variant="outlined"

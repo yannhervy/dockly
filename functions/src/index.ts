@@ -156,7 +156,7 @@ export const onInterestCreated = onDocumentCreated(
 
     let message = `Ny intresseanmälan från ${userName}: ${boatWidth}×${boatLength}m.`;
     if (hasImage) {
-      message += " 📷 Bild bifogad.";
+      message += " Bild bifogad.";
     }
     if (userMessage) {
       message += ` "${userMessage}"`;
