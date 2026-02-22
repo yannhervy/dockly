@@ -679,18 +679,24 @@ function UsersTab({ initialEditId }: { initialEditId?: string }) {
             <TableHead>
               <TableRow>
                 <TableCell>Name</TableCell>
+                <TableCell></TableCell>
                 <TableCell>Email</TableCell>
                 <TableCell>Role</TableCell>
                 <TableCell>Phone</TableCell>
                 <TableCell>Public</TableCell>
                 <TableCell>Senast inloggad</TableCell>
-                <TableCell align="right">Actions</TableCell>
+                <TableCell align="right"></TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
               {users.map((u) => (
                 <TableRow key={u.id} hover>
                   <TableCell sx={{ fontWeight: 600 }}>{u.name}</TableCell>
+                  <TableCell>
+                    <IconButton size="small" onClick={() => handleEditOpen(u)}>
+                      <EditIcon fontSize="small" />
+                    </IconButton>
+                  </TableCell>
                   <TableCell>{u.email}</TableCell>
                   <TableCell>
                     <Select
@@ -729,18 +735,7 @@ function UsersTab({ initialEditId }: { initialEditId?: string }) {
                       : "—"}
                   </TableCell>
                   <TableCell align="right">
-                    <IconButton
-                      size="small"
-                      onClick={() => handleEditOpen(u)}
-                      sx={{ mr: 0.5 }}
-                    >
-                      <EditIcon fontSize="small" />
-                    </IconButton>
-                    <IconButton
-                      size="small"
-                      color="error"
-                      onClick={() => handleDeleteUser(u.id)}
-                    >
+                    <IconButton size="small" color="error" onClick={() => handleDeleteUser(u.id)}>
                       <DeleteIcon fontSize="small" />
                     </IconButton>
                   </TableCell>
@@ -2074,6 +2069,7 @@ function ResourcesTab({ initialEditId }: { initialEditId?: string }) {
             <TableHead>
               <TableRow>
                 <TableCell>Marking Code</TableCell>
+                <TableCell></TableCell>
                 <TableCell>Type</TableCell>
                 <TableCell>Dock</TableCell>
                 <TableCell>Dir</TableCell>
@@ -2081,7 +2077,7 @@ function ResourcesTab({ initialEditId }: { initialEditId?: string }) {
                 <TableCell>Payment</TableCell>
                 <TableCell>Ansvarig</TableCell>
                 <TableCell sx={{ minWidth: 220 }}>Tenant</TableCell>
-                <TableCell align="right">Actions</TableCell>
+                <TableCell align="right"></TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -2115,6 +2111,11 @@ function ResourcesTab({ initialEditId }: { initialEditId?: string }) {
                         {r.heading}°
                       </Typography>
                     )}
+                  </TableCell>
+                  <TableCell>
+                    <IconButton size="small" onClick={() => openEditDialog(r)}>
+                      <EditIcon fontSize="small" />
+                    </IconButton>
                   </TableCell>
                   <TableCell>
                     <Chip label={r.type} size="small" variant="outlined" />
@@ -2196,18 +2197,7 @@ function ResourcesTab({ initialEditId }: { initialEditId?: string }) {
                     />
                   </TableCell>
                   <TableCell align="right">
-                    <IconButton
-                      size="small"
-                      onClick={() => openEditDialog(r)}
-                      sx={{ mr: 0.5 }}
-                    >
-                      <EditIcon fontSize="small" />
-                    </IconButton>
-                    <IconButton
-                      size="small"
-                      color="error"
-                      onClick={() => setDeleteConfirmId(r.id)}
-                    >
+                    <IconButton size="small" color="error" onClick={() => setDeleteConfirmId(r.id)}>
                       <DeleteIcon fontSize="small" />
                     </IconButton>
                   </TableCell>
@@ -3006,36 +2996,31 @@ function InterestsTab({ initialEditId }: { initialEditId?: string }) {
           <Table>
             <TableHead>
               <TableRow>
+                <TableCell></TableCell>
                 <TableCell>Namn</TableCell>
-                <TableCell>Bild</TableCell>
-                <TableCell>E-post</TableCell>
-                <TableCell>Telefon</TableCell>
                 <TableCell>Båt (B×L)</TableCell>
                 <TableCell>Önskad brygga</TableCell>
                 <TableCell>Önskad plats</TableCell>
                 <TableCell>Datum</TableCell>
                 <TableCell>Status</TableCell>
-                <TableCell align="right">Åtgärd</TableCell>
+                <TableCell align="right"></TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
               {interests.map((interest) => (
                 <TableRow key={interest.id} hover>
-                  <TableCell sx={{ fontWeight: 600 }}>{interest.userName}</TableCell>
-                  <TableCell>
-                    {interest.imageUrl ? (
-                      <InsertPhotoIcon
-                        sx={{ color: "#4FC3F7", cursor: "pointer", fontSize: 28 }}
-                        titleAccess="Visa bild"
-                        onClick={() => window.open(interest.imageUrl!, "_blank")}
-                      />
-                    ) : (
-                      <Typography variant="caption" color="text.secondary">—</Typography>
-                    )}
+                  <TableCell sx={{ whiteSpace: "nowrap" }}>
+                    <Button
+                      size="small"
+                      variant="contained"
+                      onClick={() => openDetail(interest)}
+                      sx={{ textTransform: "none", fontWeight: 600, minWidth: 70 }}
+                    >
+                      Öppna
+                    </Button>
                   </TableCell>
-                  <TableCell>{interest.email}</TableCell>
-                  <TableCell>{interest.phone || "—"}</TableCell>
-                  <TableCell>
+                  <TableCell sx={{ fontWeight: 600 }}>{interest.userName}</TableCell>
+                  <TableCell sx={{ whiteSpace: "nowrap" }}>
                     {interest.boatWidth}×{interest.boatLength} m
                   </TableCell>
                   <TableCell>{getDockName(interest.preferredDockId)}</TableCell>
@@ -3059,13 +3044,6 @@ function InterestsTab({ initialEditId }: { initialEditId?: string }) {
                     </Select>
                   </TableCell>
                   <TableCell align="right">
-                    <IconButton
-                      size="small"
-                      onClick={() => openDetail(interest)}
-                      sx={{ color: "primary.main" }}
-                    >
-                      <VisibilityIcon fontSize="small" />
-                    </IconButton>
                     <IconButton
                       size="small"
                       onClick={() => setDeleteConfirmId(interest.id)}
@@ -3488,7 +3466,7 @@ function InterestsTab({ initialEditId }: { initialEditId?: string }) {
                 <TextField
                   fullWidth
                   multiline
-                  rows={3}
+                  rows={5}
                   value={replyMessage}
                   onChange={(e) => setReplyMessage(e.target.value)}
                   placeholder="Skriv ett svar till den intresserade..."
@@ -3741,6 +3719,7 @@ function AbandonedObjectsTab({ initialEditId }: { initialEditId?: string }) {
             <TableHead>
               <TableRow>
                 <TableCell>ID</TableCell>
+                <TableCell></TableCell>
                 <TableCell>Typ</TableCell>
                 <TableCell>Foto</TableCell>
                 <TableCell>Ägare</TableCell>
@@ -3748,13 +3727,18 @@ function AbandonedObjectsTab({ initialEditId }: { initialEditId?: string }) {
                 <TableCell>Position</TableCell>
                 <TableCell>Övergiven sedan</TableCell>
                 <TableCell>Kommentar</TableCell>
-                <TableCell align="right">Åtgärder</TableCell>
+                <TableCell align="right"></TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
               {entries.map((entry) => (
                 <TableRow key={entry.id} hover>
                   <TableCell sx={{ fontWeight: 700, whiteSpace: "nowrap" }}>☠️ {entry.abandonedId}</TableCell>
+                  <TableCell>
+                    <IconButton size="small" onClick={() => openEdit(entry)}>
+                      <EditIcon fontSize="small" />
+                    </IconButton>
+                  </TableCell>
                   <TableCell>{objectTypeLabel(entry.objectType)}</TableCell>
                   <TableCell>
                     {entry.imageUrl ? (
@@ -3792,9 +3776,6 @@ function AbandonedObjectsTab({ initialEditId }: { initialEditId?: string }) {
                     {entry.comment || "—"}
                   </TableCell>
                   <TableCell align="right">
-                    <IconButton size="small" onClick={() => openEdit(entry)} sx={{ mr: 0.5 }}>
-                      <EditIcon fontSize="small" />
-                    </IconButton>
                     <IconButton size="small" color="error" onClick={() => handleDelete(entry.id)}>
                       <DeleteIcon fontSize="small" />
                     </IconButton>
@@ -4179,16 +4160,22 @@ function POITab({ initialEditId }: { initialEditId?: string }) {
             <TableHead>
               <TableRow>
                 <TableCell>Namn</TableCell>
+                <TableCell></TableCell>
                 <TableCell>Foto</TableCell>
                 <TableCell>Position</TableCell>
                 <TableCell>Kommentar</TableCell>
-                <TableCell align="right">Åtgärder</TableCell>
+                <TableCell align="right"></TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
               {entries.map((entry) => (
                 <TableRow key={entry.id} hover>
                   <TableCell sx={{ fontWeight: 700 }}>{entry.id}</TableCell>
+                  <TableCell>
+                    <IconButton size="small" onClick={() => openEdit(entry)}>
+                      <EditIcon fontSize="small" />
+                    </IconButton>
+                  </TableCell>
                   <TableCell>
                     {entry.imageUrl ? (
                       <InsertPhotoIcon
@@ -4207,9 +4194,6 @@ function POITab({ initialEditId }: { initialEditId?: string }) {
                     {entry.comment || "—"}
                   </TableCell>
                   <TableCell align="right">
-                    <IconButton size="small" onClick={() => openEdit(entry)} sx={{ mr: 0.5 }}>
-                      <EditIcon fontSize="small" />
-                    </IconButton>
                     <IconButton size="small" color="error" onClick={() => handleDelete(entry.id)}>
                       <DeleteIcon fontSize="small" />
                     </IconButton>

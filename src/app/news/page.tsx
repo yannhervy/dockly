@@ -583,7 +583,7 @@ export default function NewsPage() {
             sx={{ mt: 1, mb: 2 }}
           />
 
-          <Box data-color-mode="dark" sx={{ mb: 2 }}>
+          <Box data-color-mode="light" sx={{ mb: 2 }}>
             <MDEditor
               value={form.body}
               onChange={(val) => setForm({ ...form, body: val || "" })}
