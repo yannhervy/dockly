@@ -238,8 +238,8 @@ export function CombinedWindWidget({ data }: { data: VivaStationData }) {
 
     const cx = W / 2;
     const cy = H / 2;
-    const outerRadius = 100;
-    const innerRadius = 80;
+    const outerRadius = 115;
+    const innerRadius = 92;
 
     let startTime: number | null = null;
     const animDuration = 1400;
@@ -317,8 +317,8 @@ export function CombinedWindWidget({ data }: { data: VivaStationData }) {
 
       // Cardinal directions
       ctx.save();
-      ctx.font = "600 10px 'Inter', sans-serif";
-      ctx.fillStyle = "rgba(226,232,240,0.4)";
+      ctx.font = "600 11px 'Inter', sans-serif";
+      ctx.fillStyle = "rgba(226,232,240,0.55)";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
       const cardinals = [
@@ -358,8 +358,8 @@ export function CombinedWindWidget({ data }: { data: VivaStationData }) {
       const hamnText = "HAMNSEKTOR";
       const hamnR = outerRadius + 18;
       const hamnCenter = (200 * Math.PI) / 180 - Math.PI / 2;
-      ctx.font = "600 8px 'Inter', sans-serif";
-      ctx.fillStyle = "rgba(255,255,255,0.7)";
+      ctx.font = "600 9px 'Inter', sans-serif";
+      ctx.fillStyle = "rgba(255,255,255,0.75)";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
       const hamnSpacing = 0.08;
@@ -385,7 +385,7 @@ export function CombinedWindWidget({ data }: { data: VivaStationData }) {
         ctx.beginPath();
         ctx.moveTo(cx + Math.cos(angle) * innerR, cy + Math.sin(angle) * innerR);
         ctx.lineTo(cx + Math.cos(angle) * outerR, cy + Math.sin(angle) * outerR);
-        ctx.strokeStyle = isMajor ? "rgba(226,232,240,0.25)" : "rgba(226,232,240,0.08)";
+        ctx.strokeStyle = isMajor ? "rgba(226,232,240,0.35)" : "rgba(226,232,240,0.12)";
         ctx.lineWidth = isMajor ? 2 : 1;
         ctx.stroke();
       }
@@ -468,26 +468,26 @@ export function CombinedWindWidget({ data }: { data: VivaStationData }) {
       ctx.save();
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      ctx.font = "500 8px 'Inter', sans-serif";
-      ctx.fillStyle = "rgba(245,158,11,0.7)";
+      ctx.font = "500 9px 'Inter', sans-serif";
+      ctx.fillStyle = "rgba(245,158,11,0.8)";
       ctx.fillText("BYVIND", cx, cy - 22);
       ctx.font = "700 18px 'JetBrains Mono', monospace";
       ctx.fillStyle = "#f59e0b";
       ctx.fillText(currentGust.toFixed(1), cx, cy - 8);
-      ctx.font = "500 8px 'Inter', sans-serif";
-      ctx.fillStyle = "rgba(59,130,246,0.7)";
+      ctx.font = "500 9px 'Inter', sans-serif";
+      ctx.fillStyle = "rgba(59,130,246,0.8)";
       ctx.fillText("MEDEL", cx, cy + 10);
       ctx.font = "700 18px 'JetBrains Mono', monospace";
       ctx.fillStyle = "#3b82f6";
       ctx.fillText(currentAvg.toFixed(1), cx, cy + 24);
-      ctx.font = "400 9px 'Inter', sans-serif";
-      ctx.fillStyle = "rgba(226,232,240,0.4)";
+      ctx.font = "400 10px 'Inter', sans-serif";
+      ctx.fillStyle = "rgba(226,232,240,0.55)";
       ctx.fillText("m/s", cx, cy + 38);
       ctx.restore();
 
       // Direction label
       ctx.save();
-      ctx.font = "600 11px 'Inter', sans-serif";
+      ctx.font = "600 12px 'Inter', sans-serif";
       ctx.fillStyle = "#e2e8f0";
       ctx.textAlign = "center";
       ctx.fillText(gust.direction + " " + Math.round(currentHeading) + "°", cx, H - 4);
@@ -562,9 +562,9 @@ export function CombinedWaterWidget({ data }: { data: VivaStationData }) {
     const barBottom = H - 35;
     const barH = barBottom - barTop;
 
-    const arcCx = W * 0.62;
+    const arcCx = W * 0.68;
     const arcCy = H / 2;
-    const arcRadius = 85;
+    const arcRadius = 72;
 
     let startTime: number | null = null;
     const animDuration = 1400;
@@ -591,8 +591,8 @@ export function CombinedWaterWidget({ data }: { data: VivaStationData }) {
 
       // Scale marks
       ctx.save();
-      ctx.font = "400 9px 'JetBrains Mono', monospace";
-      ctx.fillStyle = "rgba(226,232,240,0.3)";
+      ctx.font = "400 10px 'JetBrains Mono', monospace";
+      ctx.fillStyle = "rgba(226,232,240,0.45)";
       ctx.textAlign = "right";
       for (let v = -scaleMax; v <= scaleMax; v += scaleStep) {
         const frac = (v - (-scaleMax)) / (scaleMax * 2);
@@ -646,14 +646,14 @@ export function CombinedWaterWidget({ data }: { data: VivaStationData }) {
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
       ctx.fillText(Math.round(currentLevel) + "", barX + barW / 2, barTop - 10);
-      ctx.font = "400 9px 'Inter', sans-serif";
-      ctx.fillStyle = "rgba(226,232,240,0.5)";
+      ctx.font = "400 10px 'Inter', sans-serif";
+      ctx.fillStyle = "rgba(226,232,240,0.6)";
       ctx.fillText("cm", barX + barW + 16, barTop - 10);
       ctx.restore();
 
       ctx.save();
-      ctx.font = "600 8px 'Inter', sans-serif";
-      ctx.fillStyle = "rgba(226,232,240,0.4)";
+      ctx.font = "600 9px 'Inter', sans-serif";
+      ctx.fillStyle = "rgba(226,232,240,0.55)";
       ctx.textAlign = "center";
       ctx.fillText("NIVÅ", barX + barW / 2, barBottom + 16);
       ctx.restore();
@@ -706,8 +706,8 @@ export function CombinedWaterWidget({ data }: { data: VivaStationData }) {
 
       // Temperature scale ticks
       ctx.save();
-      ctx.font = "400 8px 'JetBrains Mono', monospace";
-      ctx.fillStyle = "rgba(226,232,240,0.25)";
+      ctx.font = "400 9px 'JetBrains Mono', monospace";
+      ctx.fillStyle = "rgba(226,232,240,0.4)";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
       for (let st = 0; st <= 30; st += 10) {
@@ -724,8 +724,8 @@ export function CombinedWaterWidget({ data }: { data: VivaStationData }) {
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
       ctx.fillText(currentTemp.toFixed(1) + "°", arcCx, arcCy - 4);
-      ctx.font = "400 10px 'Inter', sans-serif";
-      ctx.fillStyle = "rgba(226,232,240,0.5)";
+      ctx.font = "400 11px 'Inter', sans-serif";
+      ctx.fillStyle = "rgba(226,232,240,0.6)";
       ctx.fillText("Celsius", arcCx, arcCy + 16);
       ctx.restore();
 
