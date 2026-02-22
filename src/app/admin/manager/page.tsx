@@ -322,26 +322,24 @@ function ManagerContent() {
             ))}
           </Select>
         </FormControl>
-        {selectedIds.size > 0 && (
-          <>
-            <Button
-              variant="contained"
-              startIcon={<SmsIcon />}
-              onClick={() => setSmsDialogOpen(true)}
-              sx={{ textTransform: "none", fontWeight: 600 }}
-            >
-              Skicka SMS / Betalning ({selectedIds.size} st)
-            </Button>
-            <Button
-              variant="outlined"
-              startIcon={<AttachMoneyIcon />}
-              onClick={() => setPriceDialogOpen(true)}
-              sx={{ textTransform: "none", fontWeight: 600 }}
-            >
-              Hantera priser ({selectedIds.size} st)
-            </Button>
-          </>
-        )}
+        <Button
+          variant="contained"
+          startIcon={<SmsIcon />}
+          onClick={() => setSmsDialogOpen(true)}
+          disabled={selectedIds.size === 0}
+          sx={{ textTransform: "none", fontWeight: 600 }}
+        >
+          Skicka SMS / Betalning{selectedIds.size > 0 ? ` (${selectedIds.size} st)` : ""}
+        </Button>
+        <Button
+          variant="outlined"
+          startIcon={<AttachMoneyIcon />}
+          onClick={() => setPriceDialogOpen(true)}
+          disabled={selectedIds.size === 0}
+          sx={{ textTransform: "none", fontWeight: 600 }}
+        >
+          Hantera priser{selectedIds.size > 0 ? ` (${selectedIds.size} st)` : ""}
+        </Button>
       </Box>
 
       {loadingDocks ? (
