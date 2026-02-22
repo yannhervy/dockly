@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useRef } from "react";
 import Dialog from "@mui/material/Dialog";
 import DialogTitle from "@mui/material/DialogTitle";
 import DialogContent from "@mui/material/DialogContent";
@@ -51,6 +51,7 @@ interface SmsBatchDialogProps {
 
 // ─── Placeholder insertion helper ───────────────────────
 const PLACEHOLDERS = [
+  { value: "{id}", label: "Platskod" },
   { value: "{namn}", label: "Namn" },
   { value: "{pris}", label: "Pris" },
   { value: "{lastPaymentDate}", label: "Sista betalningsdag" },
@@ -62,6 +63,7 @@ function interpolateMessage(
   lastPaymentDate: string
 ): string {
   return template
+    .replace(/\{id\}/g, recipient.markingCode || "—")
     .replace(/\{namn\}/g, recipient.name || "—")
     .replace(/\{pris\}/g, recipient.price != null ? `${recipient.price.toLocaleString("sv-SE")} kr` : "—")
     .replace(/\{lastPaymentDate\}/g, lastPaymentDate || "—");
@@ -92,6 +94,9 @@ export default function SmsBatchDialog({
   const [sendResult, setSendResult] = useState<{ sent: number; failed: number; skipped: number } | null>(null);
   const [testSent, setTestSent] = useState(false);
 
+  // Ref to the message textarea for caret-position insertion
+  const messageRef = useRef<HTMLTextAreaElement>(null);
+
   // Reset state when dialog opens
   React.useEffect(() => {
     if (open) {
@@ -117,9 +122,25 @@ export default function SmsBatchDialog({
 
   const sendableRows = previewRows.filter((r) => r.phone);
 
-  // Insert placeholder at cursor position
+  // Insert placeholder at cursor (caret) position
   const handleInsertPlaceholder = (placeholder: string) => {
-    setMessage((prev) => prev + placeholder);
+    const el = messageRef.current;
+    if (el) {
+      const start = el.selectionStart ?? message.length;
+      const end = el.selectionEnd ?? message.length;
+      const before = message.slice(0, start);
+      const after = message.slice(end);
+      const newMsg = before + placeholder + after;
+      setMessage(newMsg);
+      // Restore focus and move caret after the inserted placeholder
+      requestAnimationFrame(() => {
+        el.focus();
+        const newPos = start + placeholder.length;
+        el.setSelectionRange(newPos, newPos);
+      });
+    } else {
+      setMessage((prev) => prev + placeholder);
+    }
   };
 
   // Send test SMS to self (only to the logged-in user's phone)
@@ -236,7 +257,8 @@ export default function SmsBatchDialog({
                 rows={4}
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
-                placeholder="Skriv ditt meddelande här... Använd {namn}, {pris}, {lastPaymentDate} som platshållare."
+                inputRef={messageRef}
+                placeholder="Skriv ditt meddelande här... Använd {id}, {namn}, {pris}, {lastPaymentDate} som platshållare."
               />
             </Box>
 
