@@ -190,9 +190,8 @@ function ManagerContent() {
     setSelectedDockId(event.target.value);
   };
 
-  // Toggle payment status
-  const togglePayment = async (resourceId: string, current: string) => {
-    const newStatus = current === "Paid" ? "Unpaid" : "Paid";
+  // Set payment status directly
+  const setPaymentStatus = async (resourceId: string, newStatus: string) => {
     try {
       await updateDoc(doc(db, "resources", resourceId), {
         paymentStatus: newStatus,
@@ -202,8 +201,6 @@ function ManagerContent() {
           r.id === resourceId ? { ...r, paymentStatus: newStatus as Resource["paymentStatus"] } : r
         )
       );
-      setSuccessMsg(`Betalningsstatus ändrad till ${newStatus === "Paid" ? "Betald" : "Obetald"}`);
-      setTimeout(() => setSuccessMsg(""), 3000);
     } catch (err) {
       console.error("Error updating payment:", err);
     }
@@ -465,13 +462,21 @@ function ManagerContent() {
                           />
                         </TableCell>
                         <TableCell>
-                          <Chip
-                            label={r.paymentStatus === "Paid" ? "Betald" : "Obetald"}
+                          <Select
+                            value={r.paymentStatus}
+                            onChange={(e) => setPaymentStatus(r.id, e.target.value as string)}
                             size="small"
-                            color={r.paymentStatus === "Paid" ? "success" : "error"}
-                            onClick={() => togglePayment(r.id, r.paymentStatus)}
-                            sx={{ cursor: "pointer" }}
-                          />
+                            sx={{
+                              fontSize: "0.8rem",
+                              fontWeight: 600,
+                              minWidth: 100,
+                              color: r.paymentStatus === "Paid" ? "success.main" : "error.main",
+                              "& .MuiSelect-select": { py: 0.5 },
+                            }}
+                          >
+                            <MenuItem value="Paid">✅ Betald</MenuItem>
+                            <MenuItem value="Unpaid">❌ Obetald</MenuItem>
+                          </Select>
                         </TableCell>
                         <TableCell>
                           {price != null ? (
