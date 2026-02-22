@@ -49,6 +49,16 @@ interface SmsBatchDialogProps {
   defaultSwishPhone: string;
 }
 
+// ─── GSM-7 segment calculation ──────────────────────────
+const SMS_COST_SEK = 0.52;
+
+function countSmsSegments(text: string): number {
+  if (!text) return 0;
+  const len = text.length;
+  if (len <= 160) return 1;
+  return Math.ceil(len / 153); // concatenated SMS uses 153 chars per segment
+}
+
 // ─── Placeholder insertion helper ───────────────────────
 const PLACEHOLDERS = [
   { value: "{id}", label: "Platskod" },
@@ -273,6 +283,55 @@ export default function SmsBatchDialog({
               label="Inkludera Swish-betalningslänk"
               sx={{ mb: 2 }}
             />
+
+            {/* SMS cost estimation */}
+            {(() => {
+              const longest = sendableRows.reduce(
+                (max, r) => Math.max(max, r.fullMessage.length),
+                0
+              );
+              const segmentsPerMsg = countSmsSegments(
+                sendableRows[0]?.fullMessage || ""
+              );
+              const totalSegments = sendableRows.reduce(
+                (sum, r) => sum + countSmsSegments(r.fullMessage),
+                0
+              );
+              const totalCost = totalSegments * SMS_COST_SEK;
+              const hasMultiSegment = segmentsPerMsg > 1;
+
+              return (
+                <Box sx={{ mb: 2 }}>
+                  {hasMultiSegment && (
+                    <Alert severity="warning" sx={{ mb: 1 }}>
+                      Meddelandet är {longest} tecken — det blir {segmentsPerMsg} SMS per mottagare.
+                      Håll dig under 160 tecken för att skicka 1 SMS.
+                    </Alert>
+                  )}
+                  <Box
+                    sx={{
+                      display: "flex",
+                      gap: 3,
+                      alignItems: "center",
+                      flexWrap: "wrap",
+                      p: 1.5,
+                      borderRadius: 1,
+                      bgcolor: "rgba(255,255,255,0.04)",
+                    }}
+                  >
+                    <Typography variant="body2">
+                      Längsta meddelande: <strong>{longest}</strong> tecken → <strong>{segmentsPerMsg}</strong> SMS/st
+                    </Typography>
+                    <Typography variant="body2">
+                      Totalt: <strong>{totalSegments}</strong> segment × {SMS_COST_SEK.toFixed(2)} kr = <strong>{totalCost.toFixed(2)} kr</strong>
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      ({sendableRows.length} mottagare)
+                    </Typography>
+                  </Box>
+                </Box>
+              );
+            })()}
 
             {/* Preview table */}
             <Typography variant="subtitle2" sx={{ mb: 1 }}>

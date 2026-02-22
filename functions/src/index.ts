@@ -159,7 +159,8 @@ export const onInterestCreated = onDocumentCreated(
       message += " Bild bifogad.";
     }
     if (userMessage) {
-      message += ` "${userMessage}"`;
+      const truncated = userMessage.length > 60 ? userMessage.slice(0, 57) + "..." : userMessage;
+      message += ` "${truncated}"`;
     }
     message += "\nhttps://stegerholmenshamn.web.app/admin";
     const auth = Buffer.from(
@@ -322,7 +323,13 @@ export const onUserCreated = onDocumentCreated(
       return;
     }
 
-    const noteText = data.registrationNote ? ` Notering: "${data.registrationNote}"` : "";
+    const noteText = data.registrationNote
+      ? (() => {
+          const note = String(data.registrationNote);
+          const truncated = note.length > 40 ? note.slice(0, 37) + "..." : note;
+          return ` Notering: "${truncated}"`;
+        })()
+      : "";
 
     const message = `Nytt konto väntar på godkännande: ${userName} (${phone}). Engagemang: ${engagementText}.${noteText}\nhttps://stegerholmenshamn.web.app/admin`;
     const authStr = Buffer.from(
