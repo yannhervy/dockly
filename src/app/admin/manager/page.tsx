@@ -15,6 +15,7 @@ import {
 } from "firebase/firestore";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import SmsBatchDialog, { SmsBatchRecipient } from "@/components/SmsBatchDialog";
+import PriceBatchDialog from "@/components/PriceBatchDialog";
 
 // MUI
 import Box from "@mui/material/Box";
@@ -46,6 +47,7 @@ import IconButton from "@mui/material/IconButton";
 import AnchorIcon from "@mui/icons-material/Anchor";
 import WarningAmberIcon from "@mui/icons-material/WarningAmber";
 import SmsIcon from "@mui/icons-material/Sms";
+import AttachMoneyIcon from "@mui/icons-material/AttachMoney";
 
 export default function ManagerPage() {
   return (
@@ -107,6 +109,7 @@ function ManagerContent() {
   // SMS dialog
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [smsDialogOpen, setSmsDialogOpen] = useState(false);
+  const [priceDialogOpen, setPriceDialogOpen] = useState(false);
 
   // Fetch docks managed by this user (or all docks for Superadmin)
   useEffect(() => {
@@ -320,14 +323,24 @@ function ManagerContent() {
           </Select>
         </FormControl>
         {selectedIds.size > 0 && (
-          <Button
-            variant="contained"
-            startIcon={<SmsIcon />}
-            onClick={() => setSmsDialogOpen(true)}
-            sx={{ textTransform: "none", fontWeight: 600 }}
-          >
-            Skicka SMS / Betalning ({selectedIds.size} st)
-          </Button>
+          <>
+            <Button
+              variant="contained"
+              startIcon={<SmsIcon />}
+              onClick={() => setSmsDialogOpen(true)}
+              sx={{ textTransform: "none", fontWeight: 600 }}
+            >
+              Skicka SMS / Betalning ({selectedIds.size} st)
+            </Button>
+            <Button
+              variant="outlined"
+              startIcon={<AttachMoneyIcon />}
+              onClick={() => setPriceDialogOpen(true)}
+              sx={{ textTransform: "none", fontWeight: 600 }}
+            >
+              Hantera priser ({selectedIds.size} st)
+            </Button>
+          </>
         )}
       </Box>
 
@@ -534,6 +547,23 @@ function ManagerContent() {
         onClose={() => setSmsDialogOpen(false)}
         recipients={smsRecipients}
         defaultSwishPhone={profile?.phone || ""}
+      />
+
+      {/* Price Batch Dialog */}
+      <PriceBatchDialog
+        open={priceDialogOpen}
+        onClose={() => setPriceDialogOpen(false)}
+        resources={resources.filter((r) => selectedIds.has(r.id))}
+        onUpdated={(updated) => {
+          setResources((prev) =>
+            prev.map((r) => {
+              const u = updated.find((ur) => ur.id === r.id);
+              return u || r;
+            })
+          );
+          setSuccessMsg(`Priser uppdaterade för ${updated.length} plats(er)`);
+          setTimeout(() => setSuccessMsg(""), 3000);
+        }}
       />
     </Box>
   );
