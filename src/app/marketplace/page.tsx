@@ -693,7 +693,6 @@ export default function MarketplacePage() {
               ref={fileInputRef}
               type="file"
               accept="image/*"
-              capture="environment"
               style={{ display: "none" }}
               onChange={handleImageSelect}
             />

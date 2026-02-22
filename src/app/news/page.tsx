@@ -634,7 +634,6 @@ export default function NewsPage() {
               ref={fileInputRef}
               type="file"
               accept="image/*"
-              capture="environment"
               multiple
               style={{ display: "none" }}
               onChange={handleImageSelect}

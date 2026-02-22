@@ -2400,7 +2400,6 @@ function DashboardContent() {
         ref={fileInputRef}
         type="file"
         accept="image/*"
-        capture="environment"
         style={{ display: "none" }}
         onChange={handleFileChange}
       />
@@ -2408,7 +2407,6 @@ function DashboardContent() {
         ref={profileInputRef}
         type="file"
         accept="image/*"
-        capture="environment"
         style={{ display: "none" }}
         onChange={handleProfilePictureChange}
       />
@@ -2416,7 +2414,6 @@ function DashboardContent() {
         ref={landFileInputRef}
         type="file"
         accept="image/*"
-        capture="environment"
         style={{ display: "none" }}
         onChange={handleLandFileChange}
       />

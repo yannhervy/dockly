@@ -1189,7 +1189,6 @@ function DocksTab({ initialEditId }: { initialEditId?: string }) {
         <input
           type="file"
           accept="image/*"
-          capture="environment"
           hidden
           ref={dockFileInputRef}
           onChange={handleDockImageChange}
@@ -2657,7 +2656,6 @@ function ResourcesTab({ initialEditId }: { initialEditId?: string }) {
                           type="file"
                           hidden
                           accept="image/*"
-                          capture="environment"
                           onChange={(e) => {
                             const file = e.target.files?.[0];
                             if (file) {
@@ -2680,7 +2678,6 @@ function ResourcesTab({ initialEditId }: { initialEditId?: string }) {
                       type="file"
                       hidden
                       accept="image/*"
-                      capture="environment"
                       onChange={(e) => {
                         const file = e.target.files?.[0];
                         if (file) {
@@ -3954,7 +3951,7 @@ function AbandonedObjectsTab({ initialEditId }: { initialEditId?: string }) {
                 Ta bort bild
               </Button>
             )}
-            <input ref={fileRef} type="file" accept="image/*" capture="environment" hidden onChange={handlePhotoChange} />
+            <input ref={fileRef} type="file" accept="image/*" hidden onChange={handlePhotoChange} />
           </Box>
           {photoPreview && (
             <Box
@@ -4327,7 +4324,7 @@ function POITab({ initialEditId }: { initialEditId?: string }) {
             <Button variant="outlined" size="small" onClick={() => fileRef.current?.click()}>
               {photoPreview ? "Byt foto" : "Välj foto"}
             </Button>
-            <input ref={fileRef} type="file" accept="image/*" capture="environment" hidden onChange={handlePhotoChange} />
+            <input ref={fileRef} type="file" accept="image/*" hidden onChange={handlePhotoChange} />
           </Box>
           {photoPreview && (
             <Box

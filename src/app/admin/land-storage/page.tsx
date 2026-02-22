@@ -639,7 +639,6 @@ function LandStorageContent() {
               ref={imageInputRef}
               type="file"
               accept="image/*"
-              capture="environment"
               hidden
               onChange={async (e) => {
                 const file = e.target.files?.[0];
