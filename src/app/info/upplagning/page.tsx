@@ -152,7 +152,7 @@ export default function UpplagningPage() {
           För att få nyttja hamnens mark för förvaring måste du ha ett unikt
           uppläggningsnummer. Du tilldelar enkelt en kod själv via{" "}
           <MuiLink component={Link} href="/dashboard" color="primary">
-            Mina sidor
+            Mina grejer
           </MuiLink>.
         </Paragraph>
         <Box component="ol" sx={{ pl: 2.5, mt: 0, mb: 1.5 }}>
@@ -160,7 +160,7 @@ export default function UpplagningPage() {
             <Typography variant="body1" color="text.secondary" sx={{ lineHeight: 1.8 }}>
               Logga in och gå till{" "}
               <MuiLink component={Link} href="/dashboard" color="primary">
-                Mina sidor
+                Mina grejer
               </MuiLink>. Under <strong>Min markförvaring</strong> klickar du på{" "}
               <strong>&quot;Jag behöver en uppställningskod&quot;</strong> så tilldelas du
               automatiskt en ledig kod.

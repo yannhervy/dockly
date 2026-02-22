@@ -496,7 +496,7 @@ export const onInterestReplyCreated = onDocumentCreated(
     }
 
     const normalized = normalizePhone(ownerPhone);
-    const message = `Hej! Du har fått ett svar på din intresseanmälan från Stegerholmens hamn. Gå till Mina sidor för att läsa: https://stegerholmenshamn.web.app`;
+    const message = `Hej! Du har fått ett svar på din intresseanmälan från Stegerholmens hamn. Gå till Mina grejer för att läsa: https://stegerholmenshamn.web.app`;
 
     const authStr = Buffer.from(
       `${elksUsername.value()}:${elksPassword.value()}`

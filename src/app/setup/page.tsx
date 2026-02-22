@@ -565,7 +565,7 @@ export default function ProfileSetupPage() {
                     onClick={() => router.push("/dashboard")}
                     sx={{ mt: 1 }}
                   >
-                    Gå till Mina sidor →
+                    Gå till Mina grejer →
                   </Button>
                 </>
               ) : (

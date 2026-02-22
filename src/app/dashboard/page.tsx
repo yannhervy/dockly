@@ -1036,7 +1036,7 @@ function DashboardContent() {
           sx={{ mb: 1, display: "flex", alignItems: "center", gap: 1.5 }}
         >
           <DashboardIcon sx={{ color: "primary.main" }} />
-          Mina sidor
+          Mina grejer
         </Typography>
         <Typography variant="body1" color="text.secondary">
           Hantera din profil, båtbilder och se dina hyresavtal.

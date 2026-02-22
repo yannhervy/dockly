@@ -20,6 +20,9 @@ import LoginIcon from "@mui/icons-material/Login";
 import NewspaperIcon from "@mui/icons-material/Newspaper";
 import ReportProblemIcon from "@mui/icons-material/ReportProblem";
 import ArrowForwardIcon from "@mui/icons-material/ArrowForward";
+import DashboardIcon from "@mui/icons-material/Dashboard";
+import MapIcon from "@mui/icons-material/Map";
+import AirIcon from "@mui/icons-material/Air";
 import CloseIcon from "@mui/icons-material/Close";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
@@ -302,35 +305,156 @@ export default function HomePage() {
         </Box>
       </Box>}
 
-      {/* ─── Weather Strip ─────────────────────────────────── */}
-      <Box sx={{ maxWidth: 1100, mx: "auto", px: 3, pt: 4, pb: 0 }}>
+      {/* ─── Reports (shown first for logged-in users) ──── */}
+      {isLoggedIn && recentReports.length > 0 && (
+        <Box sx={{ maxWidth: 1100, mx: "auto", px: 3, pt: 4, pb: 0 }}>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 2 }}>
+            <ReportProblemIcon sx={{ color: "warning.main" }} />
+            <Typography variant="h5" sx={{ fontWeight: 700 }}>
+              Rapporter
+            </Typography>
+          </Box>
+          <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+            {recentReports.map((report) => (
+              <Card
+                key={report.id}
+                onClick={() => router.push("/news")}
+                sx={{
+                  cursor: "pointer",
+                  bgcolor: "rgba(13, 33, 55, 0.6)",
+                  backdropFilter: "blur(12px)",
+                  border: "1px solid rgba(255, 183, 77, 0.2)",
+                  transition: "all 0.3s",
+                  "&:hover": {
+                    border: "1px solid rgba(255, 183, 77, 0.4)",
+                    boxShadow: "0 4px 24px rgba(255, 183, 77, 0.08)",
+                  },
+                }}
+              >
+                <CardContent sx={{ p: 3 }}>
+                  <Box sx={{ display: "flex", gap: 2, alignItems: "flex-start" }}>
+                    <ReportProblemIcon sx={{ color: "warning.main", mt: 0.3, flexShrink: 0 }} />
+                    <Box sx={{ flex: 1, minWidth: 0 }}>
+                      <Typography variant="h6" sx={{ fontWeight: 700, mb: 0.5 }}>
+                        {report.title}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1 }}>
+                        {report.authorName} ·{" "}
+                        {report.createdAt?.toDate?.()?.toLocaleDateString("sv-SE") || ""}
+                      </Typography>
+                      <Typography
+                        variant="body2"
+                        color="text.secondary"
+                        sx={{
+                          display: "-webkit-box",
+                          WebkitLineClamp: 2,
+                          WebkitBoxOrient: "vertical",
+                          overflow: "hidden",
+                          lineHeight: 1.6,
+                        }}
+                      >
+                        {report.body.replace(/[#*_~`>\[\]()!]/g, "").slice(0, 200)}
+                      </Typography>
+                    </Box>
+                    {report.imageUrls?.[0] && (
+                      <Box
+                        component="img"
+                        src={report.imageUrls[0]}
+                        alt={report.title}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setLightboxUrl(report.imageUrls[0]);
+                        }}
+                        sx={{
+                          width: 100,
+                          height: 80,
+                          objectFit: "cover",
+                          borderRadius: 2,
+                          flexShrink: 0,
+                          cursor: "pointer",
+                        }}
+                      />
+                    )}
+                  </Box>
+                </CardContent>
+              </Card>
+            ))}
+          </Box>
+        </Box>
+      )}
+
+      {/* ─── Weather Strip (clickable → /weather) ────────── */}
+      <Box
+        onClick={() => router.push("/weather")}
+        sx={{ maxWidth: 1100, mx: "auto", px: 3, pt: 4, pb: 0, cursor: "pointer" }}
+      >
         <WeatherStrip />
       </Box>
 
-      {/* ─── Quick Links Section ──────────────────────────── */}
+      {/* ─── Quick Links ─────────────────────────────────── */}
       <Box sx={{ maxWidth: 1100, mx: "auto", px: 3, py: 6 }}>
         <Grid container spacing={3}>
-          {[
-            {
-              icon: <DirectionsBoatIcon sx={{ fontSize: 36, color: "primary.main" }} />,
-              title: "Bryggor",
-              desc: "Se vilka bryggor som finns och hur du kontaktar bryggägaren.",
-              path: "/docks",
-            },
-            {
-              icon: <InfoIcon sx={{ fontSize: 36, color: "#66BB6A" }} />,
-              title: "Om hamnen",
-              desc: "Läs om hur hamnen drivs, regler och säsonger.",
-              path: "/info",
-            },
-            {
-              icon: <StorefrontIcon sx={{ fontSize: 36, color: "#FFB74D" }} />,
-              title: "Köp & Sälj",
-              desc: "Marknadsplats för utrustning, tjänster och mer.",
-              path: "/marketplace",
-            },
-          ].map((item) => (
-            <Grid size={{ xs: 12, md: 4 }} key={item.title}>
+          {(isLoggedIn
+            ? [
+                {
+                  icon: <DashboardIcon sx={{ fontSize: 36, color: "primary.main" }} />,
+                  title: "Mina grejer",
+                  desc: "Din profil, båtplatser och hyresavtal.",
+                  path: "/dashboard",
+                },
+                {
+                  icon: <MapIcon sx={{ fontSize: 36, color: "#66BB6A" }} />,
+                  title: "Karta",
+                  desc: "Satellitvy över hamnen med alla objekt.",
+                  path: "/map",
+                },
+                {
+                  icon: <StorefrontIcon sx={{ fontSize: 36, color: "#FFB74D" }} />,
+                  title: "Köp & Sälj",
+                  desc: "Marknadsplats för utrustning och tjänster.",
+                  path: "/marketplace",
+                },
+                {
+                  icon: <DirectionsBoatIcon sx={{ fontSize: 36, color: "#4FC3F7" }} />,
+                  title: "Bryggor",
+                  desc: "Se bryggor och bryggansvariga.",
+                  path: "/docks",
+                },
+                {
+                  icon: <AirIcon sx={{ fontSize: 36, color: "#3b82f6" }} />,
+                  title: "Väder",
+                  desc: "Detaljerad väderdata och historik.",
+                  path: "/weather",
+                },
+                {
+                  icon: <InfoIcon sx={{ fontSize: 36, color: "#ab47bc" }} />,
+                  title: "Info & Regler",
+                  desc: "Regler, sjösättning, parkering m.m.",
+                  path: "/info",
+                },
+              ]
+            : [
+                {
+                  icon: <DirectionsBoatIcon sx={{ fontSize: 36, color: "primary.main" }} />,
+                  title: "Bryggor",
+                  desc: "Se vilka bryggor som finns och hur du kontaktar bryggägaren.",
+                  path: "/docks",
+                },
+                {
+                  icon: <InfoIcon sx={{ fontSize: 36, color: "#66BB6A" }} />,
+                  title: "Om hamnen",
+                  desc: "Läs om hur hamnen drivs, regler och säsonger.",
+                  path: "/info",
+                },
+                {
+                  icon: <StorefrontIcon sx={{ fontSize: 36, color: "#FFB74D" }} />,
+                  title: "Köp & Sälj",
+                  desc: "Marknadsplats för utrustning, tjänster och mer.",
+                  path: "/marketplace",
+                },
+              ]
+          ).map((item) => (
+            <Grid size={{ xs: 6, md: isLoggedIn ? 4 : 4 }} key={item.title}>
               <Card
                 onClick={() => router.push(item.path)}
                 sx={{
@@ -362,8 +486,8 @@ export default function HomePage() {
         </Grid>
       </Box>
 
-      {/* ─── Recent Reports (last 2 days) ────────────────── */}
-      {recentReports.length > 0 && (
+      {/* ─── Reports (after quick links for visitors) ───── */}
+      {!isLoggedIn && recentReports.length > 0 && (
         <Box sx={{ maxWidth: 1100, mx: "auto", px: 3, py: 4 }}>
           <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 2 }}>
             <ReportProblemIcon sx={{ color: "warning.main" }} />

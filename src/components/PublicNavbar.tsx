@@ -156,7 +156,7 @@ export default function PublicNavbar() {
                   }}
                 >
                   <DashboardIcon fontSize="small" sx={{ mr: 1 }} />
-                  Mina sidor
+                  Mina grejer
                 </MenuItem>
                 {profile && (profile.role === "Superadmin" || profile.role === "Dock Manager") && (
                   <MenuItem
@@ -258,7 +258,7 @@ export default function PublicNavbar() {
             <>
               <ListItem disablePadding>
                 <ListItemButton onClick={() => handleNav("/dashboard")} sx={{ borderRadius: 1, mx: 1 }}>
-                  <ListItemText primary="Mina sidor" />
+                  <ListItemText primary="Mina grejer" />
                 </ListItemButton>
               </ListItem>
               {profile && (profile.role === "Superadmin" || profile.role === "Dock Manager") && (

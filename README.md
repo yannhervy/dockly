@@ -20,7 +20,7 @@ A modern web application for managing a small-boat marina — berths, docks, lan
 | Feature | Description |
 |---------|-------------|
 | **Login** | Firebase Authentication (email / password) with profile creation on first login |
-| **Dashboard (Mina sidor)** | Profile editing, profilsynlighet & SMS toggles, personal satellite map showing own objects, boat & land-storage image uploads, GPS editing for non-berth resources and land-storage entries, unread messages |
+| **Dashboard (Mina grejer)** | Profile editing, profilsynlighet & SMS toggles, personal satellite map showing own objects, boat & land-storage image uploads, GPS editing for non-berth resources and land-storage entries, unread messages |
 | **Berth Interest** | Submit a berth application with boat dimensions, preferred dock, phone and optional boat photo. Track status & receive replies from managers |
 | **Directory** | Browse all berths with role-based privacy: managers see full contact info + SMS, tenants see limited data |
 
