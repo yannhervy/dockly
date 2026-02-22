@@ -53,7 +53,7 @@ interface NavItem {
 const NAV_ITEMS: NavItem[] = [
   { label: "Hamnkatalog", path: "/admin/directory", icon: <PublicIcon /> },
   {
-    label: "Hamnkapten",
+    label: "Bryggöversikt",
     path: "/admin/manager",
     icon: <ManageAccountsIcon />,
     roles: ["Superadmin", "Dock Manager"],

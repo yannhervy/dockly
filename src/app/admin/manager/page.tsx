@@ -1,9 +1,9 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { db } from "@/lib/firebase";
-import { Dock, Resource, User } from "@/lib/types";
+import { Dock, Resource, User, Berth, BerthTenant } from "@/lib/types";
 import {
   collection,
   getDocs,
@@ -14,6 +14,9 @@ import {
   getDoc,
 } from "firebase/firestore";
 import ProtectedRoute from "@/components/ProtectedRoute";
+import SmsBatchDialog, { SmsBatchRecipient } from "@/components/SmsBatchDialog";
+
+// MUI
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 import Card from "@mui/material/Card";
@@ -34,9 +37,15 @@ import Paper from "@mui/material/Paper";
 import Button from "@mui/material/Button";
 import CircularProgress from "@mui/material/CircularProgress";
 import Alert from "@mui/material/Alert";
-import ManageAccountsIcon from "@mui/icons-material/ManageAccounts";
-import CheckCircleIcon from "@mui/icons-material/CheckCircle";
-import CancelIcon from "@mui/icons-material/Cancel";
+import Checkbox from "@mui/material/Checkbox";
+import Autocomplete from "@mui/material/Autocomplete";
+import TextField from "@mui/material/TextField";
+import Tooltip from "@mui/material/Tooltip";
+import IconButton from "@mui/material/IconButton";
+
+import AnchorIcon from "@mui/icons-material/Anchor";
+import WarningAmberIcon from "@mui/icons-material/WarningAmber";
+import SmsIcon from "@mui/icons-material/Sms";
 
 export default function ManagerPage() {
   return (
@@ -46,15 +55,58 @@ export default function ManagerPage() {
   );
 }
 
+// ─── Helpers ────────────────────────────────────────────
+const currentYear = new Date().getFullYear().toString();
+
+/** Resolve the invoice responsible name + phone for a berth */
+function resolveRecipient(r: Resource, occupants: Record<string, User>): { name: string; phone: string } {
+  const b = r as Berth;
+
+  // 1) invoiceResponsibleId → tenants[]
+  if (b.invoiceResponsibleId && b.tenants?.length) {
+    const t = b.tenants.find((t: BerthTenant) => t.uid === b.invoiceResponsibleId);
+    if (t) return { name: t.name, phone: t.phone };
+  }
+
+  // 2) First tenant
+  if (b.tenants?.length) {
+    return { name: b.tenants[0].name, phone: b.tenants[0].phone };
+  }
+
+  // 3) occupantIds → users lookup
+  if (r.occupantIds?.length) {
+    const u = occupants[r.occupantIds[0]];
+    if (u) return { name: u.name, phone: u.phone };
+  }
+
+  // 4) Legacy occupant fields
+  const legacyName = [b.occupantFirstName, b.occupantLastName].filter(Boolean).join(" ");
+  if (legacyName) return { name: legacyName, phone: b.occupantPhone || "" };
+
+  return { name: "", phone: "" };
+}
+
+function getBerthPrice(r: Resource): number | undefined {
+  const b = r as Berth;
+  if (b.prices && b.prices[currentYear] != null) return b.prices[currentYear];
+  return undefined;
+}
+
+// ─── Main content ───────────────────────────────────────
 function ManagerContent() {
   const { firebaseUser, profile, isSuperadmin } = useAuth();
   const [docks, setDocks] = useState<Dock[]>([]);
   const [selectedDockId, setSelectedDockId] = useState("");
   const [resources, setResources] = useState<Resource[]>([]);
   const [occupants, setOccupants] = useState<Record<string, User>>({});
+  const [users, setUsers] = useState<User[]>([]);
   const [loadingDocks, setLoadingDocks] = useState(true);
   const [loadingResources, setLoadingResources] = useState(false);
   const [successMsg, setSuccessMsg] = useState("");
+
+  // SMS dialog
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [smsDialogOpen, setSmsDialogOpen] = useState(false);
 
   // Fetch docks managed by this user (or all docks for Superadmin)
   useEffect(() => {
@@ -84,9 +136,19 @@ function ManagerContent() {
     fetchDocks();
   }, [firebaseUser, isSuperadmin]);
 
+  // Fetch all users (for tenant autocomplete)
+  useEffect(() => {
+    async function fetchUsers() {
+      const snap = await getDocs(collection(db, "users"));
+      setUsers(snap.docs.map((d) => ({ id: d.id, ...d.data() }) as User));
+    }
+    fetchUsers();
+  }, []);
+
   // Fetch resources for selected dock
   useEffect(() => {
     if (!selectedDockId) return;
+    setSelectedIds(new Set());
     async function fetchResources() {
       setLoadingResources(true);
       try {
@@ -137,31 +199,87 @@ function ManagerContent() {
           r.id === resourceId ? { ...r, paymentStatus: newStatus as Resource["paymentStatus"] } : r
         )
       );
-      setSuccessMsg(`Payment status updated to ${newStatus}`);
+      setSuccessMsg(`Betalningsstatus ändrad till ${newStatus === "Paid" ? "Betald" : "Obetald"}`);
       setTimeout(() => setSuccessMsg(""), 3000);
     } catch (err) {
       console.error("Error updating payment:", err);
     }
   };
 
-  // Toggle resource status
-  const toggleStatus = async (resourceId: string, current: string) => {
-    const newStatus = current === "Available" ? "Occupied" : "Available";
+  // Handle tenant assignment (reuses same logic as ResourcesTab)
+  const handleTenantChange = async (resourceId: string, userIds: string[]) => {
     try {
       await updateDoc(doc(db, "resources", resourceId), {
-        status: newStatus,
+        occupantIds: userIds,
+        status: userIds.length > 0 ? "Occupied" : "Available",
       });
       setResources((prev) =>
         prev.map((r) =>
-          r.id === resourceId ? { ...r, status: newStatus as Resource["status"] } : r
+          r.id === resourceId
+            ? { ...r, occupantIds: userIds, status: (userIds.length > 0 ? "Occupied" : "Available") as Resource["status"] }
+            : r
         )
       );
-      setSuccessMsg(`Resource status updated to ${newStatus}`);
-      setTimeout(() => setSuccessMsg(""), 3000);
+      // Also update occupants map for any new users
+      for (const uid of userIds) {
+        if (!occupants[uid]) {
+          const userSnap = await getDoc(doc(db, "users", uid));
+          if (userSnap.exists()) {
+            setOccupants((prev) => ({
+              ...prev,
+              [uid]: { id: userSnap.id, ...userSnap.data() } as User,
+            }));
+          }
+        }
+      }
     } catch (err) {
-      console.error("Error updating status:", err);
+      console.error("Error assigning tenant:", err);
     }
   };
+
+  // Tenant lookup helper for Autocomplete
+  const getTenants = (ids: string[] | undefined): User[] =>
+    (ids || []).map((id) => occupants[id]).filter(Boolean) as User[];
+
+  // Selection helpers
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === resources.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(resources.map((r) => r.id)));
+    }
+  };
+
+  // Build SMS recipients from selected resources
+  const smsRecipients: SmsBatchRecipient[] = useMemo(() => {
+    return resources
+      .filter((r) => selectedIds.has(r.id))
+      .map((r) => {
+        const { name, phone } = resolveRecipient(r, occupants);
+        return {
+          markingCode: r.markingCode,
+          name,
+          phone,
+          price: getBerthPrice(r),
+        };
+      });
+  }, [resources, selectedIds, occupants]);
+
+  // Sort resources by markingCode naturally
+  const sortedResources = useMemo(() => {
+    return [...resources].sort((a, b) =>
+      a.markingCode.localeCompare(b.markingCode, "sv-SE", { numeric: true })
+    );
+  }, [resources]);
 
   return (
     <Box>
@@ -170,11 +288,11 @@ function ManagerContent() {
           variant="h4"
           sx={{ mb: 1, display: "flex", alignItems: "center", gap: 1.5 }}
         >
-          <ManageAccountsIcon sx={{ color: "primary.main" }} />
-          Dock Manager
+          <AnchorIcon sx={{ color: "primary.main" }} />
+          Bryggöversikt
         </Typography>
         <Typography variant="body1" color="text.secondary">
-          Manage resources and payments for your assigned docks.
+          Hantera platser, tilldelning och betalningar för dina bryggor.
         </Typography>
       </Box>
 
@@ -184,22 +302,34 @@ function ManagerContent() {
         </Alert>
       )}
 
-      {/* Dock selector */}
-      <FormControl fullWidth sx={{ mb: 4, maxWidth: 400 }}>
-        <InputLabel>Select Dock</InputLabel>
-        <Select
-          value={selectedDockId}
-          label="Select Dock"
-          onChange={handleDockChange}
-          disabled={loadingDocks}
-        >
-          {docks.map((dock) => (
-            <MenuItem key={dock.id} value={dock.id}>
-              {dock.name}
-            </MenuItem>
-          ))}
-        </Select>
-      </FormControl>
+      {/* Dock selector + SMS button */}
+      <Box sx={{ display: "flex", gap: 2, mb: 4, flexWrap: "wrap", alignItems: "center" }}>
+        <FormControl sx={{ minWidth: 280 }}>
+          <InputLabel>Välj brygga</InputLabel>
+          <Select
+            value={selectedDockId}
+            label="Välj brygga"
+            onChange={handleDockChange}
+            disabled={loadingDocks}
+          >
+            {docks.map((dock) => (
+              <MenuItem key={dock.id} value={dock.id}>
+                {dock.name}
+              </MenuItem>
+            ))}
+          </Select>
+        </FormControl>
+        {selectedIds.size > 0 && (
+          <Button
+            variant="contained"
+            startIcon={<SmsIcon />}
+            onClick={() => setSmsDialogOpen(true)}
+            sx={{ textTransform: "none", fontWeight: 600 }}
+          >
+            Skicka SMS / Betalning ({selectedIds.size} st)
+          </Button>
+        )}
+      </Box>
 
       {loadingDocks ? (
         <Box sx={{ display: "flex", justifyContent: "center", py: 6 }}>
@@ -209,13 +339,13 @@ function ManagerContent() {
         <Card>
           <CardContent sx={{ textAlign: "center", py: 6 }}>
             <Typography color="text.secondary">
-              You are not assigned as manager for any docks.
+              Du är inte tilldelad som ansvarig för någon brygga.
             </Typography>
           </CardContent>
         </Card>
       ) : (
         <>
-          {/* Stats */}
+          {/* Stats cards */}
           <Grid container spacing={2} sx={{ mb: 3 }}>
             <Grid size={{ xs: 6, sm: 3 }}>
               <Card>
@@ -224,7 +354,7 @@ function ManagerContent() {
                     {resources.length}
                   </Typography>
                   <Typography variant="caption" color="text.secondary">
-                    Total Resources
+                    Totalt
                   </Typography>
                 </CardContent>
               </Card>
@@ -236,7 +366,7 @@ function ManagerContent() {
                     {resources.filter((r) => r.status === "Available").length}
                   </Typography>
                   <Typography variant="caption" color="text.secondary">
-                    Available
+                    Lediga
                   </Typography>
                 </CardContent>
               </Card>
@@ -248,7 +378,7 @@ function ManagerContent() {
                     {resources.filter((r) => r.status === "Occupied").length}
                   </Typography>
                   <Typography variant="caption" color="text.secondary">
-                    Occupied
+                    Belagda
                   </Typography>
                 </CardContent>
               </Card>
@@ -260,7 +390,7 @@ function ManagerContent() {
                     {resources.filter((r) => r.paymentStatus === "Unpaid").length}
                   </Typography>
                   <Typography variant="caption" color="text.secondary">
-                    Unpaid
+                    Obetalda
                   </Typography>
                 </CardContent>
               </Card>
@@ -277,80 +407,134 @@ function ManagerContent() {
               component={Paper}
               sx={{ bgcolor: "background.paper", backgroundImage: "none" }}
             >
-              <Table>
+              <Table size="small">
                 <TableHead>
                   <TableRow>
-                    <TableCell>Marking Code</TableCell>
-                    <TableCell>Type</TableCell>
+                    <TableCell padding="checkbox">
+                      <Checkbox
+                        checked={resources.length > 0 && selectedIds.size === resources.length}
+                        indeterminate={selectedIds.size > 0 && selectedIds.size < resources.length}
+                        onChange={toggleSelectAll}
+                      />
+                    </TableCell>
+                    <TableCell>Platskod</TableCell>
+                    <TableCell>Typ</TableCell>
                     <TableCell>Status</TableCell>
-                    <TableCell>Payment</TableCell>
-                    <TableCell>Occupant</TableCell>
-                    <TableCell align="right">Actions</TableCell>
+                    <TableCell>Betalning</TableCell>
+                    <TableCell>Årspris {currentYear}</TableCell>
+                    <TableCell>Ansvarig</TableCell>
+                    <TableCell sx={{ minWidth: 220 }}>Tilldelad</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {resources.map((r) => (
-                    <TableRow key={r.id} hover>
-                      <TableCell sx={{ fontWeight: 600 }}>
-                        {r.markingCode}
-                      </TableCell>
-                      <TableCell>
-                        <Chip label={r.type} size="small" variant="outlined" />
-                      </TableCell>
-                      <TableCell>
-                        <Chip
-                          label={r.status}
-                          size="small"
-                          color={r.status === "Available" ? "success" : "warning"}
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <Chip
-                          label={r.paymentStatus}
-                          size="small"
-                          color={r.paymentStatus === "Paid" ? "success" : "error"}
-                        />
-                      </TableCell>
-                      <TableCell>
-                        {r.occupantIds && r.occupantIds.length > 0
-                          ? r.occupantIds.map((id) => occupants[id]?.name || id).join(", ")
-                          : "—"}
-                      </TableCell>
-                      <TableCell align="right">
-                        <Button
-                          size="small"
-                          startIcon={
-                            r.status === "Available" ? (
-                              <CancelIcon />
-                            ) : (
-                              <CheckCircleIcon />
-                            )
-                          }
-                          onClick={() => toggleStatus(r.id, r.status)}
-                          sx={{ mr: 1 }}
-                        >
-                          {r.status === "Available"
-                            ? "Set Occupied"
-                            : "Set Available"}
-                        </Button>
-                        <Button
-                          size="small"
-                          color={r.paymentStatus === "Paid" ? "error" : "success"}
-                          onClick={() => togglePayment(r.id, r.paymentStatus)}
-                        >
-                          {r.paymentStatus === "Paid"
-                            ? "Mark Unpaid"
-                            : "Mark Paid"}
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                  {sortedResources.map((r) => {
+                    const price = getBerthPrice(r);
+                    const { name: responsibleName, phone: responsiblePhone } = resolveRecipient(r, occupants);
+                    const isOccupied = r.status === "Occupied";
+                    const missingPhone = isOccupied && !responsiblePhone;
+                    const missingPrice = isOccupied && price == null;
+
+                    return (
+                      <TableRow key={r.id} hover selected={selectedIds.has(r.id)}>
+                        <TableCell padding="checkbox">
+                          <Checkbox
+                            checked={selectedIds.has(r.id)}
+                            onChange={() => toggleSelect(r.id)}
+                          />
+                        </TableCell>
+                        <TableCell sx={{ fontWeight: 600 }}>{r.markingCode}</TableCell>
+                        <TableCell>
+                          <Chip label={r.type} size="small" variant="outlined" />
+                        </TableCell>
+                        <TableCell>
+                          <Chip
+                            label={r.status === "Available" ? "Ledig" : "Belagd"}
+                            size="small"
+                            color={r.status === "Available" ? "success" : "warning"}
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Chip
+                            label={r.paymentStatus === "Paid" ? "Betald" : "Obetald"}
+                            size="small"
+                            color={r.paymentStatus === "Paid" ? "success" : "error"}
+                            onClick={() => togglePayment(r.id, r.paymentStatus)}
+                            sx={{ cursor: "pointer" }}
+                          />
+                        </TableCell>
+                        <TableCell>
+                          {price != null ? (
+                            <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                              {price.toLocaleString("sv-SE")} kr
+                            </Typography>
+                          ) : (
+                            <Tooltip title="Årspris saknas — ange i Resurser-admin">
+                              <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                                <WarningAmberIcon sx={{ color: "warning.main", fontSize: 18 }} />
+                                <Typography variant="caption" color="text.secondary">Saknas</Typography>
+                              </Box>
+                            </Tooltip>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {responsibleName ? (
+                            <Box>
+                              <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                                {responsibleName}
+                              </Typography>
+                              {responsiblePhone ? (
+                                <Typography variant="caption" color="text.secondary">
+                                  {responsiblePhone}
+                                </Typography>
+                              ) : missingPhone ? (
+                                <Tooltip title="Telefonnummer saknas">
+                                  <WarningAmberIcon sx={{ color: "warning.main", fontSize: 16 }} />
+                                </Tooltip>
+                              ) : null}
+                            </Box>
+                          ) : (
+                            <Typography variant="caption" color="text.secondary">—</Typography>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <Autocomplete
+                            multiple
+                            size="small"
+                            options={users}
+                            getOptionLabel={(u) => `${u.name} (${u.email})`}
+                            value={getTenants(r.occupantIds)}
+                            onChange={(_e, newVal) =>
+                              handleTenantChange(r.id, newVal.map((u) => u.id))
+                            }
+                            isOptionEqualToValue={(opt, val) => opt.id === val.id}
+                            renderInput={(params) => (
+                              <TextField
+                                {...params}
+                                placeholder="Tilldela..."
+                                variant="outlined"
+                                size="small"
+                              />
+                            )}
+                            sx={{ minWidth: 220 }}
+                          />
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             </TableContainer>
           )}
         </>
       )}
+
+      {/* SMS Batch Dialog */}
+      <SmsBatchDialog
+        open={smsDialogOpen}
+        onClose={() => setSmsDialogOpen(false)}
+        recipients={smsRecipients}
+        defaultSwishPhone={profile?.phone || ""}
+      />
     </Box>
   );
 }

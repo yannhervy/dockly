@@ -40,8 +40,8 @@ const SECTIONS: SectionCard[] = [
     roles: ["Superadmin", "Dock Manager", "Tenant"],
   },
   {
-    title: "Hamnkapten",
-    description: "Hantera bryggplatser per ansvarig hamnkapten.",
+    title: "Bryggöversikt",
+    description: "Hantera platser, tilldelning och betalningar per brygga.",
     path: "/admin/manager",
     icon: <ManageAccountsIcon sx={{ fontSize: 40 }} />,
     color: "#FFB74D",
