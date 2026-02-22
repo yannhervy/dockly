@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useRef, Suspense } from "react";
+import ImagePickerDialog from "@/components/ImagePickerDialog";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   collection,
@@ -102,7 +103,7 @@ function InterestPageInner() {
   });
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [imagePickerOpen, setImagePickerOpen] = useState(false);
   const paramsApplied = useRef(false);
 
   useEffect(() => {
@@ -463,11 +464,9 @@ function InterestPageInner() {
 
             {/* Boat image upload */}
             <Box sx={{ mb: 3 }}>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                style={{ display: "none" }}
+              <ImagePickerDialog
+                open={imagePickerOpen}
+                onClose={() => setImagePickerOpen(false)}
                 onChange={(e) => {
                   const file = e.target.files?.[0];
                   if (file) {
@@ -479,7 +478,7 @@ function InterestPageInner() {
               <Button
                 variant="outlined"
                 startIcon={<AddPhotoAlternateIcon />}
-                onClick={() => fileInputRef.current?.click()}
+                onClick={() => setImagePickerOpen(true)}
                 fullWidth
                 sx={{
                   textTransform: "none",

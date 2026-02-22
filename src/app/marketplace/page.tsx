@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState } from "react";
+import ImagePickerDialog from "@/components/ImagePickerDialog";
 import {
   collection,
   getDocs,
@@ -131,7 +132,7 @@ export default function MarketplacePage() {
   const [tab, setTab] = useState(0); // 0=All, 1=Sale, 2=Service, 3=SubletOffer, 4=SubletWanted
   const [editingId, setEditingId] = useState<string | null>(null); // null = creating
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [imagePickerOpen, setImagePickerOpen] = useState(false);
 
   const [form, setForm] = useState<FormState>({ ...EMPTY_FORM });
   const [imageFile, setImageFile] = useState<File | null>(null);
@@ -689,17 +690,11 @@ export default function MarketplacePage() {
 
           {/* Image upload */}
           <Box sx={{ mb: 2 }}>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              style={{ display: "none" }}
-              onChange={handleImageSelect}
-            />
+            <ImagePickerDialog open={imagePickerOpen} onClose={() => setImagePickerOpen(false)} onChange={handleImageSelect} />
             <Button
               variant="outlined"
               startIcon={<AddPhotoAlternateIcon />}
-              onClick={() => fileInputRef.current?.click()}
+              onClick={() => setImagePickerOpen(true)}
               fullWidth
               sx={{
                 textTransform: "none",

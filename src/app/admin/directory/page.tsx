@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useEffect, useState, useMemo, useRef } from "react";
+import React, { useEffect, useState, useMemo } from "react";
+import ImagePickerDialog from "@/components/ImagePickerDialog";
 import {
   collection,
   getDocs,
@@ -61,7 +62,7 @@ export default function DirectoryPage() {
   const [search, setSearch] = useState("");
   const [userHasResources, setUserHasResources] = useState(false);
   const [uploadingId, setUploadingId] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [imagePickerOpen, setImagePickerOpen] = useState(false);
   const [uploadTargetId, setUploadTargetId] = useState<string | null>(null);
   const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
 
@@ -331,7 +332,7 @@ export default function DirectoryPage() {
   // Image upload handler
   const handleUploadClick = (berthId: string) => {
     setUploadTargetId(berthId);
-    fileInputRef.current?.click();
+    setImagePickerOpen(true);
   };
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -356,7 +357,7 @@ export default function DirectoryPage() {
     } finally {
       setUploadingId(null);
       setUploadTargetId(null);
-      if (fileInputRef.current) fileInputRef.current.value = "";
+      // Input reset is handled by ImagePickerDialog
     }
   };
 
@@ -936,14 +937,8 @@ export default function DirectoryPage() {
         </Box>
       </Dialog>
 
-      {/* Hidden file input for image uploads */}
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept="image/*"
-        style={{ display: "none" }}
-        onChange={handleFileChange}
-      />
+      {/* Image picker dialog for uploads */}
+      <ImagePickerDialog open={imagePickerOpen} onClose={() => setImagePickerOpen(false)} onChange={handleFileChange} />
     </Box>
   );
 }

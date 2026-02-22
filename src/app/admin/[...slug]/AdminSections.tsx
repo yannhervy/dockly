@@ -27,6 +27,7 @@ import Checkbox from "@mui/material/Checkbox";
 import Divider from "@mui/material/Divider";
 import { computeRectCorners, computeBoatHull, HARBOR_CENTER } from "@/lib/mapUtils";
 import { extractExifGps } from "@/lib/exifGps";
+import ImagePickerDialog from "@/components/ImagePickerDialog";
 import { APIProvider, Map as GMap, useMap, useMapsLibrary, AdvancedMarker } from "@vis.gl/react-google-maps";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
@@ -1000,7 +1001,7 @@ function DocksTab({ initialEditId }: { initialEditId?: string }) {
     name: "",
     type: "Association" as Dock["type"],
   });
-  const dockFileInputRef = useRef<HTMLInputElement>(null);
+  const [dockPickerOpen, setDockPickerOpen] = useState(false);
   const [uploadingDockId, setUploadingDockId] = useState<string | null>(null);
 
   // Generic confirm dialog state
@@ -1124,7 +1125,7 @@ function DocksTab({ initialEditId }: { initialEditId?: string }) {
   // Dock image upload
   const handleDockImageClick = (dockId: string) => {
     setUploadingDockId(dockId);
-    dockFileInputRef.current?.click();
+    setDockPickerOpen(true);
   };
 
   const handleDockImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1142,7 +1143,7 @@ function DocksTab({ initialEditId }: { initialEditId?: string }) {
       console.error("Error uploading dock image:", err);
     } finally {
       setUploadingDockId(null);
-      if (dockFileInputRef.current) dockFileInputRef.current.value = "";
+      // Input reset is handled by ImagePickerDialog
     }
   };
 
@@ -1185,14 +1186,8 @@ function DocksTab({ initialEditId }: { initialEditId?: string }) {
         </Alert>
       )}
 
+      <ImagePickerDialog open={dockPickerOpen} onClose={() => setDockPickerOpen(false)} onChange={handleDockImageChange} />
       <Box sx={{ display: "flex", justifyContent: "flex-end", mb: 2 }}>
-        <input
-          type="file"
-          accept="image/*"
-          hidden
-          ref={dockFileInputRef}
-          onChange={handleDockImageChange}
-        />
         <Button
           variant="contained"
           startIcon={<AddIcon />}
@@ -1847,6 +1842,7 @@ function ResourcesTab({ initialEditId }: { initialEditId?: string }) {
   const [editImageFile, setEditImageFile] = useState<File | null>(null);
   const [editImagePreview, setEditImagePreview] = useState<string | null>(null);
   const [removeImage, setRemoveImage] = useState(false);
+  const [berthPickerOpen, setBerthPickerOpen] = useState(false);
   const [movedBerths, setMovedBerths] = useState<Record<string, { lat: number; lng: number }>>({});
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -2641,6 +2637,18 @@ function ResourcesTab({ initialEditId }: { initialEditId?: string }) {
               <Grid size={12}><Divider sx={{ borderColor: 'rgba(79,195,247,0.15)' }} /></Grid>
               <Grid size={12}>
                 <Typography variant="subtitle2" sx={{ mb: 0.5, fontWeight: 700 }}>Photo</Typography>
+                <ImagePickerDialog
+                  open={berthPickerOpen}
+                  onClose={() => setBerthPickerOpen(false)}
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      setEditImageFile(file);
+                      setEditImagePreview(URL.createObjectURL(file));
+                      setRemoveImage(false);
+                    }
+                  }}
+                />
                 {editImagePreview && !removeImage ? (
                   <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 2 }}>
                     <Box
@@ -2650,21 +2658,8 @@ function ResourcesTab({ initialEditId }: { initialEditId?: string }) {
                       sx={{ width: 180, height: 120, objectFit: 'cover', borderRadius: 1, border: '1px solid rgba(79,195,247,0.2)' }}
                     />
                     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                      <Button size="small" variant="outlined" component="label">
+                      <Button size="small" variant="outlined" onClick={() => setBerthPickerOpen(true)}>
                         Change
-                        <input
-                          type="file"
-                          hidden
-                          accept="image/*"
-                          onChange={(e) => {
-                            const file = e.target.files?.[0];
-                            if (file) {
-                              setEditImageFile(file);
-                              setEditImagePreview(URL.createObjectURL(file));
-                              setRemoveImage(false);
-                            }
-                          }}
-                        />
                       </Button>
                       <Button size="small" color="error" onClick={() => { setRemoveImage(true); setEditImageFile(null); }}>
                         Remove
@@ -2672,21 +2667,8 @@ function ResourcesTab({ initialEditId }: { initialEditId?: string }) {
                     </Box>
                   </Box>
                 ) : (
-                  <Button size="small" variant="outlined" component="label">
+                  <Button size="small" variant="outlined" onClick={() => setBerthPickerOpen(true)}>
                     Upload photo
-                    <input
-                      type="file"
-                      hidden
-                      accept="image/*"
-                      onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        if (file) {
-                          setEditImageFile(file);
-                          setEditImagePreview(URL.createObjectURL(file));
-                          setRemoveImage(false);
-                        }
-                      }}
-                    />
                   </Button>
                 )}
               </Grid>
@@ -3548,7 +3530,7 @@ function AbandonedObjectsTab({ initialEditId }: { initialEditId?: string }) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editEntry, setEditEntry] = useState<AbandonedObject | null>(null);
   const [saving, setSaving] = useState(false);
-  const fileRef = useRef<HTMLInputElement>(null);
+  const [abandonedPickerOpen, setAbandonedPickerOpen] = useState(false);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
@@ -3937,7 +3919,7 @@ function AbandonedObjectsTab({ initialEditId }: { initialEditId?: string }) {
 
           {/* Photo upload */}
           <Box sx={{ mb: 1, display: "flex", gap: 1, alignItems: "center" }}>
-            <Button variant="outlined" size="small" onClick={() => fileRef.current?.click()}>
+            <Button variant="outlined" size="small" onClick={() => setAbandonedPickerOpen(true)}>
               {photoPreview ? "Byt foto" : "Välj foto"}
             </Button>
             {photoPreview && editEntry?.imageUrl && !photoFile && (
@@ -3951,7 +3933,7 @@ function AbandonedObjectsTab({ initialEditId }: { initialEditId?: string }) {
                 Ta bort bild
               </Button>
             )}
-            <input ref={fileRef} type="file" accept="image/*" hidden onChange={handlePhotoChange} />
+            <ImagePickerDialog open={abandonedPickerOpen} onClose={() => setAbandonedPickerOpen(false)} onChange={handlePhotoChange} />
           </Box>
           {photoPreview && (
             <Box
@@ -4029,7 +4011,7 @@ function POITab({ initialEditId }: { initialEditId?: string }) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editEntry, setEditEntry] = useState<POI | null>(null);
   const [saving, setSaving] = useState(false);
-  const fileRef = useRef<HTMLInputElement>(null);
+  const [poiPickerOpen, setPoiPickerOpen] = useState(false);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
@@ -4321,10 +4303,10 @@ function POITab({ initialEditId }: { initialEditId?: string }) {
 
           {/* Photo upload */}
           <Box sx={{ mb: 1 }}>
-            <Button variant="outlined" size="small" onClick={() => fileRef.current?.click()}>
+            <Button variant="outlined" size="small" onClick={() => setPoiPickerOpen(true)}>
               {photoPreview ? "Byt foto" : "Välj foto"}
             </Button>
-            <input ref={fileRef} type="file" accept="image/*" hidden onChange={handlePhotoChange} />
+            <ImagePickerDialog open={poiPickerOpen} onClose={() => setPoiPickerOpen(false)} onChange={handlePhotoChange} />
           </Box>
           {photoPreview && (
             <Box

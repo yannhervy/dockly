@@ -11,6 +11,7 @@ import { sendSms } from "@/lib/sms";
 import { APIProvider, Map as GMap, AdvancedMarker, useMap, useMapsLibrary } from "@vis.gl/react-google-maps";
 import { computeBoatHull, HARBOR_CENTER } from "@/lib/mapUtils";
 import { extractExifGps } from "@/lib/exifGps";
+import ImagePickerDialog from "@/components/ImagePickerDialog";
 import useMediaQuery from "@mui/material/useMediaQuery";
 import {
   collection,
@@ -254,7 +255,7 @@ function DashboardContent() {
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState("");
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [boatPickerOpen, setBoatPickerOpen] = useState(false);
   const [uploadTargetId, setUploadTargetId] = useState<string | null>(null);
   const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
 
@@ -265,7 +266,7 @@ function DashboardContent() {
   const [saving, setSaving] = useState(false);
 
   // Profile picture upload
-  const profileInputRef = useRef<HTMLInputElement>(null);
+  const [profilePickerOpen, setProfilePickerOpen] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
 
   // Password change state
@@ -806,14 +807,14 @@ function DashboardContent() {
       console.error("Error uploading profile picture:", err);
     } finally {
       setUploadingPhoto(false);
-      if (profileInputRef.current) profileInputRef.current.value = "";
+      // Input reset is handled by ImagePickerDialog
     }
   };
 
   // Handle boat image upload
   const handleUploadClick = (resourceId: string) => {
     setUploadTargetId(resourceId);
-    fileInputRef.current?.click();
+    setBoatPickerOpen(true);
   };
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -864,17 +865,17 @@ function DashboardContent() {
     } finally {
       setUploading(null);
       setUploadTargetId(null);
-      if (fileInputRef.current) fileInputRef.current.value = "";
+      // Input reset is handled by ImagePickerDialog
     }
   };
 
   // Handle land storage image upload
-  const landFileInputRef = useRef<HTMLInputElement>(null);
+  const [landPickerOpen, setLandPickerOpen] = useState(false);
   const [landUploadTargetId, setLandUploadTargetId] = useState<string | null>(null);
 
   const handleLandUploadClick = (entryId: string) => {
     setLandUploadTargetId(entryId);
-    landFileInputRef.current?.click();
+    setLandPickerOpen(true);
   };
 
   const handleLandFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -924,7 +925,7 @@ function DashboardContent() {
     } finally {
       setUploading(null);
       setLandUploadTargetId(null);
-      if (landFileInputRef.current) landFileInputRef.current.value = "";
+      // Input reset is handled by ImagePickerDialog
     }
   };
 
@@ -1174,7 +1175,7 @@ function DashboardContent() {
                 {/* Clickable avatar with camera overlay */}
                 <Box
                   sx={{ position: "relative", cursor: "pointer", mb: 2 }}
-                  onClick={() => profileInputRef.current?.click()}
+                  onClick={() => setProfilePickerOpen(true)}
                 >
                   <Avatar
                     src={profile?.photoURL}
@@ -2395,28 +2396,10 @@ function DashboardContent() {
         </Box>
       </Dialog>
 
-      {/* Hidden file inputs */}
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept="image/*"
-        style={{ display: "none" }}
-        onChange={handleFileChange}
-      />
-      <input
-        ref={profileInputRef}
-        type="file"
-        accept="image/*"
-        style={{ display: "none" }}
-        onChange={handleProfilePictureChange}
-      />
-      <input
-        ref={landFileInputRef}
-        type="file"
-        accept="image/*"
-        style={{ display: "none" }}
-        onChange={handleLandFileChange}
-      />
+      {/* Image picker dialogs (camera + gallery choice on mobile) */}
+      <ImagePickerDialog open={boatPickerOpen} onClose={() => setBoatPickerOpen(false)} onChange={handleFileChange} />
+      <ImagePickerDialog open={profilePickerOpen} onClose={() => setProfilePickerOpen(false)} onChange={handleProfilePictureChange} />
+      <ImagePickerDialog open={landPickerOpen} onClose={() => setLandPickerOpen(false)} onChange={handleLandFileChange} />
       {/* Second-hand tenant lookup dialog */}
       <Dialog
         open={!!lookupBerthId}

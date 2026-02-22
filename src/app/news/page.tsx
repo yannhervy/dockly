@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState } from "react";
+import ImagePickerDialog from "@/components/ImagePickerDialog";
 import dynamic from "next/dynamic";
 
 const MDEditor = dynamic(() => import("@uiw/react-md-editor"), { ssr: false });
@@ -61,7 +62,7 @@ export default function NewsPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [success, setSuccess] = useState("");
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [imagePickerOpen, setImagePickerOpen] = useState(false);
 
   const [form, setForm] = useState({ title: "", body: "" });
   const [formPostType, setFormPostType] = useState<PostType>("report");
@@ -140,7 +141,7 @@ export default function NewsPage() {
       ...prev,
       ...files.map((f) => URL.createObjectURL(f)),
     ]);
-    if (fileInputRef.current) fileInputRef.current.value = "";
+    // Input reset is handled by ImagePickerDialog
   };
 
   const removeImage = (index: number) => {
@@ -630,18 +631,11 @@ export default function NewsPage() {
 
           {/* Multi-image upload */}
           <Box sx={{ mb: 2 }}>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              multiple
-              style={{ display: "none" }}
-              onChange={handleImageSelect}
-            />
+            <ImagePickerDialog open={imagePickerOpen} onClose={() => setImagePickerOpen(false)} onChange={handleImageSelect} multiple />
             <Button
               variant="outlined"
               startIcon={<AddPhotoAlternateIcon />}
-              onClick={() => fileInputRef.current?.click()}
+              onClick={() => setImagePickerOpen(true)}
               fullWidth
               sx={{ textTransform: "none", py: 1.5, borderStyle: "dashed" }}
             >

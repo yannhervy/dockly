@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useEffect, useState, useMemo, useRef } from "react";
+import React, { useEffect, useState, useMemo } from "react";
+import ImagePickerDialog from "@/components/ImagePickerDialog";
 import useMediaQuery from "@mui/material/useMediaQuery";
 import { useAuth } from "@/context/AuthContext";
 import { db } from "@/lib/firebase";
@@ -93,7 +94,7 @@ function LandStorageContent() {
   const [successMsg, setSuccessMsg] = useState("");
   const [editImageUrl, setEditImageUrl] = useState<string | undefined>(undefined);
   const [editImageFile, setEditImageFile] = useState<File | null>(null);
-  const imageInputRef = useRef<HTMLInputElement>(null);
+  const [imagePickerOpen, setImagePickerOpen] = useState(false);
 
   // Fetch all land storage entries
   useEffect(() => {
@@ -617,29 +618,9 @@ function LandStorageContent() {
                 sx={{ width: 120, height: 80, objectFit: 'cover', borderRadius: 1, border: '1px solid rgba(79,195,247,0.2)' }}
               />
             )}
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
-              <Button
-                size="small"
-                variant="outlined"
-                onClick={() => imageInputRef.current?.click()}
-              >
-                {editImageUrl || editImageFile ? 'Change photo' : 'Upload photo'}
-              </Button>
-              {(editImageUrl || editImageFile) && (
-                <Button
-                  size="small"
-                  color="error"
-                  onClick={() => { setEditImageUrl(undefined); setEditImageFile(null); }}
-                >
-                  Remove
-                </Button>
-              )}
-            </Box>
-            <input
-              ref={imageInputRef}
-              type="file"
-              accept="image/*"
-              hidden
+            <ImagePickerDialog
+              open={imagePickerOpen}
+              onClose={() => setImagePickerOpen(false)}
               onChange={async (e) => {
                 const file = e.target.files?.[0];
                 if (!file) return;
@@ -657,6 +638,24 @@ function LandStorageContent() {
                 }
               }}
             />
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+              <Button
+                size="small"
+                variant="outlined"
+                onClick={() => setImagePickerOpen(true)}
+              >
+                {editImageUrl || editImageFile ? 'Change photo' : 'Upload photo'}
+              </Button>
+              {(editImageUrl || editImageFile) && (
+                <Button
+                  size="small"
+                  color="error"
+                  onClick={() => { setEditImageUrl(undefined); setEditImageFile(null); }}
+                >
+                  Remove
+                </Button>
+              )}
+            </Box>
           </Box>
 
           {/* Map location picker */}
