@@ -50,7 +50,7 @@ interface SmsBatchDialogProps {
 }
 
 // ─── GSM-7 segment calculation ──────────────────────────
-const SMS_COST_SEK = 0.52;
+const SMS_COST_SEK = 0.65; // 0.52 kr ex moms + 25% moms
 
 function countSmsSegments(text: string): number {
   if (!text) return 0;
