@@ -56,6 +56,7 @@ import { APIProvider, Map as GMap, AdvancedMarker } from "@vis.gl/react-google-m
 import { HARBOR_CENTER } from "@/lib/mapUtils";
 import PlaceIcon from "@mui/icons-material/Place";
 import MyLocationIcon from "@mui/icons-material/MyLocation";
+import { extractExifGps } from "@/lib/exifGps";
 
 export default function LandStoragePage() {
   return (
@@ -638,10 +639,23 @@ function LandStorageContent() {
               ref={imageInputRef}
               type="file"
               accept="image/*"
+              capture="environment"
               hidden
-              onChange={(e) => {
+              onChange={async (e) => {
                 const file = e.target.files?.[0];
-                if (file) setEditImageFile(file);
+                if (!file) return;
+                setEditImageFile(file);
+
+                // Extract EXIF GPS if no position is set yet
+                if (!editLat && !editLng) {
+                  const gps = await extractExifGps(file);
+                  if (gps) {
+                    setEditLat(gps.lat);
+                    setEditLng(gps.lng);
+                    setSuccessMsg("GPS-position har h\u00e4mtats fr\u00e5n bilden. Kontrollera och justera positionen vid behov.");
+                    setTimeout(() => setSuccessMsg(""), 6000);
+                  }
+                }
               }}
             />
           </Box>

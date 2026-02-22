@@ -10,6 +10,7 @@ import { normalizePhone } from "@/lib/phoneUtils";
 import { sendSms } from "@/lib/sms";
 import { APIProvider, Map as GMap, AdvancedMarker, useMap, useMapsLibrary } from "@vis.gl/react-google-maps";
 import { computeBoatHull, HARBOR_CENTER } from "@/lib/mapUtils";
+import { extractExifGps } from "@/lib/exifGps";
 import useMediaQuery from "@mui/material/useMediaQuery";
 import {
   collection,
@@ -825,7 +826,32 @@ function DashboardContent() {
       await updateDoc(doc(db, "resources", uploadTargetId), {
         objectImageUrl: url,
       });
-      // Update local state
+
+      // Extract EXIF GPS if the resource has no position yet
+      const resource = resources.find((r) => r.id === uploadTargetId);
+      if (resource && !resource.lat && !resource.lng) {
+        const gps = await extractExifGps(file);
+        if (gps) {
+          await updateDoc(doc(db, "resources", uploadTargetId), {
+            lat: gps.lat,
+            lng: gps.lng,
+          });
+          setResources((prev) =>
+            prev.map((r) =>
+              r.id === uploadTargetId
+                ? { ...r, objectImageUrl: url, lat: gps.lat, lng: gps.lng }
+                : r
+            )
+          );
+          setSuccessMsg(
+            "Båtbild uppdaterad! GPS-position har hämtats från bilden. Kontrollera och justera positionen vid behov."
+          );
+          setTimeout(() => setSuccessMsg(""), 6000);
+          return;
+        }
+      }
+
+      // Update local state (no GPS extracted)
       setResources((prev) =>
         prev.map((r) =>
           r.id === uploadTargetId ? { ...r, objectImageUrl: url } : r
@@ -861,6 +887,31 @@ function DashboardContent() {
       await updateDoc(doc(db, "landStorage", landUploadTargetId), {
         imageUrl: url,
       });
+
+      // Extract EXIF GPS if the entry has no position yet
+      const entry = landEntries.find((x) => x.id === landUploadTargetId);
+      if (entry && !entry.lat && !entry.lng) {
+        const gps = await extractExifGps(file);
+        if (gps) {
+          await updateDoc(doc(db, "landStorage", landUploadTargetId), {
+            lat: gps.lat,
+            lng: gps.lng,
+          });
+          setLandEntries((prev) =>
+            prev.map((x) =>
+              x.id === landUploadTargetId
+                ? { ...x, imageUrl: url, lat: gps.lat, lng: gps.lng }
+                : x
+            )
+          );
+          setSuccessMsg(
+            "Bild för markförvaring uppdaterad! GPS-position har hämtats från bilden. Kontrollera och justera positionen vid behov."
+          );
+          setTimeout(() => setSuccessMsg(""), 6000);
+          return;
+        }
+      }
+
       setLandEntries((prev) =>
         prev.map((x) =>
           x.id === landUploadTargetId ? { ...x, imageUrl: url } : x
@@ -2349,6 +2400,7 @@ function DashboardContent() {
         ref={fileInputRef}
         type="file"
         accept="image/*"
+        capture="environment"
         style={{ display: "none" }}
         onChange={handleFileChange}
       />
@@ -2356,6 +2408,7 @@ function DashboardContent() {
         ref={profileInputRef}
         type="file"
         accept="image/*"
+        capture="environment"
         style={{ display: "none" }}
         onChange={handleProfilePictureChange}
       />
@@ -2363,6 +2416,7 @@ function DashboardContent() {
         ref={landFileInputRef}
         type="file"
         accept="image/*"
+        capture="environment"
         style={{ display: "none" }}
         onChange={handleLandFileChange}
       />

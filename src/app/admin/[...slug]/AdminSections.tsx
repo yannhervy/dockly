@@ -26,6 +26,7 @@ import { uploadBoatImage, uploadDockImage, uploadLandStorageImage, uploadAbandon
 import Checkbox from "@mui/material/Checkbox";
 import Divider from "@mui/material/Divider";
 import { computeRectCorners, computeBoatHull, HARBOR_CENTER } from "@/lib/mapUtils";
+import { extractExifGps } from "@/lib/exifGps";
 import { APIProvider, Map as GMap, useMap, useMapsLibrary, AdvancedMarker } from "@vis.gl/react-google-maps";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
@@ -1188,6 +1189,7 @@ function DocksTab({ initialEditId }: { initialEditId?: string }) {
         <input
           type="file"
           accept="image/*"
+          capture="environment"
           hidden
           ref={dockFileInputRef}
           onChange={handleDockImageChange}
@@ -2655,6 +2657,7 @@ function ResourcesTab({ initialEditId }: { initialEditId?: string }) {
                           type="file"
                           hidden
                           accept="image/*"
+                          capture="environment"
                           onChange={(e) => {
                             const file = e.target.files?.[0];
                             if (file) {
@@ -2677,6 +2680,7 @@ function ResourcesTab({ initialEditId }: { initialEditId?: string }) {
                       type="file"
                       hidden
                       accept="image/*"
+                      capture="environment"
                       onChange={(e) => {
                         const file = e.target.files?.[0];
                         if (file) {
@@ -3686,11 +3690,20 @@ function AbandonedObjectsTab({ initialEditId }: { initialEditId?: string }) {
     });
   }
 
-  function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
+  async function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
-    if (file) {
-      setPhotoFile(file);
-      setPhotoPreview(URL.createObjectURL(file));
+    if (!file) return;
+    setPhotoFile(file);
+    setPhotoPreview(URL.createObjectURL(file));
+
+    // Extract EXIF GPS if lat/lng form fields are empty
+    if (!form.lat.trim() && !form.lng.trim()) {
+      const gps = await extractExifGps(file);
+      if (gps) {
+        setForm((prev) => ({ ...prev, lat: String(gps.lat), lng: String(gps.lng) }));
+        setSuccessMsg("GPS-position har hämtats från bilden. Kontrollera och justera positionen vid behov.");
+        setTimeout(() => setSuccessMsg(""), 6000);
+      }
     }
   }
 
@@ -3941,7 +3954,7 @@ function AbandonedObjectsTab({ initialEditId }: { initialEditId?: string }) {
                 Ta bort bild
               </Button>
             )}
-            <input ref={fileRef} type="file" accept="image/*" hidden onChange={handlePhotoChange} />
+            <input ref={fileRef} type="file" accept="image/*" capture="environment" hidden onChange={handlePhotoChange} />
           </Box>
           {photoPreview && (
             <Box
@@ -4143,11 +4156,20 @@ function POITab({ initialEditId }: { initialEditId?: string }) {
     });
   }
 
-  const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handlePhotoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
-    if (f) {
-      setPhotoFile(f);
-      setPhotoPreview(URL.createObjectURL(f));
+    if (!f) return;
+    setPhotoFile(f);
+    setPhotoPreview(URL.createObjectURL(f));
+
+    // Extract EXIF GPS if lat/lng form fields are empty
+    if (!form.lat.trim() && !form.lng.trim()) {
+      const gps = await extractExifGps(f);
+      if (gps) {
+        setForm((prev) => ({ ...prev, lat: String(gps.lat), lng: String(gps.lng) }));
+        setSuccessMsg("GPS-position har hämtats från bilden. Kontrollera och justera positionen vid behov.");
+        setTimeout(() => setSuccessMsg(""), 6000);
+      }
     }
   };
 
@@ -4305,7 +4327,7 @@ function POITab({ initialEditId }: { initialEditId?: string }) {
             <Button variant="outlined" size="small" onClick={() => fileRef.current?.click()}>
               {photoPreview ? "Byt foto" : "Välj foto"}
             </Button>
-            <input ref={fileRef} type="file" accept="image/*" hidden onChange={handlePhotoChange} />
+            <input ref={fileRef} type="file" accept="image/*" capture="environment" hidden onChange={handlePhotoChange} />
           </Box>
           {photoPreview && (
             <Box
