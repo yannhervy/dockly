@@ -30,6 +30,7 @@ import { db } from "@/lib/firebase";
 import { collection, query, orderBy, limit, getDocs, where, Timestamp } from "firebase/firestore";
 import type { NewsPost } from "@/lib/types";
 import WeatherStrip from "@/components/weather/WeatherStrip";
+import ReactionsBar from "@/components/ReactionsBar";
 
 export default function HomePage() {
   const router = useRouter();
@@ -642,6 +643,18 @@ export default function HomePage() {
                     >
                       {post.body.replace(/[#*_~`>\[\]()!]/g, "").slice(0, 200)}
                     </Typography>
+                    <Box sx={{ mt: "auto", pt: 1 }}>
+                      <ReactionsBar
+                        postId={post.id}
+                        reactions={post.reactions || {}}
+                        compact
+                        onReactionsChange={(updated) =>
+                          setAllPosts((prev) =>
+                            prev.map((p) => (p.id === post.id ? { ...p, reactions: updated } : p))
+                          )
+                        }
+                      />
+                    </Box>
                   </CardContent>
                 </Card>
               </Grid>

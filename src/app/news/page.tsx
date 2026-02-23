@@ -29,7 +29,7 @@ import { useAuth } from "@/context/AuthContext";
 import type { NewsPost, ReactionMap, PostType, Dock, Resource } from "@/lib/types";
 import { slugify } from "@/lib/slugify";
 import Link from "next/link";
-import { REACTION_EMOJIS, REACTION_LABELS } from "@/lib/types";
+import ReactionsBar from "@/components/ReactionsBar";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 import Card from "@mui/material/Card";
@@ -282,32 +282,6 @@ function NewsListingPage() {
   const canEditPost = (post: NewsPost) =>
     canManage || post.authorId === firebaseUser?.uid;
 
-  const handleReaction = async (postId: string, emoji: string) => {
-    if (!firebaseUser) return;
-    const post = posts.find((p) => p.id === postId);
-    if (!post) return;
-
-    const reactions: ReactionMap = { ...post.reactions };
-    const users = reactions[emoji] || [];
-
-    if (users.includes(firebaseUser.uid)) {
-      reactions[emoji] = users.filter((u) => u !== firebaseUser.uid);
-      if (reactions[emoji].length === 0) delete reactions[emoji];
-    } else {
-      reactions[emoji] = [...users, firebaseUser.uid];
-    }
-
-    setPosts((prev) =>
-      prev.map((p) => (p.id === postId ? { ...p, reactions } : p))
-    );
-
-    try {
-      await updateDoc(doc(db, "news", postId), { reactions });
-    } catch (err) {
-      console.error("Error updating reaction:", err);
-      fetchPosts();
-    }
-  };
 
   // Resolve dock names from IDs
   const dockNameMap = Object.fromEntries(docks.map((d) => [d.id, d.name]));
@@ -437,48 +411,15 @@ function NewsListingPage() {
           )}
 
           {/* Emoji reactions */}
-          <Box sx={{ display: "flex", gap: 0.5, flexWrap: "wrap", alignItems: "center" }}>
-            {REACTION_EMOJIS.map((emoji) => {
-              const reactors = post.reactions?.[emoji] || [];
-              const hasReacted = firebaseUser
-                ? reactors.includes(firebaseUser.uid)
-                : false;
-              const count = reactors.length;
-
-              return (
-                <Tooltip
-                  key={emoji}
-                  title={firebaseUser ? (hasReacted ? "Ta bort reaktion" : (REACTION_LABELS[emoji] || "Reagera")) : "Logga in för att reagera"}
-                >
-                  <span>
-                    <Chip
-                      label={`${emoji}${count > 0 ? ` ${count}` : ""}`}
-                      size="small"
-                      clickable={!!firebaseUser}
-                      onClick={() => handleReaction(post.id, emoji)}
-                      disabled={!firebaseUser}
-                      variant={hasReacted ? "filled" : "outlined"}
-                      sx={{
-                        fontSize: "1rem",
-                        borderColor: hasReacted
-                          ? "primary.main"
-                          : "rgba(79,195,247,0.15)",
-                        bgcolor: hasReacted
-                          ? "rgba(79,195,247,0.15)"
-                          : "transparent",
-                        "&:hover": {
-                          bgcolor: "rgba(79,195,247,0.1)",
-                        },
-                        ...(count === 0 && !firebaseUser
-                          ? { display: "none" }
-                          : {}),
-                      }}
-                    />
-                  </span>
-                </Tooltip>
-              );
-            })}
-          </Box>
+          <ReactionsBar
+            postId={post.id}
+            reactions={post.reactions || {}}
+            onReactionsChange={(updated) =>
+              setPosts((prev) =>
+                prev.map((p) => (p.id === post.id ? { ...p, reactions: updated } : p))
+              )
+            }
+          />
         </CardContent>
       </Card>
     );

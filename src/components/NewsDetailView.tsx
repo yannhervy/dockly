@@ -21,14 +21,12 @@ import {
   doc,
   updateDoc,
   deleteDoc,
-  arrayUnion,
-  arrayRemove,
 } from "firebase/firestore";
 import { deleteStorageFile } from "@/lib/storage";
 import { db } from "@/lib/firebase";
 import { useAuth } from "@/context/AuthContext";
 import type { NewsPost } from "@/lib/types";
-import { REACTION_EMOJIS, REACTION_LABELS } from "@/lib/types";
+import ReactionsBar from "@/components/ReactionsBar";
 
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
@@ -36,7 +34,6 @@ import Card from "@mui/material/Card";
 import CardContent from "@mui/material/CardContent";
 import CardMedia from "@mui/material/CardMedia";
 import Button from "@mui/material/Button";
-import Chip from "@mui/material/Chip";
 import Tooltip from "@mui/material/Tooltip";
 import Snackbar from "@mui/material/Snackbar";
 import CircularProgress from "@mui/material/CircularProgress";
@@ -151,35 +148,6 @@ export default function NewsDetailView({ slug }: NewsDetailViewProps) {
     })();
   }, [slug]);
 
-  // Reaction handler
-  const handleReaction = async (postId: string, emoji: string) => {
-    if (!firebaseUser) return;
-    const uid = firebaseUser.uid;
-    const postRef = doc(db, "news", postId);
-    const current = post?.reactions?.[emoji] || [];
-    const hasReacted = current.includes(uid);
-
-    try {
-      await updateDoc(postRef, {
-        [`reactions.${emoji}`]: hasReacted
-          ? arrayRemove(uid)
-          : arrayUnion(uid),
-      });
-      setPost((prev) => {
-        if (!prev) return prev;
-        const reactions = { ...prev.reactions };
-        const list = [...(reactions[emoji] || [])];
-        if (hasReacted) {
-          reactions[emoji] = list.filter((id) => id !== uid);
-        } else {
-          reactions[emoji] = [...list, uid];
-        }
-        return { ...prev, reactions };
-      });
-    } catch (err) {
-      console.error("Error toggling reaction:", err);
-    }
-  };
 
   // Edit handlers
   const openEdit = () => {
@@ -369,38 +337,11 @@ export default function NewsDetailView({ slug }: NewsDetailViewProps) {
           )}
 
           {/* Reactions */}
-          <Box sx={{ display: "flex", gap: 0.5, flexWrap: "wrap", alignItems: "center" }}>
-            {REACTION_EMOJIS.map((emoji) => {
-              const reactors = post.reactions?.[emoji] || [];
-              const hasReacted = firebaseUser ? reactors.includes(firebaseUser.uid) : false;
-              const count = reactors.length;
-
-              return (
-                <Tooltip
-                  key={emoji}
-                  title={firebaseUser ? (hasReacted ? "Ta bort reaktion" : (REACTION_LABELS[emoji] || "Reagera")) : "Logga in för att reagera"}
-                >
-                  <span>
-                    <Chip
-                      label={`${emoji}${count > 0 ? ` ${count}` : ""}`}
-                      size="small"
-                      clickable={!!firebaseUser}
-                      onClick={() => handleReaction(post.id, emoji)}
-                      disabled={!firebaseUser}
-                      variant={hasReacted ? "filled" : "outlined"}
-                      sx={{
-                        fontSize: "1rem",
-                        borderColor: hasReacted ? "primary.main" : "rgba(79,195,247,0.15)",
-                        bgcolor: hasReacted ? "rgba(79,195,247,0.15)" : "transparent",
-                        "&:hover": { bgcolor: "rgba(79,195,247,0.1)" },
-                        ...(count === 0 && !firebaseUser ? { display: "none" } : {}),
-                      }}
-                    />
-                  </span>
-                </Tooltip>
-              );
-            })}
-          </Box>
+          <ReactionsBar
+            postId={post.id}
+            reactions={post.reactions || {}}
+            onReactionsChange={(updated) => setPost((prev) => prev ? { ...prev, reactions: updated } : prev)}
+          />
         </CardContent>
       </Card>
 
