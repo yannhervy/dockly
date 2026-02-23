@@ -29,7 +29,7 @@ import { useAuth } from "@/context/AuthContext";
 import type { NewsPost, ReactionMap, PostType, Dock, Resource } from "@/lib/types";
 import { slugify } from "@/lib/slugify";
 import Link from "next/link";
-import { REACTION_EMOJIS } from "@/lib/types";
+import { REACTION_EMOJIS, REACTION_LABELS } from "@/lib/types";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 import Card from "@mui/material/Card";
@@ -448,7 +448,7 @@ function NewsListingPage() {
               return (
                 <Tooltip
                   key={emoji}
-                  title={firebaseUser ? (hasReacted ? "Ta bort reaktion" : "Reagera") : "Logga in för att reagera"}
+                  title={firebaseUser ? (hasReacted ? "Ta bort reaktion" : (REACTION_LABELS[emoji] || "Reagera")) : "Logga in för att reagera"}
                 >
                   <span>
                     <Chip

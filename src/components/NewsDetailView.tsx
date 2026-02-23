@@ -20,13 +20,15 @@ import {
   Timestamp,
   doc,
   updateDoc,
+  deleteDoc,
   arrayUnion,
   arrayRemove,
 } from "firebase/firestore";
+import { deleteStorageFile } from "@/lib/storage";
 import { db } from "@/lib/firebase";
 import { useAuth } from "@/context/AuthContext";
 import type { NewsPost } from "@/lib/types";
-import { REACTION_EMOJIS } from "@/lib/types";
+import { REACTION_EMOJIS, REACTION_LABELS } from "@/lib/types";
 
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
@@ -39,12 +41,20 @@ import Tooltip from "@mui/material/Tooltip";
 import Snackbar from "@mui/material/Snackbar";
 import CircularProgress from "@mui/material/CircularProgress";
 import Dialog from "@mui/material/Dialog";
+import DialogTitle from "@mui/material/DialogTitle";
+import DialogContent from "@mui/material/DialogContent";
+import DialogActions from "@mui/material/DialogActions";
+import TextField from "@mui/material/TextField";
 import IconButton from "@mui/material/IconButton";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import ShareIcon from "@mui/icons-material/Share";
+import EditIcon from "@mui/icons-material/Edit";
+import DeleteIcon from "@mui/icons-material/Delete";
 import CloseIcon from "@mui/icons-material/Close";
 import ReportProblemIcon from "@mui/icons-material/ReportProblem";
 import Link from "next/link";
+
+const MDEditor = dynamic(() => import("@uiw/react-md-editor"), { ssr: false });
 
 // ─── Helpers ──────────────────────────────────────────────
 function formatDate(ts: Timestamp): string {
@@ -67,13 +77,26 @@ interface NewsDetailViewProps {
 
 export default function NewsDetailView({ slug }: NewsDetailViewProps) {
   const router = useRouter();
-  const { firebaseUser } = useAuth();
+  const { firebaseUser, profile } = useAuth();
 
   const [post, setPost] = useState<NewsPost | null>(null);
   const [otherPosts, setOtherPosts] = useState<NewsPost[]>([]);
   const [loading, setLoading] = useState(true);
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
   const [snackMsg, setSnackMsg] = useState("");
+
+  // Edit/delete state
+  const [editOpen, setEditOpen] = useState(false);
+  const [editTitle, setEditTitle] = useState("");
+  const [editBody, setEditBody] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  // Permission check — same as listing page
+  const canManage = profile?.role === "Superadmin" || profile?.role === "Dock Manager";
+  const canEdit = post ? (canManage || post.authorId === firebaseUser?.uid) : false;
+  const canDelete = canEdit;
 
   // Fetch the post by slug, fallback to document ID
   useEffect(() => {
@@ -158,6 +181,50 @@ export default function NewsDetailView({ slug }: NewsDetailViewProps) {
     }
   };
 
+  // Edit handlers
+  const openEdit = () => {
+    if (!post) return;
+    setEditTitle(post.title);
+    setEditBody(post.body);
+    setEditOpen(true);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!post) return;
+    setSaving(true);
+    try {
+      await updateDoc(doc(db, "news", post.id), {
+        title: editTitle,
+        body: editBody,
+      });
+      setPost({ ...post, title: editTitle, body: editBody });
+      setEditOpen(false);
+      setSnackMsg("Uppdaterad!");
+    } catch (err) {
+      console.error("Error updating post:", err);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!post) return;
+    setDeleting(true);
+    try {
+      // Delete attached images from storage
+      if (post.imageUrls) {
+        for (const url of post.imageUrls) {
+          await deleteStorageFile(url);
+        }
+      }
+      await deleteDoc(doc(db, "news", post.id));
+      router.push("/news");
+    } catch (err) {
+      console.error("Error deleting post:", err);
+      setDeleting(false);
+    }
+  };
+
   // Share handler
   const handleShare = async () => {
     const shareUrl = `${window.location.origin}/share/news/${slug}`;
@@ -238,11 +305,27 @@ export default function NewsDetailView({ slug }: NewsDetailViewProps) {
                 {post.authorName} &middot; {formatDate(post.createdAt)}
               </Typography>
             </Box>
-            <Tooltip title="Dela nyhet">
-              <IconButton onClick={handleShare} sx={{ color: "primary.main" }}>
-                <ShareIcon />
-              </IconButton>
-            </Tooltip>
+            <Box sx={{ display: "flex", gap: 0.5 }}>
+              <Tooltip title="Dela nyhet">
+                <IconButton onClick={handleShare} sx={{ color: "primary.main" }}>
+                  <ShareIcon />
+                </IconButton>
+              </Tooltip>
+              {canEdit && (
+                <Tooltip title="Redigera">
+                  <IconButton onClick={openEdit} sx={{ color: "primary.main" }}>
+                    <EditIcon />
+                  </IconButton>
+                </Tooltip>
+              )}
+              {canDelete && (
+                <Tooltip title="Ta bort">
+                  <IconButton onClick={() => setConfirmDeleteOpen(true)} color="error">
+                    <DeleteIcon />
+                  </IconButton>
+                </Tooltip>
+              )}
+            </Box>
           </Box>
 
           {/* Body */}
@@ -295,7 +378,7 @@ export default function NewsDetailView({ slug }: NewsDetailViewProps) {
               return (
                 <Tooltip
                   key={emoji}
-                  title={firebaseUser ? (hasReacted ? "Ta bort reaktion" : "Reagera") : "Logga in för att reagera"}
+                  title={firebaseUser ? (hasReacted ? "Ta bort reaktion" : (REACTION_LABELS[emoji] || "Reagera")) : "Logga in för att reagera"}
                 >
                   <span>
                     <Chip
@@ -409,6 +492,52 @@ export default function NewsDetailView({ slug }: NewsDetailViewProps) {
       </Dialog>
 
       {/* Snackbar for clipboard copy feedback */}
+      {/* Edit dialog */}
+      <Dialog open={editOpen} onClose={() => setEditOpen(false)} maxWidth="md" fullWidth>
+        <DialogTitle>{post?.postType === "report" ? "Redigera rapport" : "Redigera nyhet"}</DialogTitle>
+        <DialogContent>
+          <TextField
+            fullWidth
+            label="Rubrik"
+            value={editTitle}
+            onChange={(e) => setEditTitle(e.target.value)}
+            sx={{ mt: 1, mb: 2 }}
+          />
+          <MDEditor value={editBody} onChange={(v) => setEditBody(v || "")} height={300} />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setEditOpen(false)}>Avbryt</Button>
+          <Button
+            variant="contained"
+            onClick={handleSaveEdit}
+            disabled={saving || !editTitle.trim()}
+            startIcon={saving ? <CircularProgress size={18} /> : undefined}
+          >
+            {saving ? "Sparar..." : "Spara"}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Delete confirmation dialog */}
+      <Dialog open={confirmDeleteOpen} onClose={() => setConfirmDeleteOpen(false)} maxWidth="xs">
+        <DialogTitle>Ta bort {post?.postType === "report" ? "rapport" : "nyhet"}?</DialogTitle>
+        <DialogContent>
+          <Typography>Är du säker? Detta kan inte ångras.</Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setConfirmDeleteOpen(false)}>Avbryt</Button>
+          <Button
+            variant="contained"
+            color="error"
+            onClick={handleDelete}
+            disabled={deleting}
+            startIcon={deleting ? <CircularProgress size={18} /> : <DeleteIcon />}
+          >
+            {deleting ? "Tar bort..." : "Ta bort"}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
       <Snackbar
         open={!!snackMsg}
         autoHideDuration={2000}

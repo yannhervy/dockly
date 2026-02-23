@@ -213,7 +213,13 @@ export interface MarketplaceListing {
 
 // ─── News & Reports ──────────────────────────────────────
 // Configurable list of reaction emojis — edit this array to change available reactions
-export const REACTION_EMOJIS = ["🐟", "🦀", "🧜", "🌊", "⚓", "☠️"];
+export const REACTION_EMOJIS = ["🐳", "⚓", "🦈", "🦐"];
+export const REACTION_LABELS: Record<string, string> = {
+  "🐳": "Bra val!",
+  "⚓": "Förankrat!",
+  "🦈": "Jag hajar!",
+  "🦐": "Räkna med det!",
+};
 
 // Reactions stored as a map of emoji -> array of user IDs
 export type ReactionMap = Record<string, string[]>;
