@@ -14,11 +14,11 @@ import Divider from "@mui/material/Divider";
 import Tooltip from "@mui/material/Tooltip";
 import AddCommentIcon from "@mui/icons-material/AddComment";
 import DeleteIcon from "@mui/icons-material/Delete";
+import EditIcon from "@mui/icons-material/Edit";
 
 // ─── Helpers ──────────────────────────────────────────────
 function formatDate(ts: Timestamp): string {
   const d = ts.toDate();
-  // If the date is very old (epoch 0 / min-date), show "Okänt datum"
   if (d.getFullYear() < 2000) return "Okänt datum";
   return d.toLocaleDateString("sv-SE", {
     year: "numeric",
@@ -30,7 +30,7 @@ function formatDate(ts: Timestamp): string {
 interface Props {
   /** Current list of internal comments */
   comments: InternalComment[];
-  /** Called with updated comments array after add/delete */
+  /** Called with updated comments array after add/delete/edit */
   onChange: (updated: InternalComment[]) => void;
   /** Map of userId → display name (for rendering author names) */
   userNames?: Record<string, string>;
@@ -39,7 +39,7 @@ interface Props {
 }
 
 /**
- * Reusable panel for viewing, adding, and deleting internal comments.
+ * Reusable panel for viewing, adding, editing, and deleting internal comments.
  * Used across admin tabs for Users, Resources, LandStorage, and AbandonedObjects.
  */
 export default function InternalCommentsPanel({
@@ -51,6 +51,10 @@ export default function InternalCommentsPanel({
   const { firebaseUser } = useAuth();
   const [newComment, setNewComment] = useState("");
   const [adding, setAdding] = useState(false);
+
+  // Edit state
+  const [editingIndex, setEditingIndex] = useState<number | null>(null);
+  const [editText, setEditText] = useState("");
 
   const handleAdd = () => {
     if (!newComment.trim() || !firebaseUser) return;
@@ -66,6 +70,26 @@ export default function InternalCommentsPanel({
 
   const handleDelete = (index: number) => {
     onChange(comments.filter((_, i) => i !== index));
+  };
+
+  const startEdit = (index: number) => {
+    setEditingIndex(index);
+    setEditText(comments[index].comment);
+  };
+
+  const handleSaveEdit = () => {
+    if (editingIndex === null || !editText.trim()) return;
+    const updated = comments.map((c, i) =>
+      i === editingIndex ? { ...c, comment: editText.trim() } : c
+    );
+    onChange(updated);
+    setEditingIndex(null);
+    setEditText("");
+  };
+
+  const cancelEdit = () => {
+    setEditingIndex(null);
+    setEditText("");
   };
 
   const getAuthorName = (uid: string): string => {
@@ -102,19 +126,60 @@ export default function InternalCommentsPanel({
                 border: "1px solid rgba(79, 195, 247, 0.08)",
               }}
             >
-              <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                <Typography variant="body2" sx={{ whiteSpace: "pre-wrap", flex: 1 }}>
-                  {c.comment}
-                </Typography>
-                <Tooltip title="Ta bort kommentar">
-                  <IconButton size="small" onClick={() => handleDelete(i)} sx={{ ml: 1 }}>
-                    <DeleteIcon fontSize="small" />
-                  </IconButton>
-                </Tooltip>
-              </Box>
-              <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: "block" }}>
-                {getAuthorName(c.byWho)} · {formatDate(c.date)}
-              </Typography>
+              {editingIndex === i ? (
+                /* ── Inline edit mode ── */
+                <Box sx={{ display: "flex", gap: 1, alignItems: "flex-start" }}>
+                  <TextField
+                    size="small"
+                    fullWidth
+                    multiline
+                    minRows={2}
+                    maxRows={4}
+                    value={editText}
+                    onChange={(e) => setEditText(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !e.shiftKey) {
+                        e.preventDefault();
+                        handleSaveEdit();
+                      }
+                      if (e.key === "Escape") cancelEdit();
+                    }}
+                    autoFocus
+                  />
+                  <Box sx={{ display: "flex", flexDirection: "column", gap: 0.5 }}>
+                    <Button size="small" variant="contained" onClick={handleSaveEdit} disabled={!editText.trim()}>
+                      Spara
+                    </Button>
+                    <Button size="small" onClick={cancelEdit}>
+                      Avbryt
+                    </Button>
+                  </Box>
+                </Box>
+              ) : (
+                /* ── Read mode ── */
+                <>
+                  <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                    <Typography variant="body2" sx={{ whiteSpace: "pre-wrap", flex: 1 }}>
+                      {c.comment}
+                    </Typography>
+                    <Box sx={{ display: "flex", ml: 1 }}>
+                      <Tooltip title="Redigera kommentar">
+                        <IconButton size="small" onClick={() => startEdit(i)}>
+                          <EditIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                      <Tooltip title="Ta bort kommentar">
+                        <IconButton size="small" onClick={() => handleDelete(i)}>
+                          <DeleteIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                    </Box>
+                  </Box>
+                  <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: "block" }}>
+                    {getAuthorName(c.byWho)} · {formatDate(c.date)}
+                  </Typography>
+                </>
+              )}
             </Box>
           ))}
         </Box>
