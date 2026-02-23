@@ -4,6 +4,8 @@ import React, { useEffect, useState, useRef } from "react";
 import { db } from "@/lib/firebase";
 import { useAuth } from "@/context/AuthContext";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
+import InternalCommentsPanel from "@/components/InternalCommentsPanel";
+import type { InternalComment } from "@/lib/types";
 import { User, Dock, Resource, BerthInterest, InterestReply, OfferedBerth, Berth, BerthTenant, SeaHut, LandStorageEntry, UserMessage, AbandonedObject, AbandonedObjectType, POI, UserRole } from "@/lib/types";
 import { normalizePhone } from "@/lib/phoneUtils";
 import { sendSms } from "@/lib/sms";
@@ -183,7 +185,7 @@ function UsersTab({ initialEditId }: { initialEditId?: string }) {
     email: "",
     phone: "",
     role: "Tenant" as User["role"],
-    internalComment: "",
+    internalComments: [] as InternalComment[],
     isPublic: true,
   });
   const [editSaving, setEditSaving] = useState(false);
@@ -360,7 +362,7 @@ function UsersTab({ initialEditId }: { initialEditId?: string }) {
       email: user.email || "",
       phone: user.phone || "",
       role: user.role,
-      internalComment: user.internalComment || "",
+      internalComments: user.internalComments || [],
       isPublic: user.isPublic ?? true,
     });
     setMsgText("");
@@ -430,13 +432,13 @@ function UsersTab({ initialEditId }: { initialEditId?: string }) {
         email: editForm.email.trim(),
         phone: editForm.phone.trim(),
         role: editForm.role,
-        internalComment: editForm.internalComment.trim(),
+        internalComments: editForm.internalComments,
         isPublic: editForm.isPublic,
       });
       setUsers((prev) =>
         prev.map((u) =>
           u.id === editUser.id
-            ? { ...u, name: editForm.name.trim(), email: editForm.email.trim(), phone: editForm.phone.trim(), role: editForm.role, internalComment: editForm.internalComment.trim(), isPublic: editForm.isPublic }
+            ? { ...u, name: editForm.name.trim(), email: editForm.email.trim(), phone: editForm.phone.trim(), role: editForm.role, internalComments: editForm.internalComments, isPublic: editForm.isPublic }
             : u
         )
       );
@@ -851,16 +853,11 @@ function UsersTab({ initialEditId }: { initialEditId?: string }) {
 
           <Divider sx={{ my: 2 }} />
 
-          {/* Internal comment — only for managers/superadmin */}
-          <TextField
-            fullWidth
-            label="Internal Comment (not visible to tenant)"
-            multiline
-            rows={2}
-            value={editForm.internalComment}
-            onChange={(e) => setEditForm({ ...editForm, internalComment: e.target.value })}
-            sx={{ mb: 2 }}
-            helperText="Only visible to Dock Managers and Superadmins"
+          {/* Internal comments — structured array */}
+          <InternalCommentsPanel
+            comments={editForm.internalComments}
+            onChange={(updated) => setEditForm({ ...editForm, internalComments: updated })}
+            userNames={Object.fromEntries(users.map((u) => [u.id, u.name]))}
           />
 
           <Divider sx={{ my: 2 }} />
@@ -2735,6 +2732,13 @@ function ResourcesTab({ initialEditId }: { initialEditId?: string }) {
                 </>
               )}
             </Grid>
+
+            {/* Internal comments */}
+            <InternalCommentsPanel
+              comments={editResource?.internalComments || []}
+              onChange={(updated) => setEditResource((prev: Record<string, unknown> | null) => prev ? { ...prev, internalComments: updated } : prev)}
+              userNames={Object.fromEntries(users.map((u) => [u.id, u.name]))}
+            />
           </DialogContent>
           <DialogActions>
             <Button onClick={() => setEditResource(null)}>Cancel</Button>
@@ -3925,6 +3929,12 @@ function AbandonedObjectsTab({ initialEditId }: { initialEditId?: string }) {
               onClick={() => setLightboxUrl(photoPreview)}
             />
           )}
+
+          {/* Internal comments */}
+          <InternalCommentsPanel
+            comments={editEntry?.internalComments || []}
+            onChange={(updated) => setEditEntry((prev) => prev ? { ...prev, internalComments: updated } : prev)}
+          />
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setDialogOpen(false)}>Avbryt</Button>

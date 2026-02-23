@@ -21,7 +21,7 @@ export interface User {
   allowMapSms?: boolean; // Allow managers to send SMS from map (default true)
   phone: string;
   photoURL?: string; // Profile picture URL
-  internalComment?: string; // Internal note visible only to managers/superadmin
+  internalComments?: InternalComment[]; // Structured internal notes visible only to managers/superadmin
   engagement?: EngagementType[]; // Harbor engagement (selected during setup)
   registrationNote?: string; // Free-text note from registration (e.g. berth/seahut details)
   approved?: boolean; // false until approved by manager/superadmin (missing = approved for legacy users)
@@ -60,6 +60,13 @@ export interface Dock {
   maxLength?: number; // Length in meters (for map rectangle)
 }
 
+// ─── Internal Comment ─────────────────────────────────────
+export interface InternalComment {
+  byWho: string;    // userId of the author
+  date: Timestamp;  // When the comment was written
+  comment: string;  // The comment text
+}
+
 // ─── Resource (polymorphic base) ──────────────────────────
 export type ResourceType = "Berth" | "SeaHut" | "Box" | "LandStorage";
 export type ResourceStatus = "Available" | "Occupied";
@@ -79,6 +86,7 @@ export interface Resource {
   heading?: number; // Orientation in degrees (0-360)
   maxWidth?: number; // Width in meters (for map rectangle)
   maxLength?: number; // Length in meters (for map rectangle)
+  internalComments?: InternalComment[]; // Structured internal notes
 }
 
 // ─── Resource subtypes ────────────────────────────────────
@@ -163,7 +171,8 @@ export interface LandStorageEntry {
   lastName: string;
   phone: string;
   email?: string; // Occupant email (for matching to registered users)
-  comment: string;
+  comment: string; // Legacy description (kept for display)
+  internalComments?: InternalComment[]; // Structured internal notes
   occupantId?: string; // FK to User (if the occupant is registered)
   paymentStatus: PaymentStatus;
   season?: LandStorageSeason;
@@ -289,7 +298,8 @@ export interface AbandonedObject {
   lng: number;                           // GPS longitude
   imageUrl: string;                      // Photo URL
   abandonedSince: Timestamp;             // Abandoned since date
-  comment?: string;                      // Optional notes
+  comment?: string;                      // Legacy notes (kept for display)
+  internalComments?: InternalComment[]; // Structured internal notes
   claimedByUid?: string;                 // Firebase UID of the owner who claimed it
   claimedByName?: string;                // Display name of the claimer
   claimedByPhone?: string;               // Phone of the claimer (for admin to contact)

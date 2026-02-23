@@ -24,6 +24,10 @@
         "function": "newsOgTags"
       },
       {
+        "source": "/news/**",
+        "destination": "/news.html"
+      },
+      {
         "source": "**",
         "destination": "/index.html"
       }

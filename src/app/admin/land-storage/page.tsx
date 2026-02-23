@@ -6,7 +6,8 @@ import useMediaQuery from "@mui/material/useMediaQuery";
 import { useAuth } from "@/context/AuthContext";
 import { db } from "@/lib/firebase";
 import { uploadLandStorageImage } from "@/lib/storage";
-import { LandStorageEntry, User } from "@/lib/types";
+import { LandStorageEntry, User, InternalComment } from "@/lib/types";
+import InternalCommentsPanel from "@/components/InternalCommentsPanel";
 import {
   collection,
   getDocs,
@@ -87,6 +88,7 @@ function LandStorageContent() {
     comment: "",
   });
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+  const [editInternalComments, setEditInternalComments] = useState<InternalComment[]>([]);
   const [allUsers, setAllUsers] = useState<User[]>([]);
   const [editLat, setEditLat] = useState<number | undefined>(undefined);
   const [editLng, setEditLng] = useState<number | undefined>(undefined);
@@ -159,6 +161,7 @@ function LandStorageContent() {
       comment: entry.comment || "",
     });
     setSelectedUserId(entry.occupantId || null);
+    setEditInternalComments(entry.internalComments || []);
     setEditLat(entry.lat);
     setEditLng(entry.lng);
     setEditImageUrl(entry.imageUrl);
@@ -198,6 +201,7 @@ function LandStorageContent() {
         lat: editLat ?? null,
         lng: editLng ?? null,
         imageUrl: imageUrl ?? null,
+        internalComments: editInternalComments,
         updatedAt: Timestamp.now(),
       });
       // Update local state
@@ -734,6 +738,13 @@ function LandStorageContent() {
               </Button>
             )}
           </Box>
+
+          {/* Internal comments */}
+          <InternalCommentsPanel
+            comments={editInternalComments}
+            onChange={setEditInternalComments}
+            userNames={Object.fromEntries(allUsers.map((u) => [u.id, u.name]))}
+          />
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2, justifyContent: "space-between" }}>
           <Box>

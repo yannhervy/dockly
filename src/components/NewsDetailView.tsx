@@ -14,6 +14,7 @@ import {
   query,
   where,
   getDocs,
+  getDoc,
   orderBy,
   limit,
   Timestamp,
@@ -74,12 +75,15 @@ export default function NewsDetailView({ slug }: NewsDetailViewProps) {
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
   const [snackMsg, setSnackMsg] = useState("");
 
-  // Fetch the post by slug
+  // Fetch the post by slug, fallback to document ID
   useEffect(() => {
     if (!slug) return;
     (async () => {
       setLoading(true);
       try {
+        let found: NewsPost | null = null;
+
+        // 1. Try finding by slug field
         const q = query(
           collection(db, "news"),
           where("slug", "==", slug),
@@ -87,7 +91,19 @@ export default function NewsDetailView({ slug }: NewsDetailViewProps) {
         );
         const snap = await getDocs(q);
         if (!snap.empty) {
-          const found = { id: snap.docs[0].id, ...snap.docs[0].data() } as NewsPost;
+          found = { id: snap.docs[0].id, ...snap.docs[0].data() } as NewsPost;
+        }
+
+        // 2. Fallback: try by document ID (for old posts without slugs)
+        if (!found) {
+          const docRef = doc(db, "news", slug);
+          const docSnap = await getDoc(docRef);
+          if (docSnap.exists()) {
+            found = { id: docSnap.id, ...docSnap.data() } as NewsPost;
+          }
+        }
+
+        if (found) {
           setPost(found);
 
           // Fetch other recent posts
@@ -100,7 +116,7 @@ export default function NewsDetailView({ slug }: NewsDetailViewProps) {
           setOtherPosts(
             otherSnap.docs
               .map((d) => ({ id: d.id, ...d.data() }) as NewsPost)
-              .filter((p) => p.id !== found.id)
+              .filter((p) => p.id !== found!.id)
               .slice(0, 5)
           );
         }
