@@ -954,3 +954,84 @@ export const verifyPhoneCode = onRequest(
     res.status(200).json({ success: true });
   }
 );
+
+// ─── OG tags for shared news links ───────────────────────────
+// Serves minimal HTML with Open Graph meta tags for social media crawlers.
+// Humans are redirected to the real SPA page via <meta http-equiv="refresh">.
+export const newsOgTags = onRequest(
+  { region: "europe-west1", cors: true },
+  async (req, res) => {
+    // Extract slug from path: /share/news/{slug} or just /{slug}
+    const pathParts = req.path.replace(/^\/+/, "").split("/");
+    const slug = pathParts[pathParts.length - 1];
+
+    if (!slug) {
+      res.redirect("https://stegerholmenshamn.web.app/news");
+      return;
+    }
+
+    const db = admin.firestore();
+
+    try {
+      const snap = await db
+        .collection("news")
+        .where("slug", "==", slug)
+        .limit(1)
+        .get();
+
+      if (snap.empty) {
+        res.redirect("https://stegerholmenshamn.web.app/news");
+        return;
+      }
+
+      const post = snap.docs[0].data();
+      const title = post.title || "Stegerholmens Hamn";
+      const body = (post.body || "")
+        .replace(/[#*_~`>\[\]()!-]/g, "")
+        .replace(/\n+/g, " ")
+        .trim();
+      const description = body.length > 160 ? body.slice(0, 159) + "\u2026" : body;
+      const image = post.imageUrls?.[0] || "https://stegerholmenshamn.web.app/IMG20221112150016-EDIT.jpg";
+      const pageUrl = `https://stegerholmenshamn.web.app/news/${slug}`;
+
+      res.set("Cache-Control", "public, max-age=3600, s-maxage=3600");
+      res.send(`<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="UTF-8">
+  <title>${escapeHtml(title)} – Stegerholmens Hamn</title>
+  <meta name="description" content="${escapeHtml(description)}">
+  <meta property="og:title" content="${escapeHtml(title)}">
+  <meta property="og:description" content="${escapeHtml(description)}">
+  <meta property="og:image" content="${escapeHtml(image)}">
+  <meta property="og:url" content="${escapeHtml(pageUrl)}">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Stegerholmens Hamn">
+  <meta property="og:locale" content="sv_SE">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="${escapeHtml(title)}">
+  <meta name="twitter:description" content="${escapeHtml(description)}">
+  <meta name="twitter:image" content="${escapeHtml(image)}">
+  <meta http-equiv="refresh" content="0;url=${pageUrl}">
+  <link rel="canonical" href="${pageUrl}">
+</head>
+<body>
+  <p>Omdirigerar till <a href="${pageUrl}">${escapeHtml(title)}</a>...</p>
+</body>
+</html>`);
+    } catch (err) {
+      console.error("newsOgTags error:", err);
+      res.redirect("https://stegerholmenshamn.web.app/news");
+    }
+  }
+);
+
+/** Escape HTML special characters for safe embedding in attributes. */
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}

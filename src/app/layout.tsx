@@ -8,10 +8,41 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  title: "Stegerholmens Hamn – Båtplatser & Hamnförening",
+  title: "Stegerholmens Hamn – Båtplats Näset Göteborg",
   description:
-    "Stegerholmens Hamn – Båtplatser, bryggförvaltning och hamnservice i skärgården. Intresseanmälan, köp & sälj, och mer.",
+    "Stegerholmens Bryggförening – Båtplatser och hamnservice på Näset i Göteborg. Bryggförvaltning, sjösättning, markuppställning, köp & sälj och aktuella nyheter.",
+  keywords: [
+    "båtplats näset",
+    "båtplats näset göteborg",
+    "båtplats göteborg",
+    "stegerholmen",
+    "stegerholmens hamn",
+    "stegerholmens bryggförening",
+    "båthamn näset",
+    "hamn näset göteborg",
+    "bryggplats göteborg",
+    "sjösättning näset",
+    "markuppställning näset",
+  ],
   manifest: "/manifest.json",
+  metadataBase: new URL("https://stegerholmenshamn.web.app"),
+  openGraph: {
+    title: "Stegerholmens Hamn – Båtplats Näset Göteborg",
+    description:
+      "Båtplatser och hamnservice på Näset i Göteborg. Bryggförvaltning, sjösättning, markuppställning och mer.",
+    url: "https://stegerholmenshamn.web.app",
+    siteName: "Stegerholmens Hamn",
+    locale: "sv_SE",
+    type: "website",
+    images: [
+      {
+        url: "/IMG20221112150016-EDIT.jpg",
+        width: 1200,
+        height: 630,
+        alt: "Stegerholmens Hamn – Näset, Göteborg",
+      },
+    ],
+  },
   other: {
     "apple-mobile-web-app-capable": "yes",
     "apple-mobile-web-app-status-bar-style": "black-translucent",

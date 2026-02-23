@@ -216,6 +216,7 @@ export interface NewsPost {
   postType: PostType;              // "news" (admin only) or "report" (any user)
   title: string;
   body: string;
+  slug?: string;                   // URL-friendly slug for detail pages
   imageUrls: string[];             // Multiple images supported
   authorId: string;
   authorName: string;

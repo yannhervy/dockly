@@ -318,7 +318,7 @@ export default function HomePage() {
             {recentReports.map((report) => (
               <Card
                 key={report.id}
-                onClick={() => router.push("/news")}
+                onClick={() => router.push(`/news/${report.slug || report.id}`)}
                 sx={{
                   cursor: "pointer",
                   bgcolor: "rgba(13, 33, 55, 0.6)",
@@ -499,7 +499,7 @@ export default function HomePage() {
             {recentReports.map((report) => (
               <Card
                 key={report.id}
-                onClick={() => router.push("/news")}
+                onClick={() => router.push(`/news/${report.slug || report.id}`)}
                 sx={{
                   cursor: "pointer",
                   bgcolor: "rgba(13, 33, 55, 0.6)",
@@ -594,7 +594,7 @@ export default function HomePage() {
             {latestNews.map((post) => (
               <Grid size={{ xs: 12, md: 4 }} key={post.id}>
                 <Card
-                  onClick={() => router.push("/news")}
+                  onClick={() => router.push(`/news/${post.slug || post.id}`)}
                   sx={{
                     cursor: "pointer",
                     height: "100%",

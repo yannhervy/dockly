@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
+import NewsDetailView from "@/components/NewsDetailView";
 import ImagePickerDialog from "@/components/ImagePickerDialog";
 import dynamic from "next/dynamic";
 
@@ -25,6 +27,8 @@ import { resizeImage, deleteStorageFile } from "@/lib/storage";
 import { db, storage } from "@/lib/firebase";
 import { useAuth } from "@/context/AuthContext";
 import type { NewsPost, ReactionMap, PostType, Dock, Resource } from "@/lib/types";
+import { slugify } from "@/lib/slugify";
+import Link from "next/link";
 import { REACTION_EMOJIS } from "@/lib/types";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
@@ -56,6 +60,21 @@ function formatDate(ts: Timestamp): string {
 }
 
 export default function NewsPage() {
+  // ─── Slug detection: /news/{slug} → detail view ───
+  const pathname = usePathname();
+  const slugMatch = pathname.match(/^\/news\/(.+)$/);
+  const detailSlug = slugMatch?.[1] || null;
+
+  // If a slug is present, render the detail view component
+  if (detailSlug) {
+    return <NewsDetailView slug={detailSlug} />;
+  }
+
+  return <NewsListingPage />;
+}
+
+// ─── News listing (original page logic) ──────────────────
+function NewsListingPage() {
   const { firebaseUser, profile } = useAuth();
   const [posts, setPosts] = useState<NewsPost[]>([]);
   const [loading, setLoading] = useState(true);
@@ -184,6 +203,7 @@ export default function NewsPage() {
           postType: formPostType,
           title: form.title,
           body: form.body,
+          slug: slugify(form.title) + "-" + Date.now().toString(36),
           imageUrls,
           authorId: firebaseUser.uid,
           authorName: profile.name,
@@ -319,7 +339,12 @@ export default function NewsPage() {
                 {isReport && (
                   <ReportProblemIcon sx={{ fontSize: 20, color: "warning.main" }} />
                 )}
-                <Typography variant="h5" sx={{ fontWeight: 700 }}>
+                <Typography
+                  variant="h5"
+                  component={Link}
+                  href={`/news/${post.slug || post.id}`}
+                  sx={{ fontWeight: 700, color: "inherit", textDecoration: "none", "&:hover": { color: "primary.main" } }}
+                >
                   {post.title}
                 </Typography>
               </Box>

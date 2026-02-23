@@ -20,6 +20,10 @@
     ],
     "rewrites": [
       {
+        "source": "/share/news/**",
+        "function": "newsOgTags"
+      },
+      {
         "source": "**",
         "destination": "/index.html"
       }
