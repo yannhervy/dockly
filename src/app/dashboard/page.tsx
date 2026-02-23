@@ -12,6 +12,7 @@ import { APIProvider, Map as GMap, AdvancedMarker, useMap, useMapsLibrary } from
 import { computeBoatHull, HARBOR_CENTER } from "@/lib/mapUtils";
 import { extractExifGps } from "@/lib/exifGps";
 import ImagePickerDialog from "@/components/ImagePickerDialog";
+import SwishPaymentPanel from "@/components/SwishPaymentPanel";
 import useMediaQuery from "@mui/material/useMediaQuery";
 import {
   collection,
@@ -1996,7 +1997,11 @@ function DashboardContent() {
                   </Table>
                 </TableContainer>
                 )}
-              </CardContent>
+
+                {/* Swish payment panel — shown when user has a land storage code */}
+                {landEntries.length > 0 && (
+                  <SwishPaymentPanel code={landEntries[0].code} />
+                )}              </CardContent>
             </Card>
           </Grid>
 
