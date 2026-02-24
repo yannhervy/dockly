@@ -168,6 +168,8 @@ function UsersTab({ initialEditId }: { initialEditId?: string }) {
   const router = useRouter();
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [filterRole, setFilterRole] = useState<"all" | User["role"]>("all");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [successMsg, setSuccessMsg] = useState("");
   const [matching, setMatching] = useState(false);
@@ -607,6 +609,37 @@ function UsersTab({ initialEditId }: { initialEditId?: string }) {
         </Button>
       </Box>
 
+      {/* Search and role filter bar */}
+      <Box sx={{ display: "flex", gap: 2, mb: 2, alignItems: "center", flexWrap: "wrap" }}>
+        <TextField
+          size="small"
+          placeholder="Sök på namn, e-post, telefon..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          sx={{ minWidth: 260 }}
+          slotProps={{
+            input: {
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon fontSize="small" />
+                </InputAdornment>
+              ),
+            },
+          }}
+        />
+        <ToggleButtonGroup
+          size="small"
+          value={filterRole}
+          exclusive
+          onChange={(_, val) => val && setFilterRole(val)}
+        >
+          <ToggleButton value="all">Alla ({users.length})</ToggleButton>
+          <ToggleButton value="Tenant">Tenant ({users.filter((u) => u.role === "Tenant").length})</ToggleButton>
+          <ToggleButton value="Dock Manager">Dock Manager ({users.filter((u) => u.role === "Dock Manager").length})</ToggleButton>
+          <ToggleButton value="Superadmin">Superadmin ({users.filter((u) => u.role === "Superadmin").length})</ToggleButton>
+        </ToggleButtonGroup>
+      </Box>
+
       {/* Pending users */}
       {(() => {
         const pending = users.filter((u) => u.approved === false);
@@ -691,7 +724,18 @@ function UsersTab({ initialEditId }: { initialEditId?: string }) {
               </TableRow>
             </TableHead>
             <TableBody>
-              {users.map((u) => (
+              {users
+                .filter((u) => filterRole === "all" || u.role === filterRole)
+                .filter((u) => {
+                  if (!searchQuery.trim()) return true;
+                  const q = searchQuery.toLowerCase();
+                  return (
+                    (u.name || "").toLowerCase().includes(q) ||
+                    (u.email || "").toLowerCase().includes(q) ||
+                    (u.phone || "").toLowerCase().includes(q)
+                  );
+                })
+                .map((u) => (
                 <TableRow key={u.id} hover>
                   <TableCell sx={{ fontWeight: 600 }}>{u.name}</TableCell>
                   <TableCell>
