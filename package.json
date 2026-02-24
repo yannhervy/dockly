@@ -6,7 +6,10 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "deploy:hosting": "next build && firebase deploy --only hosting",
+    "deploy:functions": "firebase deploy --only functions",
+    "deploy": "next build && firebase deploy"
   },
   "dependencies": {
     "@emotion/cache": "^11.14.0",
