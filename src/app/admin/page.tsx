@@ -18,8 +18,7 @@ import SailingIcon from "@mui/icons-material/Sailing";
 import ConstructionIcon from "@mui/icons-material/Construction";
 import DangerousIcon from "@mui/icons-material/Dangerous";
 import PlaceIcon from "@mui/icons-material/Place";
-import ManageAccountsIcon from "@mui/icons-material/ManageAccounts";
-import PublicIcon from "@mui/icons-material/Public";
+
 
 interface SectionCard {
   title: string;
@@ -32,20 +31,12 @@ interface SectionCard {
 
 const SECTIONS: SectionCard[] = [
   {
-    title: "Hamnkatalog",
-    description: "Se och sök bland alla medlemmar i hamnen.",
-    path: "/admin/directory",
-    icon: <PublicIcon sx={{ fontSize: 40 }} />,
+    title: "Bryggöversikt",
+    description: "Se platser, status och hantera betalningar per brygga.",
+    path: "/admin/manager",
+    icon: <AnchorIcon sx={{ fontSize: 40 }} />,
     color: "#4FC3F7",
     roles: ["Superadmin", "Dock Manager", "Tenant"],
-  },
-  {
-    title: "Bryggöversikt",
-    description: "Hantera platser, tilldelning och betalningar per brygga.",
-    path: "/admin/manager",
-    icon: <ManageAccountsIcon sx={{ fontSize: 40 }} />,
-    color: "#FFB74D",
-    roles: ["Superadmin", "Dock Manager"],
   },
   {
     title: "Intresseanmälningar",

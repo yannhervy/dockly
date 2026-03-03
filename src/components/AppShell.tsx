@@ -22,8 +22,6 @@ import Chip from "@mui/material/Chip";
 import MenuIcon from "@mui/icons-material/Menu";
 import DirectionsBoatIcon from "@mui/icons-material/DirectionsBoat";
 import DashboardIcon from "@mui/icons-material/Dashboard";
-import PublicIcon from "@mui/icons-material/Public";
-import ManageAccountsIcon from "@mui/icons-material/ManageAccounts";
 import AdminPanelSettingsIcon from "@mui/icons-material/AdminPanelSettings";
 import LogoutIcon from "@mui/icons-material/Logout";
 import AnchorIcon from "@mui/icons-material/Anchor";
@@ -51,12 +49,10 @@ interface NavItem {
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { label: "Hamnkatalog", path: "/admin/directory", icon: <PublicIcon /> },
   {
     label: "Bryggöversikt",
     path: "/admin/manager",
-    icon: <ManageAccountsIcon />,
-    roles: ["Superadmin", "Dock Manager"],
+    icon: <AnchorIcon />,
   },
   {
     label: "Intresseanmälningar",
