@@ -25,12 +25,12 @@ export const metadata: Metadata = {
     "markuppställning näset",
   ],
   manifest: "/manifest.json",
-  metadataBase: new URL("https://stegerholmenshamn.web.app"),
+  metadataBase: new URL("https://stegerholmenshamn.se"),
   openGraph: {
     title: "Stegerholmens Hamn – Båtplats Näset Göteborg",
     description:
       "Båtplatser och hamnservice på Näset i Göteborg. Bryggförvaltning, sjösättning, markuppställning och mer.",
-    url: "https://stegerholmenshamn.web.app",
+    url: "https://stegerholmenshamn.se",
     siteName: "Stegerholmens Hamn",
     locale: "sv_SE",
     type: "website",

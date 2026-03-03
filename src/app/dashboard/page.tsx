@@ -1561,7 +1561,7 @@ function DashboardContent() {
               <Typography
                 variant="h6"
                 sx={{
-                  mb: 2,
+                  mb: 0.5,
                   display: "flex",
                   alignItems: "center",
                   gap: 1,
@@ -1569,6 +1569,10 @@ function DashboardContent() {
               >
                 <DirectionsBoatIcon sx={{ color: "primary.main" }} />
                 Mina hyresavtal
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                Hjälp oss att hålla ordning och reda — ladda upp bild och
+                ange GPS-position på dina objekt.
               </Typography>
 
               {loading ? (
@@ -1588,13 +1592,13 @@ function DashboardContent() {
                   <Table>
                     <TableHead>
                       <TableRow>
+                        <TableCell sx={{ width: 56, p: 1 }}></TableCell>
                         <TableCell>Typ</TableCell>
                         <TableCell>Märkningskod</TableCell>
                         <TableCell>Status</TableCell>
                         <TableCell>Betalning</TableCell>
                         <TableCell>GPS</TableCell>
                         <TableCell>2:a-hand</TableCell>
-                        <TableCell>Båtbild</TableCell>
                       </TableRow>
                     </TableHead>
                     <TableBody>
@@ -1602,6 +1606,74 @@ function DashboardContent() {
                         const isSublet = subletResourceIds.has(r.id);
                         return (
                         <TableRow key={r.id} sx={isSublet ? { bgcolor: "rgba(33, 150, 243, 0.06)" } : undefined}>
+                          {/* Round avatar image — leftmost column */}
+                          <TableCell sx={{ width: 56, p: 1 }}>
+                            {isSublet ? (
+                              r.objectImageUrl ? (
+                                <Avatar
+                                  src={r.objectImageUrl}
+                                  sx={{ width: 44, height: 44, cursor: "pointer", border: "2px solid rgba(255,255,255,0.15)" }}
+                                  onClick={() => setPreviewImageUrl(r.objectImageUrl!)}
+                                />
+                              ) : (
+                                <Avatar sx={{ width: 44, height: 44, bgcolor: "rgba(255,255,255,0.06)" }}>
+                                  <DirectionsBoatIcon sx={{ fontSize: 20, opacity: 0.3 }} />
+                                </Avatar>
+                              )
+                            ) : r.objectImageUrl ? (
+                              <Tooltip title="Klicka för att se bild — kameraikon för att ändra">
+                                <Box sx={{ position: "relative", display: "inline-block" }}>
+                                  <Avatar
+                                    src={r.objectImageUrl}
+                                    sx={{ width: 44, height: 44, cursor: "pointer", border: "2px solid rgba(255,255,255,0.15)" }}
+                                    onClick={() => setPreviewImageUrl(r.objectImageUrl!)}
+                                  />
+                                  <IconButton
+                                    size="small"
+                                    onClick={() => handleUploadClick(r.id)}
+                                    disabled={uploading === r.id}
+                                    sx={{
+                                      position: "absolute",
+                                      bottom: -4,
+                                      right: -4,
+                                      width: 22,
+                                      height: 22,
+                                      bgcolor: "primary.main",
+                                      border: "2px solid",
+                                      borderColor: "background.paper",
+                                      "&:hover": { bgcolor: "primary.dark" },
+                                    }}
+                                  >
+                                    {uploading === r.id ? (
+                                      <CircularProgress size={10} sx={{ color: "white" }} />
+                                    ) : (
+                                      <PhotoCameraIcon sx={{ fontSize: 12, color: "white" }} />
+                                    )}
+                                  </IconButton>
+                                </Box>
+                              </Tooltip>
+                            ) : (
+                              <Tooltip title="Ta en bild på ditt objekt">
+                                <IconButton
+                                  onClick={() => handleUploadClick(r.id)}
+                                  disabled={uploading === r.id}
+                                  sx={{
+                                    width: 44,
+                                    height: 44,
+                                    bgcolor: "rgba(255,183,77,0.12)",
+                                    border: "2px dashed rgba(255,183,77,0.5)",
+                                    "&:hover": { bgcolor: "rgba(255,183,77,0.2)" },
+                                  }}
+                                >
+                                  {uploading === r.id ? (
+                                    <CircularProgress size={18} />
+                                  ) : (
+                                    <PhotoCameraIcon sx={{ fontSize: 20, color: "warning.main" }} />
+                                  )}
+                                </IconButton>
+                              </Tooltip>
+                            )}
+                          </TableCell>
                           <TableCell>
                             <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
                               <Chip label={r.type === "SeaHut" ? "Sjöbod" : r.type === "Berth" ? "Båtplats" : r.type === "Box" ? "Låda" : r.type} size="small" variant="outlined" />
@@ -1633,7 +1705,7 @@ function DashboardContent() {
                           <TableCell>
                             {r.type !== "Berth" ? (
                               r.lat && r.lng ? (
-                                <Tooltip title="GPS position set — click to edit">
+                                <Tooltip title="GPS-position satt — klicka för att ändra">
                                   <IconButton
                                     size="small"
                                     onClick={() => {
@@ -1647,7 +1719,7 @@ function DashboardContent() {
                                   </IconButton>
                                 </Tooltip>
                               ) : (
-                                <Tooltip title="GPS position missing — click to set">
+                                <Tooltip title="GPS-position saknas — klicka för att ange">
                                   <IconButton
                                     size="small"
                                     onClick={() => {
@@ -1661,6 +1733,10 @@ function DashboardContent() {
                                   </IconButton>
                                 </Tooltip>
                               )
+                            ) : r.lat && r.lng ? (
+                              <Tooltip title="GPS-position (hanteras av bryggförvaltare)">
+                                <PlaceIcon fontSize="small" sx={{ color: "success.main", opacity: 0.7 }} />
+                              </Tooltip>
                             ) : (
                               <Typography variant="caption" color="text.secondary">—</Typography>
                             )}
@@ -1759,45 +1835,7 @@ function DashboardContent() {
                               <Typography variant="caption" color="text.secondary">—</Typography>
                             )}
                           </TableCell>
-                          <TableCell>
-                            {isSublet ? (
-                              r.objectImageUrl ? (
-                                <Avatar
-                                  src={r.objectImageUrl}
-                                  variant="rounded"
-                                  sx={{ width: 40, height: 40, cursor: "pointer" }}
-                                  onClick={() => setPreviewImageUrl(r.objectImageUrl!)}
-                                />
-                              ) : (
-                                <Typography variant="caption" color="text.secondary">—</Typography>
-                              )
-                            ) : (
-                            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                              {r.objectImageUrl ? (
-                              <Avatar
-                                  src={r.objectImageUrl}
-                                  variant="rounded"
-                                  sx={{ width: 40, height: 40, cursor: "pointer" }}
-                                  onClick={() => setPreviewImageUrl(r.objectImageUrl!)}
-                                />
-                              ) : null}
-                              <Button
-                                size="small"
-                                startIcon={
-                                  uploading === r.id ? (
-                                    <CircularProgress size={14} />
-                                  ) : (
-                                    <PhotoCameraIcon />
-                                  )
-                                }
-                                onClick={() => handleUploadClick(r.id)}
-                                disabled={uploading === r.id}
-                              >
-                                {r.objectImageUrl ? "Ändra" : "Ladda upp"}
-                              </Button>
-                            </Box>
-                            )}
-                          </TableCell>
+                          {/* Båtbild column removed — image is now shown as avatar in leftmost column */}
                         </TableRow>
                         );
                       })}
@@ -1854,17 +1892,92 @@ function DashboardContent() {
                   <Table>
                     <TableHead>
                       <TableRow>
+                        <TableCell sx={{ width: 56, p: 1 }}></TableCell>
                         <TableCell>Kod</TableCell>
                         <TableCell>Säsong</TableCell>
                         <TableCell>Betalning</TableCell>
                         <TableCell>GPS</TableCell>
-                        <TableCell>Bild</TableCell>
                         <TableCell>Kommentar</TableCell>
                       </TableRow>
                     </TableHead>
                     <TableBody>
                       {landEntries.map((entry) => (
                         <TableRow key={entry.id}>
+                          {/* Round avatar image — leftmost column */}
+                          <TableCell sx={{ width: 56, p: 1 }}>
+                            {entry.imageUrl ? (
+                              <Tooltip title="Klicka för att se bild — kameraikon för att ändra">
+                                <Box sx={{ position: "relative", display: "inline-block" }}>
+                                  <Avatar
+                                    src={entry.imageUrl}
+                                    sx={{ width: 44, height: 44, cursor: "pointer", border: "2px solid rgba(255,255,255,0.15)" }}
+                                    onClick={() => setPreviewImageUrl(entry.imageUrl!)}
+                                  />
+                                  <IconButton
+                                    size="small"
+                                    onClick={() => handleLandUploadClick(entry.id)}
+                                    disabled={uploading === entry.id}
+                                    sx={{
+                                      position: "absolute",
+                                      bottom: -4,
+                                      right: -4,
+                                      width: 22,
+                                      height: 22,
+                                      bgcolor: "primary.main",
+                                      border: "2px solid",
+                                      borderColor: "background.paper",
+                                      "&:hover": { bgcolor: "primary.dark" },
+                                    }}
+                                  >
+                                    {uploading === entry.id ? (
+                                      <CircularProgress size={10} sx={{ color: "white" }} />
+                                    ) : (
+                                      <PhotoCameraIcon sx={{ fontSize: 12, color: "white" }} />
+                                    )}
+                                  </IconButton>
+                                  {/* Delete image badge */}
+                                  <IconButton
+                                    size="small"
+                                    onClick={() => handleDeleteLandImage(entry.id)}
+                                    disabled={uploading === entry.id}
+                                    sx={{
+                                      position: "absolute",
+                                      top: -4,
+                                      right: -4,
+                                      width: 18,
+                                      height: 18,
+                                      bgcolor: "error.main",
+                                      border: "2px solid",
+                                      borderColor: "background.paper",
+                                      "&:hover": { bgcolor: "error.dark" },
+                                    }}
+                                  >
+                                    <CloseIcon sx={{ fontSize: 10, color: "white" }} />
+                                  </IconButton>
+                                </Box>
+                              </Tooltip>
+                            ) : (
+                              <Tooltip title="Ta en bild på ditt objekt">
+                                <IconButton
+                                  onClick={() => handleLandUploadClick(entry.id)}
+                                  disabled={uploading === entry.id}
+                                  sx={{
+                                    width: 44,
+                                    height: 44,
+                                    bgcolor: "rgba(255,183,77,0.12)",
+                                    border: "2px dashed rgba(255,183,77,0.5)",
+                                    "&:hover": { bgcolor: "rgba(255,183,77,0.2)" },
+                                  }}
+                                >
+                                  {uploading === entry.id ? (
+                                    <CircularProgress size={18} />
+                                  ) : (
+                                    <PhotoCameraIcon sx={{ fontSize: 20, color: "warning.main" }} />
+                                  )}
+                                </IconButton>
+                              </Tooltip>
+                            )}
+                          </TableCell>
                           <TableCell sx={{ fontWeight: 600, fontFamily: "monospace" }}>
                             {entry.code}
                           </TableCell>
@@ -1949,45 +2062,7 @@ function DashboardContent() {
                               </Tooltip>
                             )}
                           </TableCell>
-                          <TableCell>
-                            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                              {entry.imageUrl ? (
-                                <Avatar
-                                  src={entry.imageUrl}
-                                  variant="rounded"
-                                  sx={{ width: 40, height: 40, cursor: "pointer" }}
-                                  onClick={() => setPreviewImageUrl(entry.imageUrl!)}
-                                />
-                              ) : null}
-                              <Button
-                                size="small"
-                                startIcon={
-                                  uploading === entry.id ? (
-                                    <CircularProgress size={14} />
-                                  ) : (
-                                    <PhotoCameraIcon />
-                                  )
-                                }
-                                onClick={() => handleLandUploadClick(entry.id)}
-                                disabled={uploading === entry.id}
-                                color={entry.imageUrl ? "primary" : "warning"}
-                              >
-                                {entry.imageUrl ? "Ändra" : "Ladda upp bild"}
-                              </Button>
-                              {entry.imageUrl && (
-                                <Tooltip title="Ta bort bild">
-                                  <IconButton
-                                    size="small"
-                                    onClick={() => handleDeleteLandImage(entry.id)}
-                                    disabled={uploading === entry.id}
-                                    sx={{ color: "error.main" }}
-                                  >
-                                    <CloseIcon sx={{ fontSize: 16 }} />
-                                  </IconButton>
-                                </Tooltip>
-                              )}
-                            </Box>
-                          </TableCell>
+                          {/* Bild column removed — image is now shown as avatar in leftmost column */}
                           <TableCell>
                             {entry.comment || "—"}
                           </TableCell>

@@ -12,6 +12,7 @@ const corsConfig = [
   {
     origin: [
       "http://localhost:3000",
+      "https://stegerholmenshamn.se",
       "https://stegerholmenshamn.web.app",
       "https://stegerholmenshamn.firebaseapp.com",
     ],

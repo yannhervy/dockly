@@ -2,6 +2,7 @@ import { onRequest } from "firebase-functions/v2/https";
 import { onDocumentCreated } from "firebase-functions/v2/firestore";
 import { defineString } from "firebase-functions/params";
 import * as admin from "firebase-admin";
+import { sendEmail as sendEmailUtil } from "./email";
 
 admin.initializeApp();
 
@@ -162,7 +163,7 @@ export const onInterestCreated = onDocumentCreated(
       const truncated = userMessage.length > 60 ? userMessage.slice(0, 57) + "..." : userMessage;
       message += ` "${truncated}"`;
     }
-    message += "\nhttps://stegerholmenshamn.web.app/admin";
+    message += "\nhttps://stegerholmenshamn.se/admin";
     const auth = Buffer.from(
       `${elksUsername.value()}:${elksPassword.value()}`
     ).toString("base64");
@@ -331,7 +332,7 @@ export const onUserCreated = onDocumentCreated(
         })()
       : "";
 
-    const message = `Nytt konto väntar på godkännande: ${userName} (${phone}). Engagemang: ${engagementText}.${noteText}\nhttps://stegerholmenshamn.web.app/admin`;
+    const message = `Nytt konto väntar på godkännande: ${userName} (${phone}). Engagemang: ${engagementText}.${noteText}\nhttps://stegerholmenshamn.se/admin`;
     const authStr = Buffer.from(
       `${elksUsername.value()}:${elksPassword.value()}`
     ).toString("base64");
@@ -427,7 +428,7 @@ export const approveUser = onRequest(
     const userPhone = userDoc.data()?.phone;
     if (userPhone) {
       const normalized = normalizePhone(userPhone);
-      const message = "Ditt konto på Stegerholmens Hamn är nu godkänt! Ladda om sidan för att se ändringarna. stegerholmenshamn.web.app";
+      const message = "Ditt konto på Stegerholmens Hamn är nu godkänt! Ladda om sidan för att se ändringarna. stegerholmenshamn.se";
       const authStr = Buffer.from(
         `${elksUsername.value()}:${elksPassword.value()}`
       ).toString("base64");
@@ -503,7 +504,7 @@ export const onInterestReplyCreated = onDocumentCreated(
     }
 
     const normalized = normalizePhone(ownerPhone);
-    const message = `Hej! Du har fått ett svar på din intresseanmälan från Stegerholmens hamn. Gå till Mina grejer för att läsa: https://stegerholmenshamn.web.app`;
+    const message = `Hej! Du har fått ett svar på din intresseanmälan från Stegerholmens hamn. Gå till Mina grejer för att läsa: https://stegerholmenshamn.se`;
 
     const authStr = Buffer.from(
       `${elksUsername.value()}:${elksPassword.value()}`
@@ -645,7 +646,7 @@ export const requestPasswordResetSms = onRequest(
     });
 
     // Send SMS with reset link
-    const resetUrl = `https://stegerholmenshamn.web.app/reset-password?token=${token}`;
+    const resetUrl = `https://stegerholmenshamn.se/reset-password?token=${token}`;
     const message = `Återställ ditt lösenord på Stegerholmens Hamn: ${resetUrl}`;
 
     const authStr = Buffer.from(
@@ -966,7 +967,7 @@ export const newsOgTags = onRequest(
     const slug = pathParts[pathParts.length - 1];
 
     if (!slug) {
-      res.redirect("https://stegerholmenshamn.web.app/news");
+      res.redirect("https://stegerholmenshamn.se/news");
       return;
     }
 
@@ -980,7 +981,7 @@ export const newsOgTags = onRequest(
         .get();
 
       if (snap.empty) {
-        res.redirect("https://stegerholmenshamn.web.app/news");
+        res.redirect("https://stegerholmenshamn.se/news");
         return;
       }
 
@@ -991,8 +992,8 @@ export const newsOgTags = onRequest(
         .replace(/\n+/g, " ")
         .trim();
       const description = body.length > 160 ? body.slice(0, 159) + "\u2026" : body;
-      const image = post.imageUrls?.[0] || "https://stegerholmenshamn.web.app/IMG20221112150016-EDIT.jpg";
-      const pageUrl = `https://stegerholmenshamn.web.app/news/${slug}`;
+      const image = post.imageUrls?.[0] || "https://stegerholmenshamn.se/IMG20221112150016-EDIT.jpg";
+      const pageUrl = `https://stegerholmenshamn.se/news/${slug}`;
 
       res.set("Cache-Control", "public, max-age=3600, s-maxage=3600");
       res.send(`<!DOCTYPE html>
@@ -1021,8 +1022,55 @@ export const newsOgTags = onRequest(
 </html>`);
     } catch (err) {
       console.error("newsOgTags error:", err);
-      res.redirect("https://stegerholmenshamn.web.app/news");
+      res.redirect("https://stegerholmenshamn.se/news");
     }
+  }
+);
+
+// ─── Email via Resend ──────────────────────────────────────
+
+/**
+ * Send email via Resend.
+ * Requires authentication (Firebase Auth token in Authorization header).
+ *
+ * POST /sendEmail
+ * Body: { "to": "user@example.com" | [...], "subject": "...", "html": "..." }
+ * Optional body fields: "text", "replyTo"
+ */
+export const sendEmail = onRequest(
+  { cors: true, region: "europe-west1" },
+  async (req, res) => {
+    if (req.method !== "POST") {
+      res.status(405).json({ error: "Method not allowed" });
+      return;
+    }
+
+    // Verify Firebase Auth token
+    const authHeader = req.headers.authorization;
+    if (!authHeader?.startsWith("Bearer ")) {
+      res.status(401).json({ error: "Missing or invalid authorization header" });
+      return;
+    }
+
+    const token = authHeader.split("Bearer ")[1];
+    try {
+      await admin.auth().verifyIdToken(token);
+    } catch {
+      res.status(401).json({ error: "Invalid auth token" });
+      return;
+    }
+
+    // Parse request body
+    const { to, subject, html, text, replyTo } = req.body;
+    if (!to || !subject || !html) {
+      res.status(400).json({ error: "Missing required fields: to, subject, html" });
+      return;
+    }
+
+    const results = await sendEmailUtil({ to, subject, html, text, replyTo });
+
+    const allSuccess = results.every((r) => r.success);
+    res.status(allSuccess ? 200 : 207).json({ results });
   }
 );
 

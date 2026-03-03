@@ -15,7 +15,7 @@ import * as ExifParser from "exif-parser";
 // Firebase configuration (same as main app)
 const firebaseConfig = {
   apiKey: "AIzaSyCGGMhp8H7pVuYeEM12DXMMAqptsTWTjOI",
-  authDomain: "stegerholmenshamn.firebaseapp.com",
+  authDomain: "stegerholmenshamn.se",
   projectId: "stegerholmenshamn",
   storageBucket: "stegerholmenshamn.firebasestorage.app",
   messagingSenderId: "885107364018",

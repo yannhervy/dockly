@@ -11,7 +11,7 @@ import { getFirestore, collection, getDocs, setDoc, doc } from "firebase/firesto
 
 const firebaseConfig = {
   apiKey: "AIzaSyCGGMhp8H7pVuYeEM12DXMMAqptsTWTjOI",
-  authDomain: "stegerholmenshamn.firebaseapp.com",
+  authDomain: "stegerholmenshamn.se",
   projectId: "stegerholmenshamn",
   storageBucket: "stegerholmenshamn.firebasestorage.app",
   messagingSenderId: "885107364018",
