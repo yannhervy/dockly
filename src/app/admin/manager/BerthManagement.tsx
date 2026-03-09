@@ -401,12 +401,18 @@ export default function BerthManagement() {
 
   // ─── Detail Panel Handler ──────────────────────────────
 
-  const handleBerthSaved = (updated: Berth) => {
+  const handleBerthSaved = (updated: Berth, moved: Record<string, { lat: number; lng: number }>) => {
     setResources((prev) =>
-      prev.map((r) => (r.id === updated.id ? updated : r))
+      prev.map((r) => {
+        if (r.id === updated.id) return updated;
+        const movedPos = moved[r.id];
+        if (movedPos) return { ...r, lat: movedPos.lat, lng: movedPos.lng };
+        return r;
+      })
     );
     setDetailBerth(null);
-    setSuccessMsg("Plats uppdaterad!");
+    const movedCount = Object.keys(moved).length;
+    setSuccessMsg(`Plats uppdaterad!${movedCount > 0 ? ` ${movedCount} plats(er) omplacerade.` : ""}`);
     setTimeout(() => setSuccessMsg(""), 3000);
   };
 

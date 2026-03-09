@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { Berth, BerthTenant, Dock, User, InternalComment } from "@/lib/types";
 import { uploadBoatImage } from "@/lib/storage";
 import { db } from "@/lib/firebase";
@@ -55,8 +55,8 @@ interface BerthEditDialogProps {
   berth: Berth | null;
   /** Called when the dialog closes */
   onClose: () => void;
-  /** Called after a successful save with the updated berth data */
-  onSaved: (updated: Berth) => void;
+  /** Called after a successful save with the updated berth data and any moved berths */
+  onSaved: (updated: Berth, movedBerths: Record<string, { lat: number; lng: number }>) => void;
   /** Available docks (for dock reassignment) */
   docks: Dock[];
   /** All users (for user name resolution in internal comments) */
@@ -99,6 +99,9 @@ export default function BerthEditDialog({
 
   // Track moved berths from dragging other berths on the map
   const [movedBerths, setMovedBerths] = useState<Record<string, { lat: number; lng: number }>>({});
+
+  // Drag guard: suppress map clicks that fire immediately after polygon drag release
+  const lastDragTimestamp = useRef(0);
 
   // Confirm dialog for tenant removal
   const [confirmRemoveTenant, setConfirmRemoveTenant] = useState<BerthTenant | null>(null);
@@ -279,7 +282,7 @@ export default function BerthEditDialog({
         objectImageUrl,
       };
 
-      onSaved(updated);
+      onSaved(updated, movedBerths);
     } catch (err) {
       console.error("Error saving berth:", err);
     } finally {
@@ -311,7 +314,7 @@ export default function BerthEditDialog({
         occupantPostalAddress: "",
         status: "Available",
         paymentStatus: "Unpaid",
-      });
+      }, {});
     } catch (err) {
       console.error("Error releasing berth:", err);
     } finally {
@@ -635,6 +638,8 @@ export default function BerthEditDialog({
                     zoomControl
                     onClick={(e) => {
                       if (readOnly) return;
+                      // Suppress clicks that fire immediately after a polygon drag
+                      if (Date.now() - lastDragTimestamp.current < 500) return;
                       const ll = e.detail?.latLng;
                       if (ll) updateForm({
                         lat: String(ll.lat),
@@ -653,8 +658,10 @@ export default function BerthEditDialog({
                       label={String(form.markingCode || "")}
                       onMove={(lat, lng) => updateForm({ lat: String(lat), lng: String(lng) })}
                       onMoveOther={(id, lat, lng) => setMovedBerths((prev) => ({ ...prev, [id]: { lat, lng } }))}
+                      onDragStart={() => { lastDragTimestamp.current = Date.now(); }}
                       allBerths={allBerths}
                       currentId={berth.id}
+                      movedBerths={movedBerths}
                     />
                   </GMap>
                 </APIProvider>
