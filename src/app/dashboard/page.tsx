@@ -343,9 +343,17 @@ function DashboardContent() {
       );
       setInterestReplies(repliesMap);
 
-      // Resolve dock names and berth marking codes
-      const dockIds = [...new Set(interests.map((i) => i.preferredDockId).filter(Boolean))] as string[];
-      const berthIds = [...new Set(interests.map((i) => i.preferredBerthId).filter(Boolean))] as string[];
+      // Resolve dock names and berth marking codes (support both old single IDs and new arrays)
+      const dockIdSet = new Set<string>();
+      const berthIdSet = new Set<string>();
+      interests.forEach((i) => {
+        if (i.preferredDockId) dockIdSet.add(i.preferredDockId);
+        (i.preferredDockIds || []).forEach((id) => dockIdSet.add(id));
+        if (i.preferredBerthId) berthIdSet.add(i.preferredBerthId);
+        (i.preferredBerthIds || []).forEach((id) => berthIdSet.add(id));
+      });
+      const dockIds = [...dockIdSet];
+      const berthIds = [...berthIdSet];
 
       const dockMap: Record<string, string> = {};
       await Promise.all(
@@ -2239,8 +2247,14 @@ function DashboardContent() {
                         <Box>
                           <Typography variant="body2" sx={{ fontWeight: 600 }}>
                             {interest.boatWidth}×{interest.boatLength}m
-                            {interest.preferredDockId && ` · Brygga ${interestDockNames[interest.preferredDockId] || interest.preferredDockId}`}
-                            {interest.preferredBerthId && ` plats ${interestBerthCodes[interest.preferredBerthId] || interest.preferredBerthId}`}
+                            {(() => {
+                              const dIds = interest.preferredDockIds?.length
+                                ? interest.preferredDockIds
+                                : interest.preferredDockId ? [interest.preferredDockId] : [];
+                              if (dIds.length === 0) return null;
+                              const names = dIds.map((id) => interestDockNames[id] || id).join(", ");
+                              return ` · Brygga ${names}`;
+                            })()}
                           </Typography>
                           <Typography variant="caption" color="text.secondary">
                             {interest.createdAt.toDate().toLocaleDateString("sv-SE")}

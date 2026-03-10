@@ -2872,7 +2872,12 @@ function InterestsTab({ initialEditId }: { initialEditId?: string }) {
           allDocks.filter((d) => d.managerIds?.includes(firebaseUser.uid)).map((d) => d.id)
         );
         allInterests = allInterests.filter(
-          (i) => !i.preferredDockId || managedDockIds.has(i.preferredDockId)
+          (i) => {
+            const iDockIds = i.preferredDockIds?.length
+              ? i.preferredDockIds
+              : i.preferredDockId ? [i.preferredDockId] : [];
+            return iDockIds.length === 0 || iDockIds.some((id) => managedDockIds.has(id));
+          }
         );
       }
 
@@ -3071,7 +3076,14 @@ function InterestsTab({ initialEditId }: { initialEditId?: string }) {
                   <TableCell sx={{ whiteSpace: "nowrap" }}>
                     {interest.boatWidth}×{interest.boatLength} m
                   </TableCell>
-                  <TableCell>{getDockName(interest.preferredDockId)}</TableCell>
+                  <TableCell>
+                    {(() => {
+                      const dIds = interest.preferredDockIds?.length
+                        ? interest.preferredDockIds
+                        : interest.preferredDockId ? [interest.preferredDockId] : [];
+                      return dIds.length > 0 ? dIds.map((id) => getDockName(id)).join(", ") : "—";
+                    })()}
+                  </TableCell>
                   <TableCell>{getBerthCode(interest.preferredBerthId)}</TableCell>
                   <TableCell>{formatDate(interest.createdAt)}</TableCell>
                   <TableCell>
@@ -3192,10 +3204,15 @@ function InterestsTab({ initialEditId }: { initialEditId?: string }) {
                   </Grid>
                   <Grid size={{ xs: 6 }}>
                     <Typography variant="caption" color="text.secondary">
-                      Önskad brygga
+                      Önskade bryggor
                     </Typography>
                     <Typography variant="body2">
-                      {getDockName(selectedInterest.preferredDockId)}
+                      {(() => {
+                        const dIds = selectedInterest.preferredDockIds?.length
+                          ? selectedInterest.preferredDockIds
+                          : selectedInterest.preferredDockId ? [selectedInterest.preferredDockId] : [];
+                        return dIds.length > 0 ? dIds.map((id) => getDockName(id)).join(", ") : "—";
+                      })()}
                     </Typography>
                   </Grid>
                   {selectedInterest.preferredBerthId && (

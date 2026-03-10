@@ -22,7 +22,8 @@ import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { resizeImage, deleteStorageFile } from "@/lib/storage";
 import { useAuth } from "@/context/AuthContext";
 import { sendSms } from "@/lib/sms";
-import type { Dock, Berth, BerthInterest, InterestReply, OfferedBerth } from "@/lib/types";
+import { sendEmail } from "@/lib/email";
+import type { Dock, Berth, BerthInterest, InterestReply, OfferedBerth, User } from "@/lib/types";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 import Card from "@mui/material/Card";
@@ -85,7 +86,7 @@ function InterestPageInner() {
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
 
-  // Available berths for the selected dock
+  // Available berths for the selected docks
   const [availableBerths, setAvailableBerths] = useState<Berth[]>([]);
   const [loadingBerths, setLoadingBerths] = useState(false);
 
@@ -96,8 +97,8 @@ function InterestPageInner() {
   const [form, setForm] = useState({
     boatWidth: "",
     boatLength: "",
-    preferredDockId: "",
-    preferredBerthId: "",
+    preferredDockIds: [] as string[],
+    preferredBerthIds: [] as string[],
     phone: "",
     message: "",
   });
@@ -105,6 +106,12 @@ function InterestPageInner() {
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [imagePickerOpen, setImagePickerOpen] = useState(false);
   const paramsApplied = useRef(false);
+
+  // Helper: replace comma with dot for Swedish decimal input
+  const handleDecimalInput = (field: "boatWidth" | "boatLength") => (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value.replace(",", ".");
+    setForm((prev) => ({ ...prev, [field]: value }));
+  };
 
   useEffect(() => {
     async function fetchDocks() {
@@ -124,24 +131,29 @@ function InterestPageInner() {
     const qDock = searchParams.get("dockId");
     const qBerth = searchParams.get("berthId");
     if (qDock) {
-      setForm((prev) => ({ ...prev, preferredDockId: qDock, preferredBerthId: qBerth || "" }));
+      setForm((prev) => ({
+        ...prev,
+        preferredDockIds: [qDock],
+        preferredBerthIds: qBerth ? [qBerth] : [],
+      }));
       paramsApplied.current = true;
     }
   }, [searchParams, docks]);
 
-  // Fetch available berths when dock changes
+  // Fetch available berths when selected docks change
   useEffect(() => {
-    if (!form.preferredDockId) {
+    if (form.preferredDockIds.length === 0) {
       setAvailableBerths([]);
       return;
     }
     async function fetchBerths() {
       setLoadingBerths(true);
       try {
+        // Firestore 'in' operator supports up to 30 values
         const q = query(
           collection(db, "resources"),
           where("type", "==", "Berth"),
-          where("dockId", "==", form.preferredDockId)
+          where("dockId", "in", form.preferredDockIds)
         );
         const snap = await getDocs(q);
         const berths = snap.docs
@@ -157,7 +169,18 @@ function InterestPageInner() {
       }
     }
     fetchBerths();
-  }, [form.preferredDockId]);
+    // Clear berth selections that no longer match selected docks
+    setForm((prev) => {
+      const validBerthIds = availableBerths
+        .filter((b) => prev.preferredDockIds.includes(b.dockId))
+        .map((b) => b.id);
+      const filtered = prev.preferredBerthIds.filter((id) => validBerthIds.includes(id));
+      return filtered.length !== prev.preferredBerthIds.length
+        ? { ...prev, preferredBerthIds: filtered }
+        : prev;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.preferredDockIds.join(",")]);
 
   // Pre-fill phone from profile
   useEffect(() => {
@@ -183,7 +206,6 @@ function InterestPageInner() {
         );
       } catch (err) {
         console.error("Error fetching my interests:", err);
-        // Fallback without orderBy (index may not exist)
         try {
           const q2 = query(
             collection(db, "interests"),
@@ -207,8 +229,8 @@ function InterestPageInner() {
     e.preventDefault();
     if (!firebaseUser || !profile) return;
 
-    const width = parseFloat(form.boatWidth);
-    const length = parseFloat(form.boatLength);
+    const width = parseFloat(form.boatWidth.replace(",", "."));
+    const length = parseFloat(form.boatLength.replace(",", "."));
 
     if (isNaN(width) || isNaN(length) || width <= 0 || length <= 0) {
       setError("Ange giltiga mått för din båts bredd och längd.");
@@ -231,6 +253,17 @@ function InterestPageInner() {
         imageUrl = await getDownloadURL(storageRef);
       }
 
+      // Build dock names for notifications
+      const selectedDockNames = form.preferredDockIds
+        .map((id) => docks.find((d) => d.id === id)?.name)
+        .filter(Boolean)
+        .join(", ");
+
+      const selectedBerthCodes = form.preferredBerthIds
+        .map((id) => availableBerths.find((b) => b.id === id)?.markingCode)
+        .filter(Boolean)
+        .join(", ");
+
       await addDoc(collection(db, "interests"), {
         userId: firebaseUser.uid,
         userName: profile.name,
@@ -238,13 +271,94 @@ function InterestPageInner() {
         phone: form.phone,
         boatWidth: width,
         boatLength: length,
-        preferredDockId: form.preferredDockId || null,
-        preferredBerthId: form.preferredBerthId || null,
+        preferredDockIds: form.preferredDockIds.length > 0 ? form.preferredDockIds : null,
+        preferredBerthIds: form.preferredBerthIds.length > 0 ? form.preferredBerthIds : null,
+        // Legacy single fields (first selection for backward compat)
+        preferredDockId: form.preferredDockIds[0] || null,
+        preferredBerthId: form.preferredBerthIds[0] || null,
         message: form.message || null,
         imageUrl: imageUrl,
         createdAt: Timestamp.now(),
         status: "Pending",
       });
+
+      // ── Notifications ──
+      const emailBody = `
+        <h2>Ny intresseanmälan</h2>
+        <p><strong>${profile.name}</strong> har skickat en intresseanmälan.</p>
+        <ul>
+          <li><strong>Båtmått:</strong> ${width} × ${length} m</li>
+          ${selectedDockNames ? `<li><strong>Önskade bryggor:</strong> ${selectedDockNames}</li>` : ""}
+          ${selectedBerthCodes ? `<li><strong>Önskade platser:</strong> ${selectedBerthCodes}</li>` : ""}
+          <li><strong>Telefon:</strong> ${form.phone || "—"}</li>
+          <li><strong>E-post:</strong> ${profile.email || firebaseUser.email || "—"}</li>
+          ${form.message ? `<li><strong>Meddelande:</strong> ${form.message}</li>` : ""}
+        </ul>
+      `.trim();
+
+      // 1. Email to dock managers for selected docks
+      const managerIds = new Set<string>();
+      for (const dockId of form.preferredDockIds) {
+        const dock = docks.find((d) => d.id === dockId);
+        if (dock?.managerIds) {
+          dock.managerIds.forEach((id) => managerIds.add(id));
+        }
+      }
+      if (managerIds.size > 0) {
+        // Fetch manager emails
+        const managerEmails: string[] = [];
+        await Promise.all(
+          [...managerIds].map(async (uid) => {
+            try {
+              const uSnap = await getDocs(query(collection(db, "users"), where("uid", "==", uid)));
+              uSnap.docs.forEach((d) => {
+                const email = d.data().email;
+                if (email) managerEmails.push(email);
+              });
+            } catch { /* ignore */ }
+          })
+        );
+        if (managerEmails.length > 0) {
+          try {
+            await sendEmail(
+              managerEmails,
+              `Ny intresseanmälan${selectedDockNames ? ` för ${selectedDockNames}` : ""}`,
+              emailBody
+            );
+          } catch (e) { console.error("Email to managers failed:", e); }
+        }
+      }
+
+      // 2. SMS + email to superadmins only
+      try {
+        const saSnap = await getDocs(query(collection(db, "users"), where("role", "==", "Superadmin")));
+        const saPhones: string[] = [];
+        const saEmails: string[] = [];
+        saSnap.docs.forEach((d) => {
+          const data = d.data();
+          if (data.phone) saPhones.push(data.phone);
+          if (data.email) saEmails.push(data.email);
+        });
+        const smsText = `Ny intresseanmälan från ${profile.name}: ${width}×${length}m${selectedDockNames ? `, brygga ${selectedDockNames}` : ""}. Tel: ${form.phone || "—"}`;
+        if (saPhones.length > 0) {
+          try { await sendSms(saPhones, smsText); }
+          catch (e) { console.error("SMS to superadmins failed:", e); }
+        }
+        if (saEmails.length > 0) {
+          // Don't duplicate emails already sent to dock managers
+          const uniqueSaEmails = saEmails.filter((e) => !managerIds.has(e));
+          if (uniqueSaEmails.length > 0) {
+            try {
+              await sendEmail(
+                uniqueSaEmails,
+                `Ny intresseanmälan${selectedDockNames ? ` för ${selectedDockNames}` : ""}`,
+                emailBody
+              );
+            } catch (e) { console.error("Email to superadmins failed:", e); }
+          }
+        }
+      } catch (e) { console.error("Superadmin notification failed:", e); }
+
       setSubmitted(true);
     } catch (err) {
       console.error("Error submitting interest:", err);
@@ -352,10 +466,11 @@ function InterestPageInner() {
               <TextField
                 fullWidth
                 label="Bredd"
-                type="number"
+                type="text"
+                inputMode="decimal"
                 required
                 value={form.boatWidth}
-                onChange={(e) => setForm({ ...form, boatWidth: e.target.value })}
+                onChange={handleDecimalInput("boatWidth")}
                 slotProps={{
                   input: {
                     endAdornment: (
@@ -367,16 +482,17 @@ function InterestPageInner() {
                       </InputAdornment>
                     ),
                   },
-                  htmlInput: { step: "0.1", min: "0" },
                 }}
+                placeholder="t.ex. 2,1"
               />
               <TextField
                 fullWidth
                 label="Längd"
-                type="number"
+                type="text"
+                inputMode="decimal"
                 required
                 value={form.boatLength}
-                onChange={(e) => setForm({ ...form, boatLength: e.target.value })}
+                onChange={handleDecimalInput("boatLength")}
                 slotProps={{
                   input: {
                     endAdornment: (
@@ -391,22 +507,34 @@ function InterestPageInner() {
                       </InputAdornment>
                     ),
                   },
-                  htmlInput: { step: "0.1", min: "0" },
                 }}
+                placeholder="t.ex. 4,5"
               />
             </Box>
 
-            {/* Preferred dock */}
+            {/* Preferred docks (multi-select) */}
             <FormControl fullWidth sx={{ mb: 3 }}>
-              <InputLabel>Önskad brygga (valfritt)</InputLabel>
+              <InputLabel>Önskade bryggor (valfritt)</InputLabel>
               <Select
-                value={form.preferredDockId}
-                label="Önskad brygga (valfritt)"
-                onChange={(e) =>
-                  setForm({ ...form, preferredDockId: e.target.value })
-                }
+                multiple
+                value={form.preferredDockIds}
+                label="Önskade bryggor (valfritt)"
+                onChange={(e) => {
+                  const value = e.target.value;
+                  setForm({
+                    ...form,
+                    preferredDockIds: typeof value === "string" ? value.split(",") : value,
+                  });
+                }}
+                renderValue={(selected) => (
+                  <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5 }}>
+                    {(selected as string[]).map((id) => {
+                      const dock = docks.find((d) => d.id === id);
+                      return <Chip key={id} label={dock?.name || id} size="small" />;
+                    })}
+                  </Box>
+                )}
               >
-                <MenuItem value="">Ingen preferens</MenuItem>
                 {docks.map((d) => (
                   <MenuItem key={d.id} value={d.id}>
                     {d.name}
@@ -415,27 +543,42 @@ function InterestPageInner() {
               </Select>
             </FormControl>
 
-            {/* Available berths for the selected dock */}
-            {form.preferredDockId && (
+            {/* Available berths for the selected docks (multi-select) */}
+            {form.preferredDockIds.length > 0 && (
               <FormControl fullWidth sx={{ mb: 3 }}>
-                <InputLabel>Ledig plats (valfritt)</InputLabel>
+                <InputLabel>Lediga platser (valfritt)</InputLabel>
                 <Select
-                  value={form.preferredBerthId}
-                  label="Ledig plats (valfritt)"
-                  onChange={(e) =>
-                    setForm({ ...form, preferredBerthId: e.target.value })
-                  }
+                  multiple
+                  value={form.preferredBerthIds}
+                  label="Lediga platser (valfritt)"
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    setForm({
+                      ...form,
+                      preferredBerthIds: typeof value === "string" ? value.split(",") : value,
+                    });
+                  }}
                   disabled={loadingBerths}
+                  renderValue={(selected) => (
+                    <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5 }}>
+                      {(selected as string[]).map((id) => {
+                        const berth = availableBerths.find((b) => b.id === id);
+                        return <Chip key={id} label={berth?.markingCode || id} size="small" />;
+                      })}
+                    </Box>
+                  )}
                 >
-                  <MenuItem value="">Ingen specifik plats</MenuItem>
                   {availableBerths.length === 0 && !loadingBerths && (
                     <MenuItem disabled>Inga lediga platser just nu</MenuItem>
                   )}
-                  {availableBerths.map((b) => (
-                    <MenuItem key={b.id} value={b.id}>
-                      Plats {b.markingCode}{b.width && b.length ? ` (${b.length}×${b.width}m)` : ""}
-                    </MenuItem>
-                  ))}
+                  {availableBerths.map((b) => {
+                    const dock = docks.find((d) => d.id === b.dockId);
+                    return (
+                      <MenuItem key={b.id} value={b.id}>
+                        {dock?.name ? `${dock.name} — ` : ""}Plats {b.markingCode}{b.width && b.length ? ` (${b.length}×${b.width}m)` : ""}
+                      </MenuItem>
+                    );
+                  })}
                 </Select>
               </FormControl>
             )}
@@ -624,8 +767,14 @@ function InterestCard({
     fetchReplies();
   }, [interest.id]);
 
-  const getDockName = (dockId?: string) =>
-    dockId ? docks.find((d) => d.id === dockId)?.name || "—" : "Ingen preferens";
+  const getDockNames = () => {
+    // Support both new multi-dock and legacy single-dock
+    const ids = interest.preferredDockIds?.length
+      ? interest.preferredDockIds
+      : interest.preferredDockId ? [interest.preferredDockId] : [];
+    if (ids.length === 0) return "Ingen preferens";
+    return ids.map((id) => docks.find((d) => d.id === id)?.name || id).join(", ");
+  };
 
   return (
     <Card
@@ -703,7 +852,7 @@ function InterestCard({
         {/* Details */}
         <Box sx={{ display: "flex", gap: 3, flexWrap: "wrap", mb: 1 }}>
           <Typography variant="body2" color="text.secondary">
-            Brygga: {getDockName(interest.preferredDockId)}
+            Bryggor: {getDockNames()}
           </Typography>
           <Typography variant="body2" color="text.secondary">
             Skickat: {formatDate(interest.createdAt)}

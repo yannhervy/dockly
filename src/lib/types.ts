@@ -252,8 +252,10 @@ export interface BerthInterest {
   phone: string;
   boatWidth: number;   // meters
   boatLength: number;  // meters
-  preferredDockId?: string;
-  preferredBerthId?: string; // Optional FK to a specific berth
+  preferredDockId?: string;            // Legacy single dock
+  preferredBerthId?: string;           // Legacy single berth
+  preferredDockIds?: string[];         // Multiple preferred docks
+  preferredBerthIds?: string[];        // Multiple preferred berths
   message?: string;
   imageUrl?: string;
   createdAt: Timestamp;
