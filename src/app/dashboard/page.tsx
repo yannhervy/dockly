@@ -315,6 +315,9 @@ function DashboardContent() {
   const [pendingAcceptOffer, setPendingAcceptOffer] = useState<{ ob: OfferedBerth; reply: InterestReply; interest: BerthInterest } | null>(null);
   const [acceptingOffer, setAcceptingOffer] = useState(false);
 
+  // Track availability status of offered berths
+  const [offeredBerthStatuses, setOfferedBerthStatuses] = useState<Record<string, { status: string; occupantName?: string }>>({});
+
   // Generic confirmation dialog state (replaces native confirm())
   const [confirmDialog, setConfirmDialog] = useState<{ title: string; message: string; onConfirm: () => void } | null>(null);
 
@@ -369,6 +372,29 @@ function DashboardContent() {
         })
       );
       setInterestBerthCodes(berthMap);
+
+      // Fetch availability status for all offered berths
+      const allOfferedIds = new Set<string>();
+      Object.values(repliesMap).flat().forEach((r) => {
+        (r.offeredBerths || []).forEach((ob) => allOfferedIds.add(ob.berthId));
+        if (r.offeredBerthId) allOfferedIds.add(r.offeredBerthId);
+      });
+      const statusMap: Record<string, { status: string; occupantName?: string }> = {};
+      await Promise.all(
+        [...allOfferedIds].map(async (bId) => {
+          try {
+            const bSnap = await getDoc(doc(db, "resources", bId));
+            if (bSnap.exists()) {
+              const d = bSnap.data();
+              const occupantName = d.occupantFirstName
+                ? `${d.occupantFirstName} ${d.occupantLastName || ""}`.trim()
+                : undefined;
+              statusMap[bId] = { status: d.status || "Available", occupantName };
+            }
+          } catch { /* ignore */ }
+        })
+      );
+      setOfferedBerthStatuses(statusMap);
     });
     return () => unsub();
   }, [effectiveUid]);
@@ -2294,8 +2320,7 @@ function DashboardContent() {
                                 {isOffer && (
                                   <Box sx={{ display: "flex", flexDirection: "column", gap: 1, mb: 1 }}>
                                     {offeredBerths.map((ob) => (
-                                      <Box
-                                        key={ob.berthId}
+                                      <Box key={ob.berthId}
                                         sx={{
                                           p: 1.5,
                                           borderRadius: 1.5,
@@ -2317,21 +2342,43 @@ function DashboardContent() {
                                               {ob.price.toLocaleString("sv-SE")} kr/år
                                             </Typography>
                                           )}
+                                          {/* Availability status chip */}
+                                          {(() => {
+                                            const bs = offeredBerthStatuses[ob.berthId];
+                                            const isOccupied = bs?.status === "Occupied";
+                                            return bs ? (
+                                              <Chip
+                                                label={isOccupied ? `Upptagen${bs.occupantName ? ` (${bs.occupantName})` : ""}` : "Ledig"}
+                                                size="small"
+                                                color={isOccupied ? "error" : "success"}
+                                                variant="outlined"
+                                                sx={{ fontWeight: 600 }}
+                                              />
+                                            ) : null;
+                                          })()}
                                           {isAccepted && interest.acceptedBerthId === ob.berthId && (
                                             <Chip label="Accepterat" size="small" color="success" />
                                           )}
                                         </Box>
-                                        {/* Accept button per berth */}
-                                        {reply.offerStatus === "pending" && !isResolved && (
-                                          <Button
-                                            variant="contained"
-                                            size="small"
-                                            color="success"
-                                            onClick={() => setPendingAcceptOffer({ ob, reply, interest })}
-                                          >
-                                            ✅ Acceptera {ob.berthCode}
-                                          </Button>
-                                        )}
+                                        {/* Accept button per berth — disabled if already occupied */}
+                                        {reply.offerStatus === "pending" && !isResolved && (() => {
+                                          const bs = offeredBerthStatuses[ob.berthId];
+                                          const isOccupied = bs?.status === "Occupied";
+                                          return isOccupied ? (
+                                            <Typography variant="caption" color="error.main" sx={{ mt: 0.5 }}>
+                                              Platsen är redan upptagen{bs?.occupantName ? ` av ${bs.occupantName}` : ""}
+                                            </Typography>
+                                          ) : (
+                                            <Button
+                                              variant="contained"
+                                              size="small"
+                                              color="success"
+                                              onClick={() => setPendingAcceptOffer({ ob, reply, interest })}
+                                            >
+                                              ✅ Acceptera {ob.berthCode}
+                                            </Button>
+                                          );
+                                        })()}
                                       </Box>
                                     ))}
                                     {isDeclined && (
@@ -2751,6 +2798,22 @@ function DashboardContent() {
               const { ob, reply, interest } = pendingAcceptOffer;
               setAcceptingOffer(true);
               try {
+                // 0. Re-check berth availability from Firestore (race condition guard)
+                const freshBerth = await getDoc(doc(db, "resources", ob.berthId));
+                if (freshBerth.exists() && freshBerth.data().status === "Occupied") {
+                  const occName = freshBerth.data().occupantFirstName
+                    ? `${freshBerth.data().occupantFirstName} ${freshBerth.data().occupantLastName || ""}`.trim()
+                    : "någon annan";
+                  // Update local status map
+                  setOfferedBerthStatuses((prev) => ({
+                    ...prev,
+                    [ob.berthId]: { status: "Occupied", occupantName: occName },
+                  }));
+                  alert(`Platsen ${ob.berthCode} är redan upptagen av ${occName}. Välj en annan plats.`);
+                  setPendingAcceptOffer(null);
+                  setAcceptingOffer(false);
+                  return;
+                }
                 // 1. Update berth: set occupied + add user + write tenant data
                 const berthUpdate: Record<string, unknown> = {
                   status: "Occupied",
