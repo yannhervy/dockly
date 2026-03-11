@@ -1906,6 +1906,16 @@ function DashboardContent() {
                   Se <a href="/info/upplagning" style={{ color: "#4FC3F7" }}>/info/upplagning</a> för mer info.
                 </Typography>
 
+                {/* Info alert when any land storage entry is active */}
+                {landEntries.some((e) => e.lat && e.lng) && (
+                  <Alert
+                    severity="info"
+                    sx={{ mb: 2 }}
+                  >
+                    Du har minst en aktiv markuppställning och skall löpande betala in avgift till föreningen.
+                  </Alert>
+                )}
+
                 {landEntries.length === 0 && (
                   <Button
                     variant="outlined"
@@ -1928,6 +1938,7 @@ function DashboardContent() {
                       <TableRow>
                         <TableCell sx={{ width: 56, p: 1 }}></TableCell>
                         <TableCell>Kod</TableCell>
+                        <TableCell>Status</TableCell>
                         <TableCell>Säsong</TableCell>
                         <TableCell>Betalning</TableCell>
                         <TableCell>GPS</TableCell>
@@ -2014,6 +2025,15 @@ function DashboardContent() {
                           </TableCell>
                           <TableCell sx={{ fontWeight: 600, fontFamily: "monospace" }}>
                             {entry.code}
+                          </TableCell>
+                          <TableCell>
+                            <Chip
+                              label={entry.lat && entry.lng ? "Aktiv" : "Inaktiv"}
+                              size="small"
+                              color={entry.lat && entry.lng ? "success" : "default"}
+                              variant={entry.lat && entry.lng ? "filled" : "outlined"}
+                              sx={{ fontWeight: 700 }}
+                            />
                           </TableCell>
                           <TableCell>
                             <Chip
