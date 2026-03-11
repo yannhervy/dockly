@@ -1903,7 +1903,7 @@ function DashboardContent() {
                   När du tar bort din båt eller trailer ska du ta bort din GPS-position.
                   Kom ihåg att det är upp till dig att löpande betala in uppställningsavgiften.
                   Kontroller sker löpande och efterdebitering sker.
-                  Se <a href="/info/upplagning" style={{ color: "#4FC3F7" }}>/info/upplagning</a> för mer info.
+                  Se <a href="/info/markuppstallning" style={{ color: "#4FC3F7" }}>/info/markuppstallning</a> för mer info.
                 </Typography>
 
                 {/* Info alert when any land storage entry is active */}

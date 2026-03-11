@@ -39,10 +39,10 @@ const subPages = [
   },
   {
     icon: <ConstructionIcon sx={{ fontSize: 40, color: "#90CAF9" }} />,
-    title: "Båtuppläggning",
+    title: "Markuppställning",
     description:
-      "Vinter- och sommaruppläggning, uppläggningsnummer och betalning.",
-    href: "/info/upplagning",
+      "Vinter- och sommaruppställning, uppställningskod och betalning.",
+    href: "/info/markuppstallning",
   },
   {
     icon: <AnchorIcon sx={{ fontSize: 40, color: "#CE93D8" }} />,

@@ -129,7 +129,7 @@ export default function UpplagningPage() {
       <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, mb: 1 }}>
         <ConstructionIcon sx={{ fontSize: 36, color: "#FFB74D" }} />
         <Typography variant="h4" sx={{ fontWeight: 800 }}>
-          Båtuppläggning
+          Markuppställning
         </Typography>
       </Box>
       <Typography
@@ -138,19 +138,19 @@ export default function UpplagningPage() {
         sx={{ mb: 3, maxWidth: 650 }}
       >
         Stegerholmens Bryggförening erbjuder möjlighet till vinter- och
-        sommaruppläggning på hamnens mark i mån av plats. Eftersom vi har
+        sommaruppställning på hamnens mark i mån av plats. Eftersom vi har
         begränsat utrymme och strikta miljökrav gäller specifika regler för
-        vilken typ av båtar som får förvaras här.
+        vilken typ av båtar och utrustning som får förvaras här.
       </Typography>
 
       {/* ─── Uppläggningsnummer ────────────────────────────── */}
       <InfoCard
         icon={<AssignmentIcon sx={{ fontSize: 28, color: "#4FC3F7" }} />}
-        title="System med uppläggningsnummer"
+        title="System med uppställningskod"
       >
         <Paragraph>
-          För att få nyttja hamnens mark för förvaring måste du ha ett unikt
-          uppläggningsnummer. Du tilldelar enkelt en kod själv via{" "}
+          För att få nyttja hamnens mark för förvaring måste du ha en unik
+          uppställningskod. Du tilldelar enkelt en kod själv via{" "}
           <MuiLink component={Link} href="/dashboard" color="primary">
             Mina grejer
           </MuiLink>.
@@ -188,7 +188,7 @@ export default function UpplagningPage() {
       {/* ─── Vinteruppläggning ────────────────────────────── */}
       <InfoCard
         icon={<AcUnitIcon sx={{ fontSize: 28, color: "#90CAF9" }} />}
-        title="Vinteruppläggning"
+        title="Vinteruppställning"
       >
         <Paragraph>
           Vinterförvaring på föreningens mark är <strong>endast tillåten för
@@ -199,7 +199,7 @@ export default function UpplagningPage() {
           variant="subtitle2"
           sx={{ fontWeight: 700, color: "primary.light", mb: 0.5 }}
         >
-          Krav för uppläggning:
+           Krav för uppställning:
         </Typography>
         <BulletList
           items={[
@@ -215,7 +215,7 @@ export default function UpplagningPage() {
             </>,
             <>
               <strong>Inga motorer:</strong> Utombordsmotorer får ej sitta kvar
-              på båten under uppläggningen. Dessa ska monteras av och förvaras
+               på båten under uppställningen. Dessa ska monteras av och förvaras
               på annan plats för att minska stöldrisk och miljöpåverkan.
             </>,
           ]}
@@ -225,7 +225,7 @@ export default function UpplagningPage() {
       {/* ─── Sommaruppläggning ────────────────────────────── */}
       <InfoCard
         icon={<WbSunnyIcon sx={{ fontSize: 28, color: "#FFD54F" }} />}
-        title="Sommaruppläggning"
+        title="Sommaruppställning"
       >
         <Paragraph>
           Under sommaren används hamnens mark främst för uppställning av{" "}
@@ -255,8 +255,8 @@ export default function UpplagningPage() {
         title="Betalning"
       >
         <Paragraph>
-          Betalning sker via <strong>Swish</strong>. Ange ditt
-          uppläggningsnummer som meddelande vid betalningen.
+           Betalning sker via <strong>Swish</strong>. Ange din
+          uppställningskod som meddelande vid betalningen.
         </Paragraph>
         <Box
           sx={{
@@ -294,7 +294,7 @@ export default function UpplagningPage() {
             <Box
               component="img"
               src="/swish-QR-small-vinter.png"
-              alt="Swish QR-kod vinteruppläggning"
+              alt="Swish QR-kod vinteruppställning"
               sx={{
                 width: 180,
                 height: "auto",
@@ -308,14 +308,14 @@ export default function UpplagningPage() {
               color="text.secondary"
               sx={{ display: "block", mt: 1 }}
             >
-              Vinteruppläggning
+               Vinteruppställning
             </Typography>
           </Box>
           <Box sx={{ textAlign: "center" }}>
             <Box
               component="img"
               src="/swish-QR-small-sommar.png"
-              alt="Swish QR-kod sommaruppläggning"
+              alt="Swish QR-kod sommaruppställning"
               sx={{
                 width: 180,
                 height: "auto",
@@ -329,16 +329,16 @@ export default function UpplagningPage() {
               color="text.secondary"
               sx={{ display: "block", mt: 1 }}
             >
-              Sommaruppläggning
+               Sommaruppställning
             </Typography>
           </Box>
         </Box>
 
         <Alert severity="warning" sx={{ mt: 2 }}>
           Det är båtägarens ansvar att fortlöpande swisha för varje säsong
-          man nyttjar landuppställning. Kontroller sker löpande. Vid utebliven
-          betalning sker efterdebitering och rätten till vidare
-          landuppställning kan dras in.
+           man nyttjar markuppställning. Kontroller sker löpande. Vid utebliven
+           betalning sker efterdebitering och rätten till vidare
+           markuppställning kan dras in.
         </Alert>
       </InfoCard>
 
