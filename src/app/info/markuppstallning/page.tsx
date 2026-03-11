@@ -15,6 +15,9 @@ import AcUnitIcon from "@mui/icons-material/AcUnit";
 import WbSunnyIcon from "@mui/icons-material/WbSunny";
 import PaymentIcon from "@mui/icons-material/Payment";
 import WarningAmberIcon from "@mui/icons-material/WarningAmber";
+import GpsFixedIcon from "@mui/icons-material/GpsFixed";
+import CameraAltIcon from "@mui/icons-material/CameraAlt";
+import HelpOutlineIcon from "@mui/icons-material/HelpOutline";
 import Link from "next/link";
 
 // ─── Reusable components ────────────────────────────────────
@@ -181,7 +184,69 @@ export default function UpplagningPage() {
         <Alert severity="warning" sx={{ mt: 1 }}>
           Båtar och trailers som saknar märkning betraktas som{" "}
           <strong>övergivna</strong>, anmäls till polisen och kan komma att
-          forslas bort.
+          forslas bort eller säljas.
+        </Alert>
+      </InfoCard>
+
+      {/* ─── GPS-position & Foto ────────────────────────────── */}
+      <InfoCard
+        icon={<GpsFixedIcon sx={{ fontSize: 28, color: "#66BB6A" }} />}
+        title="GPS-position & Foto"
+      >
+        <Paragraph>
+          För att föreningen ska kunna hålla ordning och identifiera vad som
+          finns på hamnens mark krävs att du registrerar en{" "}
+          <strong>GPS-position</strong> och laddar upp ett <strong>foto</strong>{" "}
+          för varje objekt du har stående.
+        </Paragraph>
+        <Typography
+          variant="subtitle2"
+          sx={{ fontWeight: 700, color: "primary.light", mb: 0.5 }}
+        >
+          Så här gör du:
+        </Typography>
+        <Box component="ol" sx={{ pl: 2.5, mt: 0, mb: 1.5 }}>
+          <Box component="li" sx={{ mb: 0.5 }}>
+            <Typography variant="body1" color="text.secondary" sx={{ lineHeight: 1.8 }}>
+              Logga in och gå till{" "}
+              <MuiLink component={Link} href="/dashboard" color="primary">
+                Mina grejer
+              </MuiLink>.
+            </Typography>
+          </Box>
+          <Box component="li" sx={{ mb: 0.5 }}>
+            <Typography variant="body1" color="text.secondary" sx={{ lineHeight: 1.8 }}>
+              Under <strong>Min markförvaring</strong> hittar du dina objekt.
+              Klicka på <CameraAltIcon sx={{ fontSize: 16, verticalAlign: "middle" }} />{" "}
+              för att ladda upp ett foto och på <GpsFixedIcon sx={{ fontSize: 16, verticalAlign: "middle" }} />{" "}
+              för att sätta GPS-position.
+            </Typography>
+          </Box>
+          <Box component="li" sx={{ mb: 0.5 }}>
+            <Typography variant="body1" color="text.secondary" sx={{ lineHeight: 1.8 }}>
+              GPS-positionen sätter du enklast genom att stå intill din båt/
+              trailer och trycka <strong>&quot;Använd min position&quot;</strong>.
+              Positionen visas sedan på kartan.
+            </Typography>
+          </Box>
+          <Box component="li" sx={{ mb: 0.5 }}>
+            <Typography variant="body1" color="text.secondary" sx={{ lineHeight: 1.8 }}>
+              När en GPS-position finns registrerad blir statusen{" "}
+              <strong>AKTIV</strong>. Det innebär att föreningen vet att du
+              nyttjar platsen och att avgift ska betalas.
+            </Typography>
+          </Box>
+          <Box component="li" sx={{ mb: 0.5 }}>
+            <Typography variant="body1" color="text.secondary" sx={{ lineHeight: 1.8 }}>
+              När du tar bort din båt/trailer, <strong>ta bort GPS-positionen</strong>{" "}
+              så att statusen ändras till <strong>INAKTIV</strong>.
+            </Typography>
+          </Box>
+        </Box>
+        <Alert severity="info" sx={{ mt: 1 }}>
+          GPS-position och foto gör det möjligt för föreningen att identifiera
+          alla objekt och undvika att de betraktas som övergivna. Hjälp oss
+          hålla ordning!
         </Alert>
       </InfoCard>
 
@@ -205,7 +270,7 @@ export default function UpplagningPage() {
           items={[
             <>
               <strong>Upp och ner:</strong> Båten ska förvaras liggande upp och
-              ner på bockar eller virke. Detta innebär att endast mindre båtar
+              ner. Detta innebär att endast mindre båtar
               (t.ex. ekor och mindre styrpulpetare) kan förvaras här.
             </>,
             <>
@@ -278,9 +343,12 @@ export default function UpplagningPage() {
         {/* Swish QR codes */}
         <Typography
           variant="subtitle2"
-          sx={{ fontWeight: 700, color: "primary.light", mb: 1.5 }}
+          sx={{ fontWeight: 700, color: "primary.light", mb: 0.5 }}
         >
           Skanna QR-kod för att swisha direkt:
+        </Typography>
+        <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1.5 }}>
+          Är du redan på mobilen kan du klicka på QR-koden för att komma direkt till betalning.
         </Typography>
         <Box
           sx={{
@@ -291,45 +359,69 @@ export default function UpplagningPage() {
           }}
         >
           <Box sx={{ textAlign: "center" }}>
-            <Box
-              component="img"
-              src="/swish-QR-small-vinter.png"
-              alt="Swish QR-kod vinteruppställning"
-              sx={{
-                width: 180,
-                height: "auto",
-                borderRadius: 2,
-                bgcolor: "white",
-                p: 1,
-              }}
-            />
+            <MuiLink
+              href="https://app.swish.nu/1/p/sw/?sw=1236594774&amp;amt=500.00&amp;cur=SEK&amp;msg=Vinteruppst%C3%A4llning&amp;src=qr"
+              target="_blank"
+              rel="noopener"
+            >
+              <Box
+                component="img"
+                src="/swish-QR-small-vinter.png"
+                alt="Swish QR-kod vinteruppställning"
+                sx={{
+                  width: 180,
+                  height: "auto",
+                  borderRadius: 2,
+                  bgcolor: "white",
+                  p: 1,
+                  cursor: "pointer",
+                  transition: "transform 0.2s, box-shadow 0.2s",
+                  "&:hover": {
+                    transform: "scale(1.05)",
+                    boxShadow: "0 4px 20px rgba(79,195,247,0.2)",
+                  },
+                }}
+              />
+            </MuiLink>
             <Typography
               variant="caption"
               color="text.secondary"
               sx={{ display: "block", mt: 1 }}
             >
-               Vinteruppställning
+              Vinteruppställning
             </Typography>
           </Box>
           <Box sx={{ textAlign: "center" }}>
-            <Box
-              component="img"
-              src="/swish-QR-small-sommar.png"
-              alt="Swish QR-kod sommaruppställning"
-              sx={{
-                width: 180,
-                height: "auto",
-                borderRadius: 2,
-                bgcolor: "white",
-                p: 1,
-              }}
-            />
+            <MuiLink
+              href="https://app.swish.nu/1/p/sw/?sw=1236594774&amp;amt=500.00&amp;cur=SEK&amp;msg=Sommaruppst%C3%A4llning&amp;src=qr"
+              target="_blank"
+              rel="noopener"
+            >
+              <Box
+                component="img"
+                src="/swish-QR-small-sommar.png"
+                alt="Swish QR-kod sommaruppställning"
+                sx={{
+                  width: 180,
+                  height: "auto",
+                  borderRadius: 2,
+                  bgcolor: "white",
+                  p: 1,
+                  cursor: "pointer",
+                  transition: "transform 0.2s, box-shadow 0.2s",
+                  "&:hover": {
+                    transform: "scale(1.05)",
+                    boxShadow: "0 4px 20px rgba(79,195,247,0.2)",
+                  },
+                }}
+              />
+            </MuiLink>
             <Typography
               variant="caption"
               color="text.secondary"
               sx={{ display: "block", mt: 1 }}
             >
-               Sommaruppställning
+              Sommaruppställning
             </Typography>
           </Box>
         </Box>
@@ -369,6 +461,35 @@ export default function UpplagningPage() {
               </>,
             ]}
           />
+        </CardContent>
+      </Card>
+
+      {/* ─── Varför så krångligt? ──────────────────────────── */}
+      <Card
+        sx={{
+          mt: 3,
+          bgcolor: "rgba(79,195,247,0.06)",
+          border: "1px solid rgba(79,195,247,0.15)",
+        }}
+      >
+        <CardContent sx={{ p: 3 }}>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, mb: 1 }}>
+            <HelpOutlineIcon sx={{ fontSize: 28, color: "#4FC3F7" }} />
+            <Typography variant="h6" sx={{ fontWeight: 700 }}>
+              Varför så krångligt?
+            </Typography>
+          </Box>
+          <Typography
+            variant="body1"
+            color="text.secondary"
+            sx={{ lineHeight: 1.8 }}
+          >
+            Stegerholmens hamns största problem är de ca 25 övergivna båtar som
+            ingen vill kännas vid som nu legat där i åratal utan betalning. Vi
+            tvingas därför införa hårdare krav och villkor för att kunna nyttja
+            den här tjänsten framöver. Vi hoppas ni har förståelse och
+            överseende.
+          </Typography>
         </CardContent>
       </Card>
     </Box>
