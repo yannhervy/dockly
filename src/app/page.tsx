@@ -10,6 +10,7 @@ import CardContent from "@mui/material/CardContent";
 import CardMedia from "@mui/material/CardMedia";
 import Dialog from "@mui/material/Dialog";
 import IconButton from "@mui/material/IconButton";
+import Avatar from "@mui/material/Avatar";
 import SailingIcon from "@mui/icons-material/Sailing";
 import InfoIcon from "@mui/icons-material/Info";
 import DirectionsBoatIcon from "@mui/icons-material/DirectionsBoat";
@@ -339,10 +340,19 @@ export default function HomePage() {
                       <Typography variant="h6" sx={{ fontWeight: 700, mb: 0.5 }}>
                         {report.title}
                       </Typography>
-                      <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1 }}>
-                        {report.authorName} ·{" "}
-                        {report.createdAt?.toDate?.()?.toLocaleDateString("sv-SE") || ""}
-                      </Typography>
+                      <Box sx={{ display: "flex", alignItems: "center", gap: 0.75, mb: 1 }}>
+                        {report.authorPhotoURL ? (
+                          <Avatar src={report.authorPhotoURL} alt={report.authorName} sx={{ width: 24, height: 24 }} />
+                        ) : (
+                          <Avatar sx={{ width: 24, height: 24, fontSize: 12, bgcolor: "primary.dark" }}>
+                            {report.authorName?.charAt(0)?.toUpperCase()}
+                          </Avatar>
+                        )}
+                        <Typography variant="caption" color="text.secondary">
+                          {report.authorName} ·{" "}
+                          {report.createdAt?.toDate?.()?.toLocaleDateString("sv-SE") || ""}
+                        </Typography>
+                      </Box>
                       <Typography
                         variant="body2"
                         color="text.secondary"
@@ -520,10 +530,19 @@ export default function HomePage() {
                       <Typography variant="h6" sx={{ fontWeight: 700, mb: 0.5 }}>
                         {report.title}
                       </Typography>
-                      <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1 }}>
-                        {report.authorName} ·{" "}
-                        {report.createdAt?.toDate?.()?.toLocaleDateString("sv-SE") || ""}
-                      </Typography>
+                      <Box sx={{ display: "flex", alignItems: "center", gap: 0.75, mb: 1 }}>
+                        {report.authorPhotoURL ? (
+                          <Avatar src={report.authorPhotoURL} alt={report.authorName} sx={{ width: 24, height: 24 }} />
+                        ) : (
+                          <Avatar sx={{ width: 24, height: 24, fontSize: 12, bgcolor: "primary.dark" }}>
+                            {report.authorName?.charAt(0)?.toUpperCase()}
+                          </Avatar>
+                        )}
+                        <Typography variant="caption" color="text.secondary">
+                          {report.authorName} ·{" "}
+                          {report.createdAt?.toDate?.()?.toLocaleDateString("sv-SE") || ""}
+                        </Typography>
+                      </Box>
                       <Typography
                         variant="body2"
                         color="text.secondary"
@@ -625,10 +644,19 @@ export default function HomePage() {
                     <Typography variant="h6" sx={{ fontWeight: 700, mb: 0.5 }}>
                       {post.title}
                     </Typography>
-                    <Typography variant="caption" color="text.secondary" sx={{ mb: 1.5 }}>
-                      {post.authorName} ·{" "}
-                      {post.createdAt?.toDate?.()?.toLocaleDateString("sv-SE") || ""}
-                    </Typography>
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 0.75, mb: 1.5 }}>
+                      {post.authorPhotoURL ? (
+                        <Avatar src={post.authorPhotoURL} alt={post.authorName} sx={{ width: 24, height: 24 }} />
+                      ) : (
+                        <Avatar sx={{ width: 24, height: 24, fontSize: 12, bgcolor: "primary.dark" }}>
+                          {post.authorName?.charAt(0)?.toUpperCase()}
+                        </Avatar>
+                      )}
+                      <Typography variant="caption" color="text.secondary">
+                        {post.authorName} ·{" "}
+                        {post.createdAt?.toDate?.()?.toLocaleDateString("sv-SE") || ""}
+                      </Typography>
+                    </Box>
                     <Typography
                       variant="body2"
                       color="text.secondary"

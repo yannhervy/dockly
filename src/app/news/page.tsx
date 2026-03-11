@@ -45,6 +45,7 @@ import Alert from "@mui/material/Alert";
 import Chip from "@mui/material/Chip";
 import CircularProgress from "@mui/material/CircularProgress";
 import LinearProgress from "@mui/material/LinearProgress";
+import Avatar from "@mui/material/Avatar";
 import Tooltip from "@mui/material/Tooltip";
 import Autocomplete from "@mui/material/Autocomplete";
 import NewspaperIcon from "@mui/icons-material/Newspaper";
@@ -207,6 +208,7 @@ function NewsListingPage() {
           imageUrls,
           authorId: firebaseUser.uid,
           authorName: profile.name,
+          authorPhotoURL: profile.photoURL || null,
           createdAt: Timestamp.now(),
           reactions: {},
           linkedDockIds: formDockIds.length > 0 ? formDockIds : [],
@@ -322,9 +324,22 @@ function NewsListingPage() {
                   {post.title}
                 </Typography>
               </Box>
-              <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: "block" }}>
-                {post.authorName} · {formatDate(post.createdAt)}
-              </Typography>
+              <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 0.5 }}>
+                {post.authorPhotoURL ? (
+                  <Avatar
+                    src={post.authorPhotoURL}
+                    alt={post.authorName}
+                    sx={{ width: 28, height: 28 }}
+                  />
+                ) : (
+                  <Avatar sx={{ width: 28, height: 28, fontSize: 14, bgcolor: "primary.dark" }}>
+                    {post.authorName?.charAt(0)?.toUpperCase()}
+                  </Avatar>
+                )}
+                <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
+                  {post.authorName} · {formatDate(post.createdAt)}
+                </Typography>
+              </Box>
               {/* Linked docks/berths */}
               {((post.linkedDockIds && post.linkedDockIds.length > 0) ||
                 (post.linkedBerthCodes && post.linkedBerthCodes.length > 0)) && (

@@ -235,6 +235,7 @@ export interface NewsPost {
   imageUrls: string[];             // Multiple images supported
   authorId: string;
   authorName: string;
+  authorPhotoURL?: string;           // Author's profile picture
   createdAt: Timestamp;
   reactions: ReactionMap;
   linkedDockIds?: string[];        // Docks related to the report

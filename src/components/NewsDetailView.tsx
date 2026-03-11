@@ -43,6 +43,7 @@ import DialogContent from "@mui/material/DialogContent";
 import DialogActions from "@mui/material/DialogActions";
 import TextField from "@mui/material/TextField";
 import IconButton from "@mui/material/IconButton";
+import Avatar from "@mui/material/Avatar";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import ShareIcon from "@mui/icons-material/Share";
 import EditIcon from "@mui/icons-material/Edit";
@@ -269,9 +270,18 @@ export default function NewsDetailView({ slug }: NewsDetailViewProps) {
                   {post.title}
                 </Typography>
               </Box>
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                {post.authorName} &middot; {formatDate(post.createdAt)}
-              </Typography>
+              <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 2 }}>
+                {post.authorPhotoURL ? (
+                  <Avatar src={post.authorPhotoURL} alt={post.authorName} sx={{ width: 32, height: 32 }} />
+                ) : (
+                  <Avatar sx={{ width: 32, height: 32, fontSize: 15, bgcolor: "primary.dark" }}>
+                    {post.authorName?.charAt(0)?.toUpperCase()}
+                  </Avatar>
+                )}
+                <Typography variant="body2" color="text.secondary">
+                  {post.authorName} &middot; {formatDate(post.createdAt)}
+                </Typography>
+              </Box>
             </Box>
             <Box sx={{ display: "flex", gap: 0.5 }}>
               <Tooltip title="Dela nyhet">
@@ -396,9 +406,18 @@ export default function NewsDetailView({ slug }: NewsDetailViewProps) {
                         {other.title}
                       </Typography>
                     </Box>
-                    <Typography variant="caption" color="text.secondary">
-                      {other.authorName} &middot; {formatDate(other.createdAt)}
-                    </Typography>
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 0.75 }}>
+                      {other.authorPhotoURL ? (
+                        <Avatar src={other.authorPhotoURL} alt={other.authorName} sx={{ width: 22, height: 22 }} />
+                      ) : (
+                        <Avatar sx={{ width: 22, height: 22, fontSize: 11, bgcolor: "primary.dark" }}>
+                          {other.authorName?.charAt(0)?.toUpperCase()}
+                        </Avatar>
+                      )}
+                      <Typography variant="caption" color="text.secondary">
+                        {other.authorName} &middot; {formatDate(other.createdAt)}
+                      </Typography>
+                    </Box>
                     <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
                       {stripMarkdown(other.body, 120)}
                     </Typography>
