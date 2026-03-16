@@ -134,14 +134,19 @@ function NewsListingPage() {
 
   async function fetchDocksAndBerths() {
     try {
+      // Docks are publicly readable
       const dockSnap = await getDocs(collection(db, "docks"));
       setDocks(dockSnap.docs.map((d) => ({ id: d.id, ...d.data() }) as Dock));
-      const resSnap = await getDocs(collection(db, "resources"));
-      setBerths(
-        resSnap.docs
-          .map((d) => ({ id: d.id, ...d.data() }) as Resource)
-          .filter((r) => r.type === "Berth")
-      );
+
+      // Resources require authentication
+      if (firebaseUser) {
+        const resSnap = await getDocs(collection(db, "resources"));
+        setBerths(
+          resSnap.docs
+            .map((d) => ({ id: d.id, ...d.data() }) as Resource)
+            .filter((r) => r.type === "Berth")
+        );
+      }
     } catch (err) {
       console.error("Error fetching docks/berths:", err);
     }

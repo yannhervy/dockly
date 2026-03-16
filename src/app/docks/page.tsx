@@ -32,14 +32,19 @@ export default function DocksPage() {
   useEffect(() => {
     async function fetchData() {
       try {
-        const [dSnap, uSnap, rSnap] = await Promise.all([
-          getDocs(collection(db, "docks")),
-          getDocs(collection(db, "users")),
-          getDocs(collection(db, "resources")),
-        ]);
+        // Docks are publicly readable — always fetch
+        const dSnap = await getDocs(collection(db, "docks"));
         setDocks(dSnap.docs.map((d) => ({ id: d.id, ...d.data() }) as Dock).sort((a, b) => a.name.localeCompare(b.name)));
-        setUsers(uSnap.docs.map((d) => ({ id: d.id, ...d.data() }) as User));
-        setResources(rSnap.docs.map((d) => ({ id: d.id, ...d.data() }) as Resource));
+
+        // Users and resources require authentication
+        if (firebaseUser) {
+          const [uSnap, rSnap] = await Promise.all([
+            getDocs(collection(db, "users")),
+            getDocs(collection(db, "resources")),
+          ]);
+          setUsers(uSnap.docs.map((d) => ({ id: d.id, ...d.data() }) as User));
+          setResources(rSnap.docs.map((d) => ({ id: d.id, ...d.data() }) as Resource));
+        }
       } catch (err) {
         console.error("Error fetching docks:", err);
       } finally {
@@ -47,7 +52,7 @@ export default function DocksPage() {
       }
     }
     fetchData();
-  }, []);
+  }, [firebaseUser]);
 
   const getManager = (uid: string) => users.find((u) => u.id === uid);
 
