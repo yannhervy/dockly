@@ -47,6 +47,8 @@ import ConstructionIcon from "@mui/icons-material/Construction";
 import EditIcon from "@mui/icons-material/Edit";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import CancelIcon from "@mui/icons-material/Cancel";
+import PhotoCameraIcon from "@mui/icons-material/PhotoCamera";
+import QrCodeIcon from "@mui/icons-material/QrCode";
 import PersonIcon from "@mui/icons-material/Person";
 import PersonOffIcon from "@mui/icons-material/PersonOff";
 import LinkIcon from "@mui/icons-material/Link";
@@ -149,6 +151,9 @@ function LandStorageContent() {
   const totalCount = entries.length;
   const occupiedCount = entries.filter((e) => e.status === "Occupied").length;
   const availableCount = totalCount - occupiedCount;
+  const activeCount = entries.filter((e) => e.lat && e.lng).length;
+  const withBoatImageCount = entries.filter((e) => !!e.imageUrl).length;
+  const withCodeImageCount = entries.filter((e) => !!e.codeImageUrl).length;
 
   // Edit dialog handlers
   const handleEditOpen = async (entry: LandStorageEntry) => {
@@ -300,7 +305,7 @@ function LandStorageContent() {
 
       {/* Stats cards */}
       <Grid container spacing={2} sx={{ mb: 3 }}>
-        <Grid size={{ xs: 4 }}>
+        <Grid size={{ xs: 6, sm: 4, md: 2 }}>
           <Card>
             <CardContent sx={{ p: 2, "&:last-child": { pb: 2 } }}>
               <Typography variant="h4" sx={{ fontWeight: 700, color: "primary.main" }}>
@@ -312,7 +317,7 @@ function LandStorageContent() {
             </CardContent>
           </Card>
         </Grid>
-        <Grid size={{ xs: 4 }}>
+        <Grid size={{ xs: 6, sm: 4, md: 2 }}>
           <Card>
             <CardContent sx={{ p: 2, "&:last-child": { pb: 2 } }}>
               <Typography variant="h4" sx={{ fontWeight: 700, color: "warning.main" }}>
@@ -324,7 +329,7 @@ function LandStorageContent() {
             </CardContent>
           </Card>
         </Grid>
-        <Grid size={{ xs: 4 }}>
+        <Grid size={{ xs: 6, sm: 4, md: 2 }}>
           <Card>
             <CardContent sx={{ p: 2, "&:last-child": { pb: 2 } }}>
               <Typography variant="h4" sx={{ fontWeight: 700, color: "success.main" }}>
@@ -332,6 +337,42 @@ function LandStorageContent() {
               </Typography>
               <Typography variant="body2" color="text.secondary">
                 Available
+              </Typography>
+            </CardContent>
+          </Card>
+        </Grid>
+        <Grid size={{ xs: 6, sm: 4, md: 2 }}>
+          <Card>
+            <CardContent sx={{ p: 2, "&:last-child": { pb: 2 } }}>
+              <Typography variant="h4" sx={{ fontWeight: 700, color: "info.main" }}>
+                {activeCount}
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                Active (GPS)
+              </Typography>
+            </CardContent>
+          </Card>
+        </Grid>
+        <Grid size={{ xs: 6, sm: 4, md: 2 }}>
+          <Card>
+            <CardContent sx={{ p: 2, "&:last-child": { pb: 2 } }}>
+              <Typography variant="h4" sx={{ fontWeight: 700, color: withBoatImageCount === activeCount ? "success.main" : "warning.main" }}>
+                {withBoatImageCount}
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                Boat Photo
+              </Typography>
+            </CardContent>
+          </Card>
+        </Grid>
+        <Grid size={{ xs: 6, sm: 4, md: 2 }}>
+          <Card>
+            <CardContent sx={{ p: 2, "&:last-child": { pb: 2 } }}>
+              <Typography variant="h4" sx={{ fontWeight: 700, color: withCodeImageCount === activeCount ? "success.main" : "warning.main" }}>
+                {withCodeImageCount}
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                Code Photo
               </Typography>
             </CardContent>
           </Card>
@@ -391,6 +432,9 @@ function LandStorageContent() {
                   <TableCell sx={{ fontWeight: 700 }}>Status</TableCell>
                   <TableCell sx={{ fontWeight: 700 }}>Name</TableCell>
                   <TableCell sx={{ fontWeight: 700 }}>Phone</TableCell>
+                  <TableCell sx={{ fontWeight: 700, textAlign: "center" }}>GPS</TableCell>
+                  <TableCell sx={{ fontWeight: 700, textAlign: "center" }}>Båtbild</TableCell>
+                  <TableCell sx={{ fontWeight: 700, textAlign: "center" }}>Kodbild</TableCell>
                   <TableCell sx={{ fontWeight: 700 }}>Comment</TableCell>
                   {canEdit && (
                     <TableCell sx={{ fontWeight: 700 }} align="right">
@@ -470,6 +514,33 @@ function LandStorageContent() {
                     </TableCell>
                     <TableCell>
                       {entry.phone || "—"}
+                    </TableCell>
+                    <TableCell align="center">
+                      {entry.lat && entry.lng ? (
+                        <Tooltip title={`${entry.lat.toFixed(5)}, ${entry.lng.toFixed(5)}`}>
+                          <CheckCircleIcon sx={{ fontSize: 18, color: "success.main" }} />
+                        </Tooltip>
+                      ) : (
+                        <CancelIcon sx={{ fontSize: 18, color: "text.disabled" }} />
+                      )}
+                    </TableCell>
+                    <TableCell align="center">
+                      {entry.imageUrl ? (
+                        <Tooltip title="Båtbild uppladdad">
+                          <CheckCircleIcon sx={{ fontSize: 18, color: "success.main" }} />
+                        </Tooltip>
+                      ) : (
+                        <CancelIcon sx={{ fontSize: 18, color: "text.disabled" }} />
+                      )}
+                    </TableCell>
+                    <TableCell align="center">
+                      {entry.codeImageUrl ? (
+                        <Tooltip title="Kodbild uppladdad">
+                          <CheckCircleIcon sx={{ fontSize: 18, color: "success.main" }} />
+                        </Tooltip>
+                      ) : (
+                        <CancelIcon sx={{ fontSize: 18, color: "text.disabled" }} />
+                      )}
                     </TableCell>
                     <TableCell>
                       <Typography
