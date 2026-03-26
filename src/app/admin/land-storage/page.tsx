@@ -221,6 +221,7 @@ function LandStorageContent() {
                 lat: editLat,
                 lng: editLng,
                 imageUrl: imageUrl,
+                internalComments: editInternalComments,
               }
             : e
         )
