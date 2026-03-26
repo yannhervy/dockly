@@ -814,7 +814,25 @@ function LandStorageContent() {
           {/* Internal comments */}
           <InternalCommentsPanel
             comments={editInternalComments}
-            onChange={setEditInternalComments}
+            onChange={(updated) => {
+              setEditInternalComments(updated);
+              // Auto-save to Firestore immediately
+              if (editEntry) {
+                updateDoc(doc(db, "landStorage", editEntry.code), {
+                  internalComments: updated,
+                  updatedAt: Timestamp.now(),
+                }).then(() => {
+                  // Update local entries state too
+                  setEntries((prev) =>
+                    prev.map((e) =>
+                      e.code === editEntry.code
+                        ? { ...e, internalComments: updated }
+                        : e
+                    )
+                  );
+                }).catch((err) => console.error("Error saving comment:", err));
+              }
+            }}
             userNames={Object.fromEntries(allUsers.map((u) => [u.id, u.name]))}
           />
         </DialogContent>
