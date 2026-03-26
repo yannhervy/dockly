@@ -178,7 +178,8 @@ export interface LandStorageEntry {
   season?: LandStorageSeason;
   lat?: number; // GPS latitude for map positioning
   lng?: number; // GPS longitude for map positioning
-  imageUrl?: string; // Firebase Storage URL for entry photo
+  imageUrl?: string; // Firebase Storage URL for boat/trailer photo
+  codeImageUrl?: string; // Firebase Storage URL for marking code label photo
   updatedAt?: Timestamp;
 }
 

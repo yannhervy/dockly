@@ -188,17 +188,29 @@ export default function UpplagningPage() {
         </Alert>
       </InfoCard>
 
-      {/* ─── GPS-position & Foto ────────────────────────────── */}
+      {/* ─── GPS-position & Foton ────────────────────────────── */}
       <InfoCard
         icon={<GpsFixedIcon sx={{ fontSize: 28, color: "#66BB6A" }} />}
-        title="GPS-position & Foto"
+        title="GPS-position & Foton"
       >
         <Paragraph>
           För att föreningen ska kunna hålla ordning och identifiera vad som
           finns på hamnens mark krävs att du registrerar en{" "}
-          <strong>GPS-position</strong> och laddar upp ett <strong>foto</strong>{" "}
-          för varje objekt du har stående.
+          <strong>GPS-position</strong> och laddar upp <strong>två foton</strong>{" "}
+          för varje objekt du har stående:
         </Paragraph>
+        <BulletList
+          items={[
+            <>
+              <strong>Bild på båten/trailern</strong> — så att föreningen kan
+              identifiera vad som står uppställt.
+            </>,
+            <>
+              <strong>Bild på uppställningskoden</strong> — så att det framgår
+              att objektet är märkt med korrekt kod.
+            </>,
+          ]}
+        />
         <Typography
           variant="subtitle2"
           sx={{ fontWeight: 700, color: "primary.light", mb: 0.5 }}
@@ -217,8 +229,11 @@ export default function UpplagningPage() {
           <Box component="li" sx={{ mb: 0.5 }}>
             <Typography variant="body1" color="text.secondary" sx={{ lineHeight: 1.8 }}>
               Under <strong>Min markförvaring</strong> hittar du dina objekt.
-              Klicka på <CameraAltIcon sx={{ fontSize: 16, verticalAlign: "middle" }} />{" "}
-              för att ladda upp ett foto och på <GpsFixedIcon sx={{ fontSize: 16, verticalAlign: "middle" }} />{" "}
+              Varje rad har <strong>två bildplatser</strong>: en för båten (vänster)
+              och en för uppställningskoden (höger). Klicka på{" "}
+              <CameraAltIcon sx={{ fontSize: 16, verticalAlign: "middle" }} />{" "}
+              för att ladda upp respektive bild och på{" "}
+              <GpsFixedIcon sx={{ fontSize: 16, verticalAlign: "middle" }} />{" "}
               för att sätta GPS-position.
             </Typography>
           </Box>
@@ -244,9 +259,9 @@ export default function UpplagningPage() {
           </Box>
         </Box>
         <Alert severity="info" sx={{ mt: 1 }}>
-          GPS-position och foto gör det möjligt för föreningen att identifiera
-          alla objekt och undvika att de betraktas som övergivna. Hjälp oss
-          hålla ordning!
+          GPS-position och båda bilderna gör det möjligt för föreningen att
+          identifiera alla objekt och undvika att de betraktas som övergivna.
+          Hjälp oss hålla ordning!
         </Alert>
       </InfoCard>
 

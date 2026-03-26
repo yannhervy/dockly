@@ -964,11 +964,45 @@ function DashboardContent() {
     }
   };
 
+  // Handle land storage CODE image upload
+  const [landCodePickerOpen, setLandCodePickerOpen] = useState(false);
+  const [landCodeUploadTargetId, setLandCodeUploadTargetId] = useState<string | null>(null);
+
+  const handleLandCodeUploadClick = (entryId: string) => {
+    setLandCodeUploadTargetId(entryId);
+    setLandCodePickerOpen(true);
+  };
+
+  const handleLandCodeFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !landCodeUploadTargetId) return;
+
+    setUploading(landCodeUploadTargetId);
+    try {
+      const url = await uploadLandStorageImage(file, landCodeUploadTargetId + "-code");
+      await updateDoc(doc(db, "landStorage", landCodeUploadTargetId), {
+        codeImageUrl: url,
+      });
+      setLandEntries((prev) =>
+        prev.map((x) =>
+          x.id === landCodeUploadTargetId ? { ...x, codeImageUrl: url } : x
+        )
+      );
+      setSuccessMsg("Bild på uppställningskoden uppdaterad!");
+      setTimeout(() => setSuccessMsg(""), 4000);
+    } catch (err) {
+      console.error("Error uploading land storage code image:", err);
+    } finally {
+      setUploading(null);
+      setLandCodeUploadTargetId(null);
+    }
+  };
+
   // Delete land storage image
   const handleDeleteLandImage = async (entryId: string) => {
     setConfirmDialog({
       title: "Ta bort bild",
-      message: "Vill du ta bort bilden?",
+      message: "Vill du ta bort bilden på båten?",
       onConfirm: () => { setConfirmDialog(null); handleDeleteLandImageConfirmed(entryId); },
     });
   };
@@ -988,6 +1022,35 @@ function DashboardContent() {
       setTimeout(() => setSuccessMsg(""), 4000);
     } catch (err) {
       console.error("Error deleting land storage image:", err);
+    } finally {
+      setUploading(null);
+    }
+  };
+
+  // Delete land storage code image
+  const handleDeleteLandCodeImage = async (entryId: string) => {
+    setConfirmDialog({
+      title: "Ta bort kodbild",
+      message: "Vill du ta bort bilden på uppställningskoden?",
+      onConfirm: () => { setConfirmDialog(null); handleDeleteLandCodeImageConfirmed(entryId); },
+    });
+  };
+
+  const handleDeleteLandCodeImageConfirmed = async (entryId: string) => {
+    setUploading(entryId);
+    try {
+      await updateDoc(doc(db, "landStorage", entryId), {
+        codeImageUrl: deleteField(),
+      });
+      setLandEntries((prev) =>
+        prev.map((x) =>
+          x.id === entryId ? { ...x, codeImageUrl: undefined } : x
+        )
+      );
+      setSuccessMsg("Kodbilden har tagits bort.");
+      setTimeout(() => setSuccessMsg(""), 4000);
+    } catch (err) {
+      console.error("Error deleting land storage code image:", err);
     } finally {
       setUploading(null);
     }
@@ -1899,8 +1962,8 @@ function DashboardContent() {
                 </Typography>
 
                 <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                  När du förvarar något på föreningens mark ska du markera detta med en GPS-position, bild och märka båten/kärran med uppläggningskod.
-                  När du tar bort din båt eller trailer ska du ta bort din GPS-position.
+                  När du förvarar något på föreningens mark ska du markera detta med en GPS-position, två bilder (en på båten och en på uppställningskoden) och märka båten/kärran med uppläggningskod.
+                  När du tar bort din båt eller trailer ska du ta bort din GPS-position samt dina bilder.
                   Kom ihåg att det är upp till dig att löpande betala in uppställningsavgiften.
                   Kontroller sker löpande och efterdebitering sker.
                   Se <a href="/info/markuppstallning" style={{ color: "#4FC3F7" }}>/info/markuppstallning</a> för mer info.
@@ -1913,6 +1976,16 @@ function DashboardContent() {
                     sx={{ mb: 2 }}
                   >
                     Du har minst en aktiv markuppställning och skall löpande betala in avgift till föreningen.
+                  </Alert>
+                )}
+
+                {/* Warning when active entry is missing boat or code image */}
+                {landEntries.some((e) => e.lat && e.lng && (!e.imageUrl || !e.codeImageUrl)) && (
+                  <Alert
+                    severity="warning"
+                    sx={{ mb: 2 }}
+                  >
+                    Du har en aktiv markuppställning som saknar bild på båten och uppställningskoden. Båda bilderna krävs.
                   </Alert>
                 )}
 
@@ -1936,7 +2009,7 @@ function DashboardContent() {
                   <Table>
                     <TableHead>
                       <TableRow>
-                        <TableCell sx={{ width: 56, p: 1 }}></TableCell>
+                        <TableCell sx={{ width: 100, p: 1 }}></TableCell>
                         <TableCell>Kod</TableCell>
                         <TableCell>Status</TableCell>
                         <TableCell>Säsong</TableCell>
@@ -1948,80 +2021,154 @@ function DashboardContent() {
                     <TableBody>
                       {landEntries.map((entry) => (
                         <TableRow key={entry.id}>
-                          {/* Round avatar image — leftmost column */}
-                          <TableCell sx={{ width: 56, p: 1 }}>
-                            {entry.imageUrl ? (
-                              <Tooltip title="Klicka för att se bild — kameraikon för att ändra">
-                                <Box sx={{ position: "relative", display: "inline-block" }}>
-                                  <Avatar
-                                    src={entry.imageUrl}
-                                    sx={{ width: 44, height: 44, cursor: "pointer", border: "2px solid rgba(255,255,255,0.15)" }}
-                                    onClick={() => setPreviewImageUrl(entry.imageUrl!)}
-                                  />
+                          {/* Two avatar images — boat + code */}
+                          <TableCell sx={{ width: 100, p: 1 }}>
+                            <Box sx={{ display: "flex", gap: 0.5, alignItems: "center" }}>
+                              {/* Boat image avatar */}
+                              {entry.imageUrl ? (
+                                <Tooltip title="Båtbild — klicka för att se, kameraikon för att ändra">
+                                  <Box sx={{ position: "relative", display: "inline-block" }}>
+                                    <Avatar
+                                      src={entry.imageUrl}
+                                      sx={{ width: 44, height: 44, cursor: "pointer", border: "2px solid rgba(255,255,255,0.15)" }}
+                                      onClick={() => setPreviewImageUrl(entry.imageUrl!)}
+                                    />
+                                    <IconButton
+                                      size="small"
+                                      onClick={() => handleLandUploadClick(entry.id)}
+                                      disabled={uploading === entry.id}
+                                      sx={{
+                                        position: "absolute",
+                                        bottom: -4,
+                                        right: -4,
+                                        width: 22,
+                                        height: 22,
+                                        bgcolor: "primary.main",
+                                        border: "2px solid",
+                                        borderColor: "background.paper",
+                                        "&:hover": { bgcolor: "primary.dark" },
+                                      }}
+                                    >
+                                      {uploading === entry.id ? (
+                                        <CircularProgress size={10} sx={{ color: "white" }} />
+                                      ) : (
+                                        <PhotoCameraIcon sx={{ fontSize: 12, color: "white" }} />
+                                      )}
+                                    </IconButton>
+                                    <IconButton
+                                      size="small"
+                                      onClick={() => handleDeleteLandImage(entry.id)}
+                                      disabled={uploading === entry.id}
+                                      sx={{
+                                        position: "absolute",
+                                        top: -4,
+                                        right: -4,
+                                        width: 18,
+                                        height: 18,
+                                        bgcolor: "error.main",
+                                        border: "2px solid",
+                                        borderColor: "background.paper",
+                                        "&:hover": { bgcolor: "error.dark" },
+                                      }}
+                                    >
+                                      <CloseIcon sx={{ fontSize: 10, color: "white" }} />
+                                    </IconButton>
+                                  </Box>
+                                </Tooltip>
+                              ) : (
+                                <Tooltip title="Ta en bild på din båt/trailer">
                                   <IconButton
-                                    size="small"
                                     onClick={() => handleLandUploadClick(entry.id)}
                                     disabled={uploading === entry.id}
                                     sx={{
-                                      position: "absolute",
-                                      bottom: -4,
-                                      right: -4,
-                                      width: 22,
-                                      height: 22,
-                                      bgcolor: "primary.main",
-                                      border: "2px solid",
-                                      borderColor: "background.paper",
-                                      "&:hover": { bgcolor: "primary.dark" },
+                                      width: 44,
+                                      height: 44,
+                                      bgcolor: "rgba(255,183,77,0.12)",
+                                      border: "2px dashed rgba(255,183,77,0.5)",
+                                      "&:hover": { bgcolor: "rgba(255,183,77,0.2)" },
                                     }}
                                   >
                                     {uploading === entry.id ? (
-                                      <CircularProgress size={10} sx={{ color: "white" }} />
+                                      <CircularProgress size={18} />
                                     ) : (
-                                      <PhotoCameraIcon sx={{ fontSize: 12, color: "white" }} />
+                                      <PhotoCameraIcon sx={{ fontSize: 20, color: "warning.main" }} />
                                     )}
                                   </IconButton>
-                                  {/* Delete image badge */}
+                                </Tooltip>
+                              )}
+                              {/* Code image avatar */}
+                              {entry.codeImageUrl ? (
+                                <Tooltip title="Kodbild — klicka för att se, kameraikon för att ändra">
+                                  <Box sx={{ position: "relative", display: "inline-block" }}>
+                                    <Avatar
+                                      src={entry.codeImageUrl}
+                                      sx={{ width: 44, height: 44, cursor: "pointer", border: "2px solid rgba(255,255,255,0.15)" }}
+                                      onClick={() => setPreviewImageUrl(entry.codeImageUrl!)}
+                                    />
+                                    <IconButton
+                                      size="small"
+                                      onClick={() => handleLandCodeUploadClick(entry.id)}
+                                      disabled={uploading === entry.id}
+                                      sx={{
+                                        position: "absolute",
+                                        bottom: -4,
+                                        right: -4,
+                                        width: 22,
+                                        height: 22,
+                                        bgcolor: "primary.main",
+                                        border: "2px solid",
+                                        borderColor: "background.paper",
+                                        "&:hover": { bgcolor: "primary.dark" },
+                                      }}
+                                    >
+                                      {uploading === entry.id ? (
+                                        <CircularProgress size={10} sx={{ color: "white" }} />
+                                      ) : (
+                                        <PhotoCameraIcon sx={{ fontSize: 12, color: "white" }} />
+                                      )}
+                                    </IconButton>
+                                    <IconButton
+                                      size="small"
+                                      onClick={() => handleDeleteLandCodeImage(entry.id)}
+                                      disabled={uploading === entry.id}
+                                      sx={{
+                                        position: "absolute",
+                                        top: -4,
+                                        right: -4,
+                                        width: 18,
+                                        height: 18,
+                                        bgcolor: "error.main",
+                                        border: "2px solid",
+                                        borderColor: "background.paper",
+                                        "&:hover": { bgcolor: "error.dark" },
+                                      }}
+                                    >
+                                      <CloseIcon sx={{ fontSize: 10, color: "white" }} />
+                                    </IconButton>
+                                  </Box>
+                                </Tooltip>
+                              ) : (
+                                <Tooltip title="Ta en bild på uppställningskoden">
                                   <IconButton
-                                    size="small"
-                                    onClick={() => handleDeleteLandImage(entry.id)}
+                                    onClick={() => handleLandCodeUploadClick(entry.id)}
                                     disabled={uploading === entry.id}
                                     sx={{
-                                      position: "absolute",
-                                      top: -4,
-                                      right: -4,
-                                      width: 18,
-                                      height: 18,
-                                      bgcolor: "error.main",
-                                      border: "2px solid",
-                                      borderColor: "background.paper",
-                                      "&:hover": { bgcolor: "error.dark" },
+                                      width: 44,
+                                      height: 44,
+                                      bgcolor: "rgba(79,195,247,0.12)",
+                                      border: "2px dashed rgba(79,195,247,0.5)",
+                                      "&:hover": { bgcolor: "rgba(79,195,247,0.2)" },
                                     }}
                                   >
-                                    <CloseIcon sx={{ fontSize: 10, color: "white" }} />
+                                    {uploading === entry.id ? (
+                                      <CircularProgress size={18} />
+                                    ) : (
+                                      <PhotoCameraIcon sx={{ fontSize: 20, color: "info.main" }} />
+                                    )}
                                   </IconButton>
-                                </Box>
-                              </Tooltip>
-                            ) : (
-                              <Tooltip title="Ta en bild på ditt objekt">
-                                <IconButton
-                                  onClick={() => handleLandUploadClick(entry.id)}
-                                  disabled={uploading === entry.id}
-                                  sx={{
-                                    width: 44,
-                                    height: 44,
-                                    bgcolor: "rgba(255,183,77,0.12)",
-                                    border: "2px dashed rgba(255,183,77,0.5)",
-                                    "&:hover": { bgcolor: "rgba(255,183,77,0.2)" },
-                                  }}
-                                >
-                                  {uploading === entry.id ? (
-                                    <CircularProgress size={18} />
-                                  ) : (
-                                    <PhotoCameraIcon sx={{ fontSize: 20, color: "warning.main" }} />
-                                  )}
-                                </IconButton>
-                              </Tooltip>
-                            )}
+                                </Tooltip>
+                              )}
+                            </Box>
                           </TableCell>
                           <TableCell sx={{ fontWeight: 600, fontFamily: "monospace" }}>
                             {entry.code}
@@ -2561,6 +2708,7 @@ function DashboardContent() {
       <ImagePickerDialog open={boatPickerOpen} onClose={() => setBoatPickerOpen(false)} onChange={handleFileChange} />
       <ImagePickerDialog open={profilePickerOpen} onClose={() => setProfilePickerOpen(false)} onChange={handleProfilePictureChange} />
       <ImagePickerDialog open={landPickerOpen} onClose={() => setLandPickerOpen(false)} onChange={handleLandFileChange} />
+      <ImagePickerDialog open={landCodePickerOpen} onClose={() => setLandCodePickerOpen(false)} onChange={handleLandCodeFileChange} />
       {/* Second-hand tenant lookup dialog */}
       <Dialog
         open={!!lookupBerthId}
