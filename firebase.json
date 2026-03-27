@@ -26,12 +26,12 @@
     ],
     "rewrites": [
       {
-        "source": "/share/news/**",
-        "function": "newsOgTags"
+        "source": "/news",
+        "destination": "/news.html"
       },
       {
         "source": "/news/**",
-        "destination": "/news.html"
+        "function": "newsOgTags"
       },
       {
         "source": "**",
