@@ -177,15 +177,12 @@ export default function UpplagningPage() {
           <Box component="li" sx={{ mb: 0.5 }}>
             <Typography variant="body1" color="text.secondary" sx={{ lineHeight: 1.8 }}>
               Märk din båt eller trailer tydligt med detta nummer (t.ex. vid
-              stävöglan eller kulkopplingen) med <strong>vattenfast penna</strong>.
+              stävöglan eller kulkopplingen) med <strong>vattenfast penna</strong>. Tänk på att väder och vind sliter bort texten så säkerställ att den blir kvar, eller fyll i löpande.
             </Typography>
           </Box>
         </Box>
         <Alert severity="warning" sx={{ mt: 1 }}>
-          Båtar och trailers som saknar märkning betraktas som{" "}
-          <strong>övergivna</strong>, anmäls till polisen och kan komma att
-          forslas bort eller säljas. Inga objekt får under några omständigheter
-          förvaras på hamnens mark utan att vara märkt med en uppställningskod och betalas för omgående. Av erfarenhet vet vi att de lätt faller i glömska och blir kvar permanent.
+          OBS! Endast ett objekt per uppställningskod är tillåtet. Om du har flera objekt måste du skaffa en ny uppställningskod för varje objekt och kontaktar då Yann på 0733-619893.
         </Alert>
       </InfoCard>
 
@@ -230,7 +227,7 @@ export default function UpplagningPage() {
           <Box component="li" sx={{ mb: 0.5 }}>
             <Typography variant="body1" color="text.secondary" sx={{ lineHeight: 1.8 }}>
               Under <strong>Min markförvaring</strong> hittar du dina objekt.
-              Varje rad har <strong>två bildplatser</strong>: en för båten (vänster)
+              Varje rad har <strong>två bildplatser</strong>: en för båten eller trailern (vänster)
               och en för uppställningskoden (höger). Klicka på{" "}
               <CameraAltIcon sx={{ fontSize: 16, verticalAlign: "middle" }} />{" "}
               för att ladda upp respektive bild och på{" "}
