@@ -184,7 +184,8 @@ export default function UpplagningPage() {
         <Alert severity="warning" sx={{ mt: 1 }}>
           Båtar och trailers som saknar märkning betraktas som{" "}
           <strong>övergivna</strong>, anmäls till polisen och kan komma att
-          forslas bort eller säljas.
+          forslas bort eller säljas. Inga objekt får under några omständigheter
+          förvaras på hamnens mark utan att vara märkt med en uppställningskod och betalas för omgående. Av erfarenhet vet vi att de lätt faller i glömska och blir kvar permanent.
         </Alert>
       </InfoCard>
 
