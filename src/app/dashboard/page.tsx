@@ -2044,12 +2044,35 @@ function DashboardContent() {
                     upcomingSeasons.push({ period: "Winter", year: currentYear });
                   }
 
-                  const relevantSeasons = [...activeSeasons, ...upcomingSeasons];
+                  const baseSeasons = [...activeSeasons, ...upcomingSeasons];
 
                   return (
                     <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
                       {landEntries.map((entry) => {
                         const payments = landPayments[entry.code] || [];
+
+                        // Also include any future paid periods not already in baseSeasons
+                        const relevantSeasons = [...baseSeasons];
+                        for (const p of payments) {
+                          const alreadyListed = relevantSeasons.some(
+                            (s) => s.period === p.period && s.year === p.year
+                          );
+                          if (!alreadyListed) {
+                            // Only add if it's a future/current period (not historical)
+                            const isFuture =
+                              (p.period === "Summer" && (p.year > currentYear || (p.year === currentYear && month < 11))) ||
+                              (p.period === "Winter" && (p.year > currentYear || (p.year === currentYear && month < 6) || (p.year === currentYear - 1 && month < 6)));
+                            if (isFuture) {
+                              relevantSeasons.push({ period: p.period as "Summer" | "Winter", year: p.year });
+                            }
+                          }
+                        }
+                        // Sort seasons chronologically
+                        relevantSeasons.sort((a, b) => {
+                          const aKey = a.period === "Winter" ? a.year + 0.5 : a.year;
+                          const bKey = b.period === "Winter" ? b.year + 0.5 : b.year;
+                          return aKey - bKey;
+                        });
 
                         return (
                           <Box
