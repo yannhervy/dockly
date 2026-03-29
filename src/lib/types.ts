@@ -183,6 +183,24 @@ export interface LandStorageEntry {
   updatedAt?: Timestamp;
 }
 
+// ─── Resource Payments ────────────────────────────────────
+// Generic payment entity — reusable across land storage, sea huts, boxes, berths.
+// Stored as subcollection: landStorage/{code}/payments/{id}
+export type PaymentPeriod = "Summer" | "Winter" | "Year";
+export type PaymentResourceType = "landStorage" | "seaHut" | "box" | "berth";
+
+export interface ResourcePayment {
+  id: string;
+  resourceType: PaymentResourceType;
+  resourceId: string;        // e.g. land storage code "5643"
+  year: number;              // the year the season STARTS (Winter 2025 = Sep 2025 – Jun 2026)
+  period: PaymentPeriod;     // "Summer", "Winter", or "Year" (for annual resources)
+  amount?: number;           // optional amount in SEK
+  paidAt: Timestamp;         // when the payment was registered
+  registeredBy: string;      // admin userId who registered
+  note?: string;             // optional note
+}
+
 export interface LandStorage extends Resource {
   type: "LandStorage";
   season: LandStorageSeason;

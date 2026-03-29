@@ -6,15 +6,20 @@ import useMediaQuery from "@mui/material/useMediaQuery";
 import { useAuth } from "@/context/AuthContext";
 import { db } from "@/lib/firebase";
 import { uploadLandStorageImage } from "@/lib/storage";
-import { LandStorageEntry, User, InternalComment } from "@/lib/types";
+import { LandStorageEntry, User, InternalComment, ResourcePayment, PaymentPeriod } from "@/lib/types";
 import InternalCommentsPanel from "@/components/InternalCommentsPanel";
 import {
   collection,
   getDocs,
   doc,
   updateDoc,
+  addDoc,
+  deleteDoc,
   Timestamp,
 } from "firebase/firestore";
+import PaymentIcon from "@mui/icons-material/Payment";
+import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
+import AddIcon from "@mui/icons-material/Add";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
@@ -73,7 +78,7 @@ export default function LandStoragePage() {
 type FilterStatus = "all" | "Available" | "Occupied";
 
 function LandStorageContent() {
-  const { isSuperadmin, isDockManager } = useAuth();
+  const { isSuperadmin, isDockManager, firebaseUser } = useAuth();
   const canEdit = isSuperadmin || isDockManager;
   const isTouchDevice = useMediaQuery("(pointer: coarse)");
 
@@ -99,6 +104,15 @@ function LandStorageContent() {
   const [editImageUrl, setEditImageUrl] = useState<string | undefined>(undefined);
   const [editImageFile, setEditImageFile] = useState<File | null>(null);
   const [imagePickerOpen, setImagePickerOpen] = useState(false);
+
+  // Payment state
+  const [editPayments, setEditPayments] = useState<ResourcePayment[]>([]);
+  const [paymentYear, setPaymentYear] = useState<number>(new Date().getFullYear());
+  const [paymentPeriod, setPaymentPeriod] = useState<PaymentPeriod>("Summer");
+  const [paymentAmount, setPaymentAmount] = useState<string>("");
+  const [paymentNote, setPaymentNote] = useState("");
+  const [paymentSaving, setPaymentSaving] = useState(false);
+  const [showPaymentForm, setShowPaymentForm] = useState(false);
 
   // Fetch all land storage entries
   useEffect(() => {
@@ -171,6 +185,20 @@ function LandStorageContent() {
     setEditLng(entry.lng);
     setEditImageUrl(entry.imageUrl);
     setEditImageFile(null);
+    setShowPaymentForm(false);
+    setPaymentNote("");
+    setPaymentAmount("");
+
+    // Fetch payments subcollection
+    try {
+      const paySnap = await getDocs(collection(db, "landStorage", entry.code, "payments"));
+      const payments = paySnap.docs.map((d) => ({ id: d.id, ...d.data() }) as ResourcePayment);
+      payments.sort((a, b) => (b.year - a.year) || (a.period === "Winter" ? -1 : 1));
+      setEditPayments(payments);
+    } catch (err) {
+      console.error("Error fetching payments:", err);
+      setEditPayments([]);
+    }
 
     // Fetch users list if not loaded yet
     if (allUsers.length === 0) {
@@ -808,6 +836,199 @@ function LandStorageContent() {
               >
                 Clear
               </Button>
+            )}
+          </Box>
+
+          {/* ─── Payments section ─── */}
+          <Box sx={{ mt: 3 }}>
+            <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 1 }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 700, display: "flex", alignItems: "center", gap: 0.5 }}>
+                <PaymentIcon sx={{ fontSize: 18 }} />
+                Betalningar ({editPayments.length})
+              </Typography>
+              {!showPaymentForm && (
+                <Button size="small" startIcon={<AddIcon />} onClick={() => setShowPaymentForm(true)}>
+                  Registrera betalning
+                </Button>
+              )}
+            </Box>
+
+            {/* Existing payments */}
+            {editPayments.length > 0 && (
+              <Box sx={{ display: "flex", flexDirection: "column", gap: 0.5, mb: 1.5 }}>
+                {editPayments.map((p) => (
+                  <Box
+                    key={p.id}
+                    sx={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      p: 1,
+                      borderRadius: 1,
+                      bgcolor: "rgba(79, 195, 247, 0.04)",
+                      border: "1px solid rgba(79, 195, 247, 0.08)",
+                    }}
+                  >
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                      <Chip
+                        label={`${p.period === "Winter" ? "Vinter" : p.period === "Summer" ? "Sommar" : "Helår"} ${p.year}`}
+                        size="small"
+                        color={p.period === "Winter" ? "info" : "success"}
+                        variant="outlined"
+                      />
+                      {p.amount && (
+                        <Typography variant="body2" color="text.secondary">
+                          {p.amount} kr
+                        </Typography>
+                      )}
+                      {p.note && (
+                        <Typography variant="caption" color="text.secondary" sx={{ fontStyle: "italic" }}>
+                          {p.note}
+                        </Typography>
+                      )}
+                    </Box>
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                      <Typography variant="caption" color="text.secondary">
+                        {p.paidAt?.toDate?.()?.toLocaleDateString("sv-SE") || ""}
+                      </Typography>
+                      <IconButton
+                        size="small"
+                        color="error"
+                        onClick={async () => {
+                          if (!editEntry) return;
+                          try {
+                            await deleteDoc(doc(db, "landStorage", editEntry.code, "payments", p.id));
+                            setEditPayments((prev) => prev.filter((x) => x.id !== p.id));
+                            setSuccessMsg("Betalning borttagen.");
+                            setTimeout(() => setSuccessMsg(""), 3000);
+                          } catch (err) {
+                            console.error("Error deleting payment:", err);
+                          }
+                        }}
+                      >
+                        <DeleteOutlineIcon fontSize="small" />
+                      </IconButton>
+                    </Box>
+                  </Box>
+                ))}
+              </Box>
+            )}
+
+            {editPayments.length === 0 && !showPaymentForm && (
+              <Typography variant="caption" color="text.secondary" sx={{ fontStyle: "italic", display: "block", mb: 1 }}>
+                Inga betalningar registrerade
+              </Typography>
+            )}
+
+            {/* Register payment form */}
+            {showPaymentForm && (
+              <Box sx={{ p: 2, borderRadius: 1, bgcolor: "rgba(79, 195, 247, 0.04)", border: "1px solid rgba(79, 195, 247, 0.12)", mb: 1 }}>
+                <Alert severity="info" sx={{ mb: 2, fontSize: "0.8rem" }}>
+                  Vintersäsongen löper över nyår: <strong>Vinter 2025</strong> = 1 sep 2025 – 1 jun 2026. Året avser när säsongen <em>startar</em>.
+                </Alert>
+                <Grid container spacing={1.5}>
+                  <Grid size={{ xs: 6 }}>
+                    <TextField
+                      select
+                      fullWidth
+                      size="small"
+                      label="År"
+                      value={paymentYear}
+                      onChange={(e) => setPaymentYear(Number(e.target.value))}
+                      slotProps={{ select: { native: true } }}
+                    >
+                      {Array.from({ length: new Date().getFullYear() - 2022 + 2 }, (_, i) => 2022 + i).map((y) => (
+                        <option key={y} value={y}>{y}</option>
+                      ))}
+                    </TextField>
+                  </Grid>
+                  <Grid size={{ xs: 6 }}>
+                    <TextField
+                      select
+                      fullWidth
+                      size="small"
+                      label="Period"
+                      value={paymentPeriod}
+                      onChange={(e) => setPaymentPeriod(e.target.value as PaymentPeriod)}
+                      slotProps={{ select: { native: true } }}
+                    >
+                      <option value="Summer">Sommar</option>
+                      <option value="Winter">Vinter</option>
+                    </TextField>
+                  </Grid>
+                  <Grid size={{ xs: 6 }}>
+                    <TextField
+                      fullWidth
+                      size="small"
+                      label="Belopp (valfritt)"
+                      type="number"
+                      value={paymentAmount}
+                      onChange={(e) => setPaymentAmount(e.target.value)}
+                      slotProps={{ htmlInput: { min: 0 } }}
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 6 }}>
+                    <TextField
+                      fullWidth
+                      size="small"
+                      label="Notering (valfritt)"
+                      value={paymentNote}
+                      onChange={(e) => setPaymentNote(e.target.value)}
+                    />
+                  </Grid>
+                </Grid>
+
+                {/* Duplicate warning */}
+                {editPayments.some((p) => p.year === paymentYear && p.period === paymentPeriod) && (
+                  <Alert severity="warning" sx={{ mt: 1.5, fontSize: "0.8rem" }}>
+                    Det finns redan en betalning för {paymentPeriod === "Winter" ? "Vinter" : "Sommar"} {paymentYear}.
+                  </Alert>
+                )}
+
+                <Box sx={{ display: "flex", gap: 1, mt: 1.5, justifyContent: "flex-end" }}>
+                  <Button size="small" onClick={() => setShowPaymentForm(false)}>Avbryt</Button>
+                  <Button
+                    size="small"
+                    variant="contained"
+                    disabled={paymentSaving}
+                    onClick={async () => {
+                      if (!editEntry) return;
+                      setPaymentSaving(true);
+                      try {
+                        const paymentData = {
+                          resourceType: "landStorage" as const,
+                          resourceId: editEntry.code,
+                          year: paymentYear,
+                          period: paymentPeriod,
+                          amount: paymentAmount ? Number(paymentAmount) : null,
+                          paidAt: Timestamp.now(),
+                          registeredBy: firebaseUser?.uid || "unknown",
+                          note: paymentNote.trim() || null,
+                        };
+                        const docRef = await addDoc(
+                          collection(db, "landStorage", editEntry.code, "payments"),
+                          paymentData
+                        );
+                        setEditPayments((prev) => [
+                          { id: docRef.id, ...paymentData } as unknown as ResourcePayment,
+                          ...prev,
+                        ]);
+                        setShowPaymentForm(false);
+                        setPaymentNote("");
+                        setPaymentAmount("");
+                        setSuccessMsg(`Betalning registrerad: ${paymentPeriod === "Winter" ? "Vinter" : "Sommar"} ${paymentYear}`);
+                        setTimeout(() => setSuccessMsg(""), 4000);
+                      } catch (err) {
+                        console.error("Error saving payment:", err);
+                      } finally {
+                        setPaymentSaving(false);
+                      }
+                    }}
+                  >
+                    {paymentSaving ? "Sparar..." : "Registrera"}
+                  </Button>
+                </Box>
+              </Box>
             )}
           </Box>
 

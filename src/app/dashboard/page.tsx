@@ -5,7 +5,7 @@ import { useAuth } from "@/context/AuthContext";
 import { db, auth } from "@/lib/firebase";
 import { deleteUser as firebaseDeleteUser, reauthenticateWithCredential, EmailAuthProvider, updatePassword } from "firebase/auth";
 import { uploadBoatImage, uploadProfileImage, uploadLandStorageImage, deleteStorageFile } from "@/lib/storage";
-import { Resource, Berth, Dock, LandStorageEntry, UserMessage, User, EngagementType, BerthInterest, InterestReply, OfferedBerth, MarketplaceListing, ListingCategory } from "@/lib/types";
+import { Resource, Berth, Dock, LandStorageEntry, UserMessage, User, EngagementType, BerthInterest, InterestReply, OfferedBerth, MarketplaceListing, ListingCategory, ResourcePayment } from "@/lib/types";
 import { normalizePhone } from "@/lib/phoneUtils";
 import { sendSms } from "@/lib/sms";
 import { APIProvider, Map as GMap, AdvancedMarker, useMap, useMapsLibrary } from "@vis.gl/react-google-maps";
@@ -252,6 +252,7 @@ function DashboardContent() {
   const [resources, setResources] = useState<Resource[]>([]);
   const [subletResourceIds, setSubletResourceIds] = useState<Set<string>>(new Set());
   const [landEntries, setLandEntries] = useState<LandStorageEntry[]>([]);
+  const [landPayments, setLandPayments] = useState<Record<string, ResourcePayment[]>>({});
   const [messages, setMessages] = useState<UserMessage[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState<string | null>(null);
@@ -663,11 +664,26 @@ function DashboardContent() {
           where("occupantId", "==", uid)
         )
       );
-      setLandEntries(
-        myLandSnap.docs.map(
-          (d) => ({ id: d.id, ...d.data() }) as LandStorageEntry
-        )
+      const myLand = myLandSnap.docs.map(
+        (d) => ({ id: d.id, ...d.data() }) as LandStorageEntry
       );
+      setLandEntries(myLand);
+
+      // Fetch payments for each land entry
+      const paymentsMap: Record<string, ResourcePayment[]> = {};
+      await Promise.all(
+        myLand.map(async (entry) => {
+          try {
+            const paySnap = await getDocs(collection(db, "landStorage", entry.code, "payments"));
+            paymentsMap[entry.code] = paySnap.docs.map(
+              (d) => ({ id: d.id, ...d.data() }) as ResourcePayment
+            );
+          } catch {
+            paymentsMap[entry.code] = [];
+          }
+        })
+      );
+      setLandPayments(paymentsMap);
 
       // ── 3. Fetch unread messages ──
       const msgSnap = await getDocs(
@@ -2001,205 +2017,267 @@ function DashboardContent() {
                   </Button>
                 )}
 
-                {landEntries.length > 0 && (
-                <TableContainer
-                  component={Paper}
-                  sx={{ bgcolor: "transparent", backgroundImage: "none" }}
-                >
-                  <Table>
-                    <TableHead>
-                      <TableRow>
-                        <TableCell sx={{ width: 100, p: 1 }}></TableCell>
-                        <TableCell>Kod</TableCell>
-                        <TableCell>Status</TableCell>
-                        <TableCell>Säsong</TableCell>
-                        <TableCell>Betalning</TableCell>
-                        <TableCell>GPS</TableCell>
-                        <TableCell>Kommentar</TableCell>
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {landEntries.map((entry) => (
-                        <TableRow key={entry.id}>
-                          {/* Two avatar images — boat + code */}
-                          <TableCell sx={{ width: 100, p: 1 }}>
-                            <Box sx={{ display: "flex", gap: 0.5, alignItems: "center" }}>
-                              {/* Boat image avatar */}
-                              {entry.imageUrl ? (
-                                <Tooltip title="Båtbild — klicka för att se, kameraikon för att ändra">
-                                  <Box sx={{ position: "relative", display: "inline-block" }}>
-                                    <Avatar
-                                      src={entry.imageUrl}
-                                      sx={{ width: 44, height: 44, cursor: "pointer", border: "2px solid rgba(255,255,255,0.15)" }}
-                                      onClick={() => setPreviewImageUrl(entry.imageUrl!)}
-                                    />
+                {landEntries.length > 0 && (() => {
+                  // Season helpers: Summer = Apr 1 – Nov 1, Winter = Sep 1 – Jun 1
+                  const now = new Date();
+                  const currentYear = now.getFullYear();
+                  const month = now.getMonth() + 1; // 1-based
+
+                  // Current active seasons
+                  const activeSeasons: { period: "Summer" | "Winter"; year: number }[] = [];
+                  // Summer {year}: Apr 1 {year} – Nov 1 {year}
+                  if (month >= 4 && month < 11) {
+                    activeSeasons.push({ period: "Summer", year: currentYear });
+                  }
+                  // Winter {year}: Sep 1 {year} – Jun 1 {year+1}
+                  if (month >= 9) {
+                    activeSeasons.push({ period: "Winter", year: currentYear });
+                  } else if (month < 6) {
+                    activeSeasons.push({ period: "Winter", year: currentYear - 1 });
+                  }
+                  // Upcoming next season (not yet active)
+                  const upcomingSeasons: { period: "Summer" | "Winter"; year: number }[] = [];
+                  if (month < 4) {
+                    upcomingSeasons.push({ period: "Summer", year: currentYear });
+                  }
+                  if (month >= 6 && month < 9) {
+                    upcomingSeasons.push({ period: "Winter", year: currentYear });
+                  }
+
+                  const relevantSeasons = [...activeSeasons, ...upcomingSeasons];
+
+                  return (
+                    <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                      {landEntries.map((entry) => {
+                        const payments = landPayments[entry.code] || [];
+
+                        return (
+                          <Box
+                            key={entry.id}
+                            sx={{
+                              p: 2,
+                              borderRadius: 2,
+                              border: "1px solid rgba(79,195,247,0.10)",
+                              bgcolor: "rgba(13, 33, 55, 0.3)",
+                            }}
+                          >
+                            {/* Row 1: Images + Code + Status */}
+                            <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, mb: 1.5, flexWrap: "wrap" }}>
+                              {/* Two avatar images — boat + code */}
+                              <Box sx={{ display: "flex", gap: 0.5, alignItems: "center" }}>
+                                {/* Boat image avatar */}
+                                {entry.imageUrl ? (
+                                  <Tooltip title="Båtbild — klicka för att se, kameraikon för att ändra">
+                                    <Box sx={{ position: "relative", display: "inline-block" }}>
+                                      <Avatar
+                                        src={entry.imageUrl}
+                                        sx={{ width: 44, height: 44, cursor: "pointer", border: "2px solid rgba(255,255,255,0.15)" }}
+                                        onClick={() => setPreviewImageUrl(entry.imageUrl!)}
+                                      />
+                                      <IconButton
+                                        size="small"
+                                        onClick={() => handleLandUploadClick(entry.id)}
+                                        disabled={uploading === entry.id}
+                                        sx={{
+                                          position: "absolute",
+                                          bottom: -4,
+                                          right: -4,
+                                          width: 22,
+                                          height: 22,
+                                          bgcolor: "primary.main",
+                                          border: "2px solid",
+                                          borderColor: "background.paper",
+                                          "&:hover": { bgcolor: "primary.dark" },
+                                        }}
+                                      >
+                                        {uploading === entry.id ? (
+                                          <CircularProgress size={10} sx={{ color: "white" }} />
+                                        ) : (
+                                          <PhotoCameraIcon sx={{ fontSize: 12, color: "white" }} />
+                                        )}
+                                      </IconButton>
+                                      <IconButton
+                                        size="small"
+                                        onClick={() => handleDeleteLandImage(entry.id)}
+                                        disabled={uploading === entry.id}
+                                        sx={{
+                                          position: "absolute",
+                                          top: -4,
+                                          right: -4,
+                                          width: 18,
+                                          height: 18,
+                                          bgcolor: "error.main",
+                                          border: "2px solid",
+                                          borderColor: "background.paper",
+                                          "&:hover": { bgcolor: "error.dark" },
+                                        }}
+                                      >
+                                        <CloseIcon sx={{ fontSize: 10, color: "white" }} />
+                                      </IconButton>
+                                    </Box>
+                                  </Tooltip>
+                                ) : (
+                                  <Tooltip title="Ta en bild på din båt/trailer">
                                     <IconButton
-                                      size="small"
                                       onClick={() => handleLandUploadClick(entry.id)}
                                       disabled={uploading === entry.id}
                                       sx={{
-                                        position: "absolute",
-                                        bottom: -4,
-                                        right: -4,
-                                        width: 22,
-                                        height: 22,
-                                        bgcolor: "primary.main",
-                                        border: "2px solid",
-                                        borderColor: "background.paper",
-                                        "&:hover": { bgcolor: "primary.dark" },
+                                        width: 44,
+                                        height: 44,
+                                        bgcolor: "rgba(255,183,77,0.12)",
+                                        border: "2px dashed rgba(255,183,77,0.5)",
+                                        "&:hover": { bgcolor: "rgba(255,183,77,0.2)" },
                                       }}
                                     >
                                       {uploading === entry.id ? (
-                                        <CircularProgress size={10} sx={{ color: "white" }} />
+                                        <CircularProgress size={18} />
                                       ) : (
-                                        <PhotoCameraIcon sx={{ fontSize: 12, color: "white" }} />
+                                        <PhotoCameraIcon sx={{ fontSize: 20, color: "warning.main" }} />
                                       )}
                                     </IconButton>
+                                  </Tooltip>
+                                )}
+                                {/* Code image avatar */}
+                                {entry.codeImageUrl ? (
+                                  <Tooltip title="Kodbild — klicka för att se, kameraikon för att ändra">
+                                    <Box sx={{ position: "relative", display: "inline-block" }}>
+                                      <Avatar
+                                        src={entry.codeImageUrl}
+                                        sx={{ width: 44, height: 44, cursor: "pointer", border: "2px solid rgba(255,255,255,0.15)" }}
+                                        onClick={() => setPreviewImageUrl(entry.codeImageUrl!)}
+                                      />
+                                      <IconButton
+                                        size="small"
+                                        onClick={() => handleLandCodeUploadClick(entry.id)}
+                                        disabled={uploading === entry.id}
+                                        sx={{
+                                          position: "absolute",
+                                          bottom: -4,
+                                          right: -4,
+                                          width: 22,
+                                          height: 22,
+                                          bgcolor: "primary.main",
+                                          border: "2px solid",
+                                          borderColor: "background.paper",
+                                          "&:hover": { bgcolor: "primary.dark" },
+                                        }}
+                                      >
+                                        {uploading === entry.id ? (
+                                          <CircularProgress size={10} sx={{ color: "white" }} />
+                                        ) : (
+                                          <PhotoCameraIcon sx={{ fontSize: 12, color: "white" }} />
+                                        )}
+                                      </IconButton>
+                                      <IconButton
+                                        size="small"
+                                        onClick={() => handleDeleteLandCodeImage(entry.id)}
+                                        disabled={uploading === entry.id}
+                                        sx={{
+                                          position: "absolute",
+                                          top: -4,
+                                          right: -4,
+                                          width: 18,
+                                          height: 18,
+                                          bgcolor: "error.main",
+                                          border: "2px solid",
+                                          borderColor: "background.paper",
+                                          "&:hover": { bgcolor: "error.dark" },
+                                        }}
+                                      >
+                                        <CloseIcon sx={{ fontSize: 10, color: "white" }} />
+                                      </IconButton>
+                                    </Box>
+                                  </Tooltip>
+                                ) : (
+                                  <Tooltip title="Ta en bild på uppställningskoden">
                                     <IconButton
-                                      size="small"
-                                      onClick={() => handleDeleteLandImage(entry.id)}
-                                      disabled={uploading === entry.id}
-                                      sx={{
-                                        position: "absolute",
-                                        top: -4,
-                                        right: -4,
-                                        width: 18,
-                                        height: 18,
-                                        bgcolor: "error.main",
-                                        border: "2px solid",
-                                        borderColor: "background.paper",
-                                        "&:hover": { bgcolor: "error.dark" },
-                                      }}
-                                    >
-                                      <CloseIcon sx={{ fontSize: 10, color: "white" }} />
-                                    </IconButton>
-                                  </Box>
-                                </Tooltip>
-                              ) : (
-                                <Tooltip title="Ta en bild på din båt/trailer">
-                                  <IconButton
-                                    onClick={() => handleLandUploadClick(entry.id)}
-                                    disabled={uploading === entry.id}
-                                    sx={{
-                                      width: 44,
-                                      height: 44,
-                                      bgcolor: "rgba(255,183,77,0.12)",
-                                      border: "2px dashed rgba(255,183,77,0.5)",
-                                      "&:hover": { bgcolor: "rgba(255,183,77,0.2)" },
-                                    }}
-                                  >
-                                    {uploading === entry.id ? (
-                                      <CircularProgress size={18} />
-                                    ) : (
-                                      <PhotoCameraIcon sx={{ fontSize: 20, color: "warning.main" }} />
-                                    )}
-                                  </IconButton>
-                                </Tooltip>
-                              )}
-                              {/* Code image avatar */}
-                              {entry.codeImageUrl ? (
-                                <Tooltip title="Kodbild — klicka för att se, kameraikon för att ändra">
-                                  <Box sx={{ position: "relative", display: "inline-block" }}>
-                                    <Avatar
-                                      src={entry.codeImageUrl}
-                                      sx={{ width: 44, height: 44, cursor: "pointer", border: "2px solid rgba(255,255,255,0.15)" }}
-                                      onClick={() => setPreviewImageUrl(entry.codeImageUrl!)}
-                                    />
-                                    <IconButton
-                                      size="small"
                                       onClick={() => handleLandCodeUploadClick(entry.id)}
                                       disabled={uploading === entry.id}
                                       sx={{
-                                        position: "absolute",
-                                        bottom: -4,
-                                        right: -4,
-                                        width: 22,
-                                        height: 22,
-                                        bgcolor: "primary.main",
-                                        border: "2px solid",
-                                        borderColor: "background.paper",
-                                        "&:hover": { bgcolor: "primary.dark" },
+                                        width: 44,
+                                        height: 44,
+                                        bgcolor: "rgba(79,195,247,0.12)",
+                                        border: "2px dashed rgba(79,195,247,0.5)",
+                                        "&:hover": { bgcolor: "rgba(79,195,247,0.2)" },
                                       }}
                                     >
                                       {uploading === entry.id ? (
-                                        <CircularProgress size={10} sx={{ color: "white" }} />
+                                        <CircularProgress size={18} />
                                       ) : (
-                                        <PhotoCameraIcon sx={{ fontSize: 12, color: "white" }} />
+                                        <PhotoCameraIcon sx={{ fontSize: 20, color: "info.main" }} />
                                       )}
                                     </IconButton>
+                                  </Tooltip>
+                                )}
+                              </Box>
+
+                              {/* Code */}
+                              <Typography variant="h6" sx={{ fontWeight: 700, fontFamily: "monospace", letterSpacing: 1 }}>
+                                {entry.code}
+                              </Typography>
+
+                              {/* Status chip */}
+                              <Chip
+                                label={entry.lat && entry.lng ? "Aktiv" : "Inaktiv"}
+                                size="small"
+                                color={entry.lat && entry.lng ? "success" : "default"}
+                                variant={entry.lat && entry.lng ? "filled" : "outlined"}
+                                sx={{ fontWeight: 700 }}
+                              />
+
+                              {/* GPS */}
+                              {entry.lat && entry.lng ? (
+                                <Box sx={{ display: "flex", alignItems: "center" }}>
+                                  <Tooltip title="GPS-position angiven — klicka för att redigera">
                                     <IconButton
                                       size="small"
-                                      onClick={() => handleDeleteLandCodeImage(entry.id)}
-                                      disabled={uploading === entry.id}
-                                      sx={{
-                                        position: "absolute",
-                                        top: -4,
-                                        right: -4,
-                                        width: 18,
-                                        height: 18,
-                                        bgcolor: "error.main",
-                                        border: "2px solid",
-                                        borderColor: "background.paper",
-                                        "&:hover": { bgcolor: "error.dark" },
+                                      onClick={() => {
+                                        setGpsEditLandEntry(entry);
+                                        setGpsLandLat(entry.lat);
+                                        setGpsLandLng(entry.lng);
                                       }}
+                                      sx={{ color: "success.main" }}
                                     >
-                                      <CloseIcon sx={{ fontSize: 10, color: "white" }} />
+                                      <PlaceIcon fontSize="small" />
                                     </IconButton>
-                                  </Box>
-                                </Tooltip>
+                                  </Tooltip>
+                                  <Tooltip title="Ta bort GPS-position">
+                                    <IconButton
+                                      size="small"
+                                      onClick={async () => {
+                                        setConfirmDialog({
+                                          title: "Ta bort GPS-position",
+                                          message: "Genom att ta bort din GPS-position bekräftar du att du inte längre har något uppställt på hamnens mark.",
+                                          onConfirm: async () => {
+                                            setConfirmDialog(null);
+                                            try {
+                                              await updateDoc(doc(db, "landStorage", entry.id), {
+                                                lat: deleteField(),
+                                                lng: deleteField(),
+                                              });
+                                              setLandEntries((prev) =>
+                                                prev.map((x) =>
+                                                  x.id === entry.id
+                                                    ? { ...x, lat: undefined, lng: undefined }
+                                                    : x
+                                                )
+                                              );
+                                              setSuccessMsg("GPS-position borttagen!");
+                                              setTimeout(() => setSuccessMsg(""), 3000);
+                                            } catch (err) {
+                                              console.error("Error deleting GPS:", err);
+                                            }
+                                          },
+                                        });
+                                      }}
+                                      sx={{ color: "error.main", ml: -0.5 }}
+                                    >
+                                      <CloseIcon sx={{ fontSize: 16 }} />
+                                    </IconButton>
+                                  </Tooltip>
+                                </Box>
                               ) : (
-                                <Tooltip title="Ta en bild på uppställningskoden">
-                                  <IconButton
-                                    onClick={() => handleLandCodeUploadClick(entry.id)}
-                                    disabled={uploading === entry.id}
-                                    sx={{
-                                      width: 44,
-                                      height: 44,
-                                      bgcolor: "rgba(79,195,247,0.12)",
-                                      border: "2px dashed rgba(79,195,247,0.5)",
-                                      "&:hover": { bgcolor: "rgba(79,195,247,0.2)" },
-                                    }}
-                                  >
-                                    {uploading === entry.id ? (
-                                      <CircularProgress size={18} />
-                                    ) : (
-                                      <PhotoCameraIcon sx={{ fontSize: 20, color: "info.main" }} />
-                                    )}
-                                  </IconButton>
-                                </Tooltip>
-                              )}
-                            </Box>
-                          </TableCell>
-                          <TableCell sx={{ fontWeight: 600, fontFamily: "monospace" }}>
-                            {entry.code}
-                          </TableCell>
-                          <TableCell>
-                            <Chip
-                              label={entry.lat && entry.lng ? "Aktiv" : "Inaktiv"}
-                              size="small"
-                              color={entry.lat && entry.lng ? "success" : "default"}
-                              variant={entry.lat && entry.lng ? "filled" : "outlined"}
-                              sx={{ fontWeight: 700 }}
-                            />
-                          </TableCell>
-                          <TableCell>
-                            <Chip
-                              label={entry.season || "—"}
-                              size="small"
-                              variant="outlined"
-                            />
-                          </TableCell>
-                          <TableCell>
-                            <Chip
-                              label={entry.paymentStatus}
-                              size="small"
-                              color={entry.paymentStatus === "Paid" ? "success" : "error"}
-                            />
-                          </TableCell>
-                          <TableCell>
-                            {entry.lat && entry.lng ? (
-                              <Box sx={{ display: "flex", alignItems: "center" }}>
-                                <Tooltip title="GPS-position angiven — klicka för att redigera">
+                                <Tooltip title="GPS-position saknas — klicka för att ange">
                                   <IconButton
                                     size="small"
                                     onClick={() => {
@@ -2207,72 +2285,46 @@ function DashboardContent() {
                                       setGpsLandLat(entry.lat);
                                       setGpsLandLng(entry.lng);
                                     }}
-                                    sx={{ color: "success.main" }}
+                                    sx={{ color: "warning.main" }}
                                   >
-                                    <PlaceIcon fontSize="small" />
+                                    <WarningAmberIcon fontSize="small" />
                                   </IconButton>
                                 </Tooltip>
-                                <Tooltip title="Ta bort GPS-position">
-                                  <IconButton
+                              )}
+                            </Box>
+
+                            {/* Row 2: Payment period chips */}
+                            <Box sx={{ display: "flex", gap: 0.5, flexWrap: "wrap", mb: entry.comment ? 1 : 0 }}>
+                              {relevantSeasons.map((s) => {
+                                const isPaid = payments.some(
+                                  (p) => p.year === s.year && p.period === s.period
+                                );
+                                const label = `${s.period === "Winter" ? "Vinter" : "Sommar"} ${s.year}`;
+                                return (
+                                  <Chip
+                                    key={`${s.period}-${s.year}`}
+                                    label={isPaid ? `✓ ${label}` : label}
                                     size="small"
-                                    onClick={async () => {
-                                      setConfirmDialog({
-                                        title: "Ta bort GPS-position",
-                                        message: "Genom att ta bort din GPS-position bekräftar du att du inte längre har något uppställt på hamnens mark.",
-                                        onConfirm: async () => {
-                                          setConfirmDialog(null);
-                                          try {
-                                        await updateDoc(doc(db, "landStorage", entry.id), {
-                                          lat: deleteField(),
-                                          lng: deleteField(),
-                                        });
-                                        setLandEntries((prev) =>
-                                          prev.map((x) =>
-                                            x.id === entry.id
-                                              ? { ...x, lat: undefined, lng: undefined }
-                                              : x
-                                          )
-                                        );
-                                        setSuccessMsg("GPS-position borttagen!");
-                                        setTimeout(() => setSuccessMsg(""), 3000);
-                                          } catch (err) {
-                                            console.error("Error deleting GPS:", err);
-                                          }
-                                        },
-                                      });
-                                    }}
-                                    sx={{ color: "error.main", ml: -0.5 }}
-                                  >
-                                    <CloseIcon sx={{ fontSize: 16 }} />
-                                  </IconButton>
-                                </Tooltip>
-                              </Box>
-                            ) : (
-                              <Tooltip title="GPS-position saknas — klicka för att ange">
-                                <IconButton
-                                  size="small"
-                                  onClick={() => {
-                                    setGpsEditLandEntry(entry);
-                                    setGpsLandLat(entry.lat);
-                                    setGpsLandLng(entry.lng);
-                                  }}
-                                  sx={{ color: "warning.main" }}
-                                >
-                                  <WarningAmberIcon fontSize="small" />
-                                </IconButton>
-                              </Tooltip>
+                                    color={isPaid ? "success" : "error"}
+                                    variant={isPaid ? "filled" : "outlined"}
+                                    sx={{ fontWeight: 600, fontSize: "0.75rem" }}
+                                  />
+                                );
+                              })}
+                            </Box>
+
+                            {/* Row 3: Comment if any */}
+                            {entry.comment && (
+                              <Typography variant="caption" color="text.secondary">
+                                {entry.comment}
+                              </Typography>
                             )}
-                          </TableCell>
-                          {/* Bild column removed — image is now shown as avatar in leftmost column */}
-                          <TableCell>
-                            {entry.comment || "—"}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </TableContainer>
-                )}
+                          </Box>
+                        );
+                      })}
+                    </Box>
+                  );
+                })()}
 
                 {/* Swish payment panel — shown when user has a land storage code */}
                 {landEntries.length > 0 && (
