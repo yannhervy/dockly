@@ -958,11 +958,13 @@ export const verifyPhoneCode = onRequest(
 
 // ─── OG tags for shared news links ───────────────────────────
 // Serves minimal HTML with Open Graph meta tags for social media crawlers.
-// Humans are redirected to the real SPA page via <meta http-equiv="refresh">.
+// For regular browsers, serves the SPA page directly to avoid redirect loops.
+const CRAWLER_UA_PATTERN = /bot|crawl|spider|facebookexternalhit|Facebot|Twitterbot|LinkedInBot|Slackbot|WhatsApp|TelegramBot|Discordbot|Googlebot|Bingbot|Baiduspider|Yandex|DuckDuckBot|Embedly|Quora Link Preview|Showyoubot|outbrain|pinterest|vkShare|W3C_Validator|Screaming Frog/i;
+
 export const newsOgTags = onRequest(
   { region: "europe-west1", cors: true },
   async (req, res) => {
-    // Extract slug from path: /share/news/{slug} or just /{slug}
+    // Extract slug from path: /news/{slug}
     const pathParts = req.path.replace(/^\/+/, "").split("/");
     const slug = pathParts[pathParts.length - 1];
 
@@ -971,6 +973,29 @@ export const newsOgTags = onRequest(
       return;
     }
 
+    const userAgent = req.headers["user-agent"] || "";
+    const isCrawler = CRAWLER_UA_PATTERN.test(userAgent);
+
+    // For regular browsers, serve the SPA page directly (avoids redirect loop)
+    if (!isCrawler) {
+      try {
+        const spaResponse = await fetch("https://stegerholmenshamn.se/news.html");
+        if (spaResponse.ok) {
+          const html = await spaResponse.text();
+          res.set("Content-Type", "text/html; charset=UTF-8");
+          res.set("Cache-Control", "public, max-age=300");
+          res.send(html);
+          return;
+        }
+      } catch (err) {
+        console.error("Failed to fetch SPA page:", err);
+      }
+      // Fallback: redirect with a hash fragment (won't re-trigger rewrite)
+      res.redirect(`https://stegerholmenshamn.se/news#${slug}`);
+      return;
+    }
+
+    // Crawler: serve OG meta tags
     const db = admin.firestore();
 
     try {
@@ -1013,11 +1038,10 @@ export const newsOgTags = onRequest(
   <meta name="twitter:title" content="${escapeHtml(title)}">
   <meta name="twitter:description" content="${escapeHtml(description)}">
   <meta name="twitter:image" content="${escapeHtml(image)}">
-  <meta http-equiv="refresh" content="0;url=${pageUrl}">
   <link rel="canonical" href="${pageUrl}">
 </head>
 <body>
-  <p>Omdirigerar till <a href="${pageUrl}">${escapeHtml(title)}</a>...</p>
+  <p><a href="${pageUrl}">${escapeHtml(title)}</a></p>
 </body>
 </html>`);
     } catch (err) {
