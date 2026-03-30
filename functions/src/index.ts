@@ -1,5 +1,6 @@
 import { onRequest } from "firebase-functions/v2/https";
 import { onDocumentCreated } from "firebase-functions/v2/firestore";
+import { onSchedule } from "firebase-functions/v2/scheduler";
 import { defineString } from "firebase-functions/params";
 import * as admin from "firebase-admin";
 import { sendEmail as sendEmailUtil } from "./email";
@@ -1095,6 +1096,132 @@ export const sendEmail = onRequest(
 
     const allSuccess = results.every((r) => r.success);
     res.status(allSuccess ? 200 : 207).json({ results });
+  }
+);
+
+// ─── Weekly Database Backup ────────────────────────────────
+
+const BACKUP_RECIPIENT = "whoisyann@gmail.com";
+
+// Top-level collections to export
+const BACKUP_COLLECTIONS = [
+  "users",
+  "docks",
+  "resources",
+  "interests",
+  "landStorage",
+  "news",
+  "marketplace",
+  "abandonedObjects",
+  "pois",
+  "passwordResetTokens",
+];
+
+// Subcollections to include (parent collection → subcollection names)
+const BACKUP_SUBCOLLECTIONS: Record<string, string[]> = {
+  interests: ["replies"],
+  users: ["messages"],
+  landStorage: ["payments"],
+};
+
+/**
+ * Weekly scheduled backup: exports entire Firestore database
+ * to JSON and emails it as an attachment.
+ *
+ * Runs every Sunday at 03:00 Europe/Stockholm time.
+ */
+export const weeklyDatabaseBackup = onSchedule(
+  {
+    schedule: "0 3 * * 0", // Every Sunday at 03:00
+    timeZone: "Europe/Stockholm",
+    region: "europe-west1",
+    timeoutSeconds: 540, // 9 minutes max
+    memory: "512MiB",
+  },
+  async () => {
+    const db = admin.firestore();
+    const backup: Record<string, unknown> = {};
+    let totalDocs = 0;
+
+    for (const collName of BACKUP_COLLECTIONS) {
+      try {
+        const snap = await db.collection(collName).get();
+        const docs: Record<string, unknown> = {};
+
+        for (const doc of snap.docs) {
+          const docData: Record<string, unknown> = { ...doc.data() };
+
+          // Fetch subcollections if configured
+          const subNames = BACKUP_SUBCOLLECTIONS[collName];
+          if (subNames) {
+            for (const subName of subNames) {
+              const subSnap = await db
+                .collection(collName)
+                .doc(doc.id)
+                .collection(subName)
+                .get();
+              if (subSnap.size > 0) {
+                docData[`__sub_${subName}`] = Object.fromEntries(
+                  subSnap.docs.map((sd) => [sd.id, sd.data()])
+                );
+              }
+            }
+          }
+
+          docs[doc.id] = docData;
+          totalDocs++;
+        }
+
+        backup[collName] = docs;
+        console.log(`[Backup] ${collName}: ${snap.size} docs`);
+      } catch (err) {
+        console.error(`[Backup] Error reading ${collName}:`, err);
+        backup[collName] = { __error: String(err) };
+      }
+    }
+
+    // Serialize to JSON
+    const jsonStr = JSON.stringify(backup, null, 2);
+    const jsonBuffer = Buffer.from(jsonStr, "utf-8");
+    const dateStr = new Date().toISOString().slice(0, 10);
+    const fileName = `dockly-backup-${dateStr}.json`;
+
+    console.log(
+      `[Backup] Total: ${totalDocs} docs, ${(jsonBuffer.length / 1024).toFixed(1)} KB`
+    );
+
+    // Send via Resend with attachment
+    const { Resend } = await import("resend");
+    const resendApiKeyValue = defineString("RESEND_API_KEY").value();
+    const resend = new Resend(resendApiKeyValue);
+
+    const { error } = await resend.emails.send({
+      from: "Stegerholmens Hamn <noreply@stegerholmenshamn.se>",
+      to: BACKUP_RECIPIENT,
+      subject: `Databasbackup ${dateStr} — Stegerholmens Hamn`,
+      html: [
+        `<h2>Veckovis databasbackup</h2>`,
+        `<p>Datum: <strong>${dateStr}</strong></p>`,
+        `<p>Antal dokument: <strong>${totalDocs}</strong></p>`,
+        `<p>Filstorlek: <strong>${(jsonBuffer.length / 1024).toFixed(1)} KB</strong></p>`,
+        `<p>Bifogad fil: <code>${fileName}</code></p>`,
+        `<hr>`,
+        `<p style="color:#888;font-size:12px">Automatiskt genererad av Dockly Cloud Functions.</p>`,
+      ].join("\n"),
+      attachments: [
+        {
+          filename: fileName,
+          content: jsonBuffer,
+        },
+      ],
+    });
+
+    if (error) {
+      console.error("[Backup] Email send failed:", error);
+      throw new Error(`Backup email failed: ${error.message}`);
+    }
+
+    console.log(`[Backup] ✓ Backup email sent to ${BACKUP_RECIPIENT}`);
   }
 );
 
