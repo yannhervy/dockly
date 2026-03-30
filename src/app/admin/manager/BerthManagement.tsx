@@ -363,8 +363,47 @@ export default function BerthManagement() {
     userIds: string[]
   ) => {
     try {
+      // Ensure all user objects are loaded
+      const updatedOccupants = { ...occupants };
+      for (const uid of userIds) {
+        if (!updatedOccupants[uid]) {
+          const userSnap = await getDoc(doc(db, "users", uid));
+          if (userSnap.exists()) {
+            updatedOccupants[uid] = { id: userSnap.id, ...userSnap.data() } as User;
+          }
+        }
+      }
+      setOccupants(updatedOccupants);
+
+      // Build denormalized tenants array
+      const tenants: BerthTenant[] = userIds
+        .map((uid) => {
+          const u = updatedOccupants[uid];
+          if (!u) return null;
+          return { uid: u.id, name: u.name, phone: u.phone, email: u.email };
+        })
+        .filter(Boolean) as BerthTenant[];
+
+      // Determine invoice responsible
+      const currentResource = resources.find((r) => r.id === resourceId) as Berth | undefined;
+      const currentInvoiceId = currentResource?.invoiceResponsibleId || "";
+      let invoiceResponsibleId = "";
+
+      if (tenants.length === 0) {
+        // No tenants → no invoice responsible
+        invoiceResponsibleId = "";
+      } else if (currentInvoiceId && tenants.some((t) => t.uid === currentInvoiceId)) {
+        // Current invoice responsible is still among the tenants → keep them
+        invoiceResponsibleId = currentInvoiceId;
+      } else {
+        // First person (or previous was removed) → promote first tenant
+        invoiceResponsibleId = tenants[0].uid;
+      }
+
       await updateDoc(doc(db, "resources", resourceId), {
         occupantIds: userIds,
+        tenants,
+        invoiceResponsibleId: invoiceResponsibleId || null,
         status: userIds.length > 0 ? "Occupied" : "Available",
       });
       setResources((prev) =>
@@ -373,24 +412,15 @@ export default function BerthManagement() {
             ? {
                 ...r,
                 occupantIds: userIds,
+                tenants,
+                invoiceResponsibleId,
                 status: (userIds.length > 0
                   ? "Occupied"
                   : "Available") as Resource["status"],
-              }
+              } as Resource
             : r
         )
       );
-      for (const uid of userIds) {
-        if (!occupants[uid]) {
-          const userSnap = await getDoc(doc(db, "users", uid));
-          if (userSnap.exists()) {
-            setOccupants((prev) => ({
-              ...prev,
-              [uid]: { id: userSnap.id, ...userSnap.data() } as User,
-            }));
-          }
-        }
-      }
     } catch (err) {
       console.error("Error assigning tenant:", err);
     }
@@ -689,6 +719,9 @@ export default function BerthManagement() {
                         <TableCell>Kopplat konto</TableCell>
                         <TableCell sx={{ minWidth: 220 }}>
                           Tilldela
+                          <Typography variant="caption" display="block" color="error.main" sx={{ fontWeight: 600, fontSize: 10 }}>
+                            Röd = faktureringsansvarig
+                          </Typography>
                         </TableCell>
                       </>
                     )}
@@ -957,7 +990,11 @@ export default function BerthManagement() {
                                         key={t.uid}
                                         label={t.name}
                                         size="small"
-                                        color="success"
+                                        color={
+                                          t.uid === b.invoiceResponsibleId
+                                            ? "error"
+                                            : "default"
+                                        }
                                         sx={{ mr: 0.5, mb: 0.5 }}
                                       />
                                     )
@@ -967,12 +1004,17 @@ export default function BerthManagement() {
                                   r.occupantIds
                                 );
                                 if (tenants.length > 0) {
-                                  return tenants.map((u) => (
+                                  return tenants.map((u, idx) => (
                                     <Chip
                                       key={u.id}
                                       label={u.name}
                                       size="small"
-                                      color="success"
+                                      color={
+                                        (b.invoiceResponsibleId && u.id === b.invoiceResponsibleId) ||
+                                        (!b.invoiceResponsibleId && idx === 0)
+                                          ? "error"
+                                          : "default"
+                                      }
                                       sx={{ mr: 0.5, mb: 0.5 }}
                                     />
                                   ));
