@@ -50,6 +50,7 @@ import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
 import CloseIcon from "@mui/icons-material/Close";
 import ReportProblemIcon from "@mui/icons-material/ReportProblem";
+import HeadphonesIcon from "@mui/icons-material/Headphones";
 import Link from "next/link";
 
 const MDEditor = dynamic(() => import("@uiw/react-md-editor"), { ssr: false });
@@ -65,6 +66,24 @@ function stripMarkdown(md: string, maxLen = 160): string {
     .replace(/\n+/g, " ")
     .trim();
   return plain.length > maxLen ? plain.slice(0, maxLen - 1) + "\u2026" : plain;
+}
+
+/**
+ * Extract YouTube video ID from various URL formats.
+ */
+function extractYoutubeId(url: string): string | null {
+  if (!url) return null;
+  const patterns = [
+    /(?:youtube\.com\/watch\?v=)([a-zA-Z0-9_-]{11})/,
+    /(?:youtu\.be\/)([a-zA-Z0-9_-]{11})/,
+    /(?:youtube\.com\/embed\/)([a-zA-Z0-9_-]{11})/,
+    /(?:youtube\.com\/shorts\/)([a-zA-Z0-9_-]{11})/,
+  ];
+  for (const pattern of patterns) {
+    const match = url.match(pattern);
+    if (match) return match[1];
+  }
+  return null;
 }
 
 // ─── Component ──────────────────────────────────────────────
@@ -87,6 +106,7 @@ export default function NewsDetailView({ slug }: NewsDetailViewProps) {
   const [editOpen, setEditOpen] = useState(false);
   const [editTitle, setEditTitle] = useState("");
   const [editBody, setEditBody] = useState("");
+  const [editYoutubeUrl, setEditYoutubeUrl] = useState("");
   const [saving, setSaving] = useState(false);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -155,6 +175,7 @@ export default function NewsDetailView({ slug }: NewsDetailViewProps) {
     if (!post) return;
     setEditTitle(post.title);
     setEditBody(post.body);
+    setEditYoutubeUrl(post.youtubeUrl || "");
     setEditOpen(true);
   };
 
@@ -162,11 +183,13 @@ export default function NewsDetailView({ slug }: NewsDetailViewProps) {
     if (!post) return;
     setSaving(true);
     try {
+      const youtubeUrl = editYoutubeUrl.trim();
       await updateDoc(doc(db, "news", post.id), {
         title: editTitle,
         body: editBody,
+        youtubeUrl: youtubeUrl || null,
       });
-      setPost({ ...post, title: editTitle, body: editBody });
+      setPost({ ...post, title: editTitle, body: editBody, youtubeUrl: youtubeUrl || undefined });
       setEditOpen(false);
       setSnackMsg("Uppdaterad!");
     } catch (err) {
@@ -183,6 +206,12 @@ export default function NewsDetailView({ slug }: NewsDetailViewProps) {
       // Delete attached images from storage
       if (post.imageUrls) {
         for (const url of post.imageUrls) {
+          await deleteStorageFile(url);
+        }
+      }
+      // Delete attached audio from storage
+      if (post.audioUrls) {
+        for (const url of post.audioUrls) {
           await deleteStorageFile(url);
         }
       }
@@ -346,6 +375,72 @@ export default function NewsDetailView({ slug }: NewsDetailViewProps) {
             </Box>
           )}
 
+          {/* YouTube embed */}
+          {post.youtubeUrl && extractYoutubeId(post.youtubeUrl) && (
+            <Box
+              sx={{
+                position: "relative",
+                width: "100%",
+                paddingTop: "56.25%",
+                mb: 2,
+                borderRadius: 2,
+                overflow: "hidden",
+                bgcolor: "#000",
+              }}
+            >
+              <Box
+                component="iframe"
+                src={`https://www.youtube.com/embed/${extractYoutubeId(post.youtubeUrl)}`}
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowFullScreen
+                sx={{
+                  position: "absolute",
+                  top: 0,
+                  left: 0,
+                  width: "100%",
+                  height: "100%",
+                  border: "none",
+                }}
+              />
+            </Box>
+          )}
+
+          {/* Audio players */}
+          {post.audioUrls && post.audioUrls.length > 0 && (
+            <Box sx={{ mb: 2, display: "flex", flexDirection: "column", gap: 1 }}>
+              {post.audioUrls.map((url, i) => (
+                <Box
+                  key={i}
+                  sx={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 1.5,
+                    p: 1.5,
+                    borderRadius: 2,
+                    bgcolor: "rgba(79,195,247,0.06)",
+                    border: "1px solid rgba(79,195,247,0.1)",
+                  }}
+                >
+                  <HeadphonesIcon sx={{ color: "primary.main", fontSize: 22 }} />
+                  <Box
+                    component="audio"
+                    controls
+                    preload="metadata"
+                    sx={{
+                      flex: 1,
+                      height: 36,
+                      "&::-webkit-media-controls-panel": {
+                        bgcolor: "transparent",
+                      },
+                    }}
+                  >
+                    <source src={url} type="audio/mpeg" />
+                  </Box>
+                </Box>
+              ))}
+            </Box>
+          )}
+
           {/* Reactions */}
           <ReactionsBar
             postId={post.id}
@@ -464,6 +559,15 @@ export default function NewsDetailView({ slug }: NewsDetailViewProps) {
             sx={{ mt: 1, mb: 2 }}
           />
           <MDEditor value={editBody} onChange={(v) => setEditBody(v || "")} height={300} />
+          <TextField
+            fullWidth
+            label="YouTube-länk (valfritt)"
+            placeholder="https://www.youtube.com/watch?v=..."
+            value={editYoutubeUrl}
+            onChange={(e) => setEditYoutubeUrl(e.target.value)}
+            sx={{ mt: 2 }}
+            size="small"
+          />
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setEditOpen(false)}>Avbryt</Button>

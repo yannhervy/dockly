@@ -539,9 +539,20 @@ function UsersTab({ initialEditId }: { initialEditId?: string }) {
             berth.occupantEmail.trim().toLowerCase() === userEmail;
 
           if (phoneMatch || emailMatch) {
-            await updateDoc(doc(db, "resources", r.id), {
+            const tenantEntry: BerthTenant = {
+              uid,
+              name: user.name || "",
+              phone: user.phone || "",
+              email: user.email || "",
+            };
+            const updateData: Record<string, unknown> = {
               occupantIds: arrayUnion(uid),
-            });
+              tenants: arrayUnion(tenantEntry),
+            };
+            if (!berth.invoiceResponsibleId) {
+              updateData.invoiceResponsibleId = uid;
+            }
+            await updateDoc(doc(db, "resources", r.id), updateData);
             matchCount++;
           }
         }
@@ -1925,14 +1936,39 @@ function ResourcesTab({ initialEditId }: { initialEditId?: string }) {
 
   const handleTenantChange = async (resourceId: string, userIds: string[]) => {
     try {
+      const currentResource = resources.find((r) => r.id === resourceId);
+      const currentBerth = currentResource as Berth | undefined;
+
+      // Build denormalized tenant array from user objects
+      const tenants: BerthTenant[] = userIds
+        .map((uid) => {
+          const u = users.find((usr) => usr.id === uid);
+          if (!u) return null;
+          return { uid: u.id, name: u.name, phone: u.phone, email: u.email };
+        })
+        .filter(Boolean) as BerthTenant[];
+
+      // Determine invoice responsible
+      let invoiceResponsibleId = "";
+      const currentInvoiceId = currentBerth?.invoiceResponsibleId || "";
+      if (tenants.length === 0) {
+        invoiceResponsibleId = "";
+      } else if (currentInvoiceId && tenants.some((t) => t.uid === currentInvoiceId)) {
+        invoiceResponsibleId = currentInvoiceId;
+      } else {
+        invoiceResponsibleId = tenants[0].uid;
+      }
+
       await updateDoc(doc(db, "resources", resourceId), {
         occupantIds: userIds,
+        tenants,
+        invoiceResponsibleId: invoiceResponsibleId || null,
         status: userIds.length > 0 ? "Occupied" : "Available",
       });
       setResources((prev) =>
         prev.map((r) =>
           r.id === resourceId
-            ? { ...r, occupantIds: userIds, status: (userIds.length > 0 ? "Occupied" : "Available") as Resource["status"] }
+            ? { ...r, occupantIds: userIds, tenants, invoiceResponsibleId, status: (userIds.length > 0 ? "Occupied" : "Available") as Resource["status"] }
             : r
         )
       );

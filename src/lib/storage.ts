@@ -204,3 +204,31 @@ export async function uploadPOIImage(
   const downloadUrl = await getDownloadURL(snapshot.ref);
   return downloadUrl;
 }
+
+// ─── News Audio Upload ────────────────────────────────────
+
+const MAX_AUDIO_SIZE_MB = 50;
+
+/**
+ * Upload an audio file (MP3) for a news/report post.
+ * Stored at `news-audio/{timestamp}_{filename}`.
+ * No resizing — audio is uploaded as-is with a size limit.
+ */
+export async function uploadNewsAudio(
+  file: File,
+  timestamp: string
+): Promise<string> {
+  const maxBytes = MAX_AUDIO_SIZE_MB * 1024 * 1024;
+  if (file.size > maxBytes) {
+    throw new Error(`Audio file exceeds maximum size of ${MAX_AUDIO_SIZE_MB} MB`);
+  }
+
+  const safeFileName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+  const storagePath = `news-audio/${timestamp}_${safeFileName}`;
+  const storageRef = ref(storage, storagePath);
+  const snapshot = await uploadBytes(storageRef, file, {
+    contentType: file.type || "audio/mpeg",
+  });
+  const downloadUrl = await getDownloadURL(snapshot.ref);
+  return downloadUrl;
+}

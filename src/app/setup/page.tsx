@@ -16,7 +16,7 @@ import {
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useRouter } from "next/navigation";
-import type { Resource, Berth, LandStorageEntry, EngagementType } from "@/lib/types";
+import type { Resource, Berth, LandStorageEntry, EngagementType, BerthTenant } from "@/lib/types";
 import { normalizePhone } from "@/lib/phoneUtils";
 import Box from "@mui/material/Box";
 import Card from "@mui/material/Card";
@@ -205,9 +205,23 @@ export default function ProfileSetupPage() {
     // Link matching resources to this user
     const uid = firebaseUser.uid;
     for (const resId of matchedResourceIds) {
-      await updateDoc(doc(db, "resources", resId), {
+      const tenantEntry: BerthTenant = {
+        uid,
+        name: name.trim(),
+        phone: phone.trim(),
+        email: firebaseUser.email || "",
+      };
+      // Fetch current resource to check existing invoice responsible
+      const resSnap = await getDoc(doc(db, "resources", resId));
+      const resData = resSnap.data() as Berth | undefined;
+      const updateData: Record<string, unknown> = {
         occupantIds: arrayUnion(uid),
-      });
+        tenants: arrayUnion(tenantEntry),
+      };
+      if (!resData?.invoiceResponsibleId) {
+        updateData.invoiceResponsibleId = uid;
+      }
+      await updateDoc(doc(db, "resources", resId), updateData);
     }
     for (const landId of matchedLandIds) {
       await updateDoc(doc(db, "landStorage", landId), {

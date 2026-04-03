@@ -5,7 +5,7 @@ import { useAuth } from "@/context/AuthContext";
 import { db, auth } from "@/lib/firebase";
 import { deleteUser as firebaseDeleteUser, reauthenticateWithCredential, EmailAuthProvider, updatePassword } from "firebase/auth";
 import { uploadBoatImage, uploadProfileImage, uploadLandStorageImage, deleteStorageFile } from "@/lib/storage";
-import { Resource, Berth, Dock, LandStorageEntry, UserMessage, User, EngagementType, BerthInterest, InterestReply, OfferedBerth, MarketplaceListing, ListingCategory, ResourcePayment } from "@/lib/types";
+import { Resource, Berth, Dock, LandStorageEntry, UserMessage, User, EngagementType, BerthInterest, InterestReply, OfferedBerth, MarketplaceListing, ListingCategory, ResourcePayment, BerthTenant } from "@/lib/types";
 import { normalizePhone } from "@/lib/phoneUtils";
 import { sendSms } from "@/lib/sms";
 import { APIProvider, Map as GMap, AdvancedMarker, useMap, useMapsLibrary } from "@vis.gl/react-google-maps";
@@ -583,10 +583,22 @@ function DashboardContent() {
           berth.occupantEmail.trim().toLowerCase() === userEmail;
 
         if (phoneMatch || emailMatch) {
-          // Link the user's UID to this resource
-          await updateDoc(doc(db, "resources", r.id), {
+          // Link the user's UID to this resource + add tenant data
+          const tenantEntry: BerthTenant = {
+            uid,
+            name: profile.name || "",
+            phone: profile.phone || "",
+            email: profile.email || "",
+          };
+          const updateData: Record<string, unknown> = {
             occupantIds: arrayUnion(uid),
-          });
+            tenants: arrayUnion(tenantEntry),
+          };
+          // Set as invoice responsible if no one else is
+          if (!berth.invoiceResponsibleId) {
+            updateData.invoiceResponsibleId = uid;
+          }
+          await updateDoc(doc(db, "resources", r.id), updateData);
         }
       }
 

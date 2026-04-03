@@ -252,13 +252,15 @@ export interface NewsPost {
   body: string;
   slug?: string;                   // URL-friendly slug for detail pages
   imageUrls: string[];             // Multiple images supported
+  youtubeUrl?: string;             // YouTube video URL for embedding
+  audioUrls?: string[];            // MP3 file download URLs (Firebase Storage)
   authorId: string;
   authorName: string;
   authorPhotoURL?: string;           // Author's profile picture
   createdAt: Timestamp;
   reactions: ReactionMap;
-  linkedDockIds?: string[];        // Docks related to the report
-  linkedBerthCodes?: string[];     // Berth marking codes e.g. "D-9"
+  linkedDockIds?: string[];        // Reports only: docks related to the report
+  linkedBerthCodes?: string[];     // Reports only: berth marking codes e.g. "D-9"
 }
 
 // ─── Berth Interest Registration ──────────────────────────

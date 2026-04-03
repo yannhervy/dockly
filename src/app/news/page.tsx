@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import NewsDetailView from "@/components/NewsDetailView";
 import ImagePickerDialog from "@/components/ImagePickerDialog";
+import MediaPickerDialog from "@/components/MediaPickerDialog";
 import dynamic from "next/dynamic";
 
 const MDEditor = dynamic(() => import("@uiw/react-md-editor"), { ssr: false });
@@ -23,7 +24,7 @@ import {
   Timestamp,
 } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
-import { resizeImage, deleteStorageFile } from "@/lib/storage";
+import { resizeImage, deleteStorageFile, uploadNewsAudio } from "@/lib/storage";
 import { db, storage } from "@/lib/firebase";
 import { useAuth } from "@/context/AuthContext";
 import type { NewsPost, ReactionMap, PostType, Dock, Resource } from "@/lib/types";
@@ -52,9 +53,30 @@ import NewspaperIcon from "@mui/icons-material/Newspaper";
 import ReportProblemIcon from "@mui/icons-material/ReportProblem";
 import AddIcon from "@mui/icons-material/Add";
 import AddPhotoAlternateIcon from "@mui/icons-material/AddPhotoAlternate";
+import HeadphonesIcon from "@mui/icons-material/Headphones";
+import YouTubeIcon from "@mui/icons-material/YouTube";
 import CloseIcon from "@mui/icons-material/Close";
 import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
+
+/**
+ * Extract YouTube video ID from various URL formats.
+ * Returns null if the URL is not a valid YouTube URL.
+ */
+function extractYoutubeId(url: string): string | null {
+  if (!url) return null;
+  const patterns = [
+    /(?:youtube\.com\/watch\?v=)([a-zA-Z0-9_-]{11})/,
+    /(?:youtu\.be\/)([a-zA-Z0-9_-]{11})/,
+    /(?:youtube\.com\/embed\/)([a-zA-Z0-9_-]{11})/,
+    /(?:youtube\.com\/shorts\/)([a-zA-Z0-9_-]{11})/,
+  ];
+  for (const pattern of patterns) {
+    const match = url.match(pattern);
+    if (match) return match[1];
+  }
+  return null;
+}
 
 function formatDate(ts: Timestamp): string {
   return ts.toDate().toLocaleDateString("sv-SE");
@@ -83,16 +105,20 @@ function NewsListingPage() {
   const [uploading, setUploading] = useState(false);
   const [success, setSuccess] = useState("");
   const [imagePickerOpen, setImagePickerOpen] = useState(false);
+  const [audioPickerOpen, setAudioPickerOpen] = useState(false);
 
   const [form, setForm] = useState({ title: "", body: "" });
   const [formPostType, setFormPostType] = useState<PostType>("report");
   const [formDockIds, setFormDockIds] = useState<string[]>([]);
   const [formBerthCodes, setFormBerthCodes] = useState<string[]>([]);
+  const [formYoutubeUrl, setFormYoutubeUrl] = useState("");
   const [imageFiles, setImageFiles] = useState<File[]>([]);
   const [imagePreviews, setImagePreviews] = useState<string[]>([]);
+  const [audioFiles, setAudioFiles] = useState<File[]>([]);
   const [editingPost, setEditingPost] = useState<NewsPost | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [uploadError, setUploadError] = useState("");
 
   // Lightbox
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
@@ -174,11 +200,21 @@ function NewsListingPage() {
     setImagePreviews((prev) => prev.filter((_, i) => i !== index));
   };
 
+  const handleAudioSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    setAudioFiles((prev) => [...prev, ...files]);
+  };
+
+  const removeAudio = (index: number) => {
+    setAudioFiles((prev) => prev.filter((_, i) => i !== index));
+  };
+
   const handleSave = async () => {
     if (!firebaseUser || !profile) return;
     // Only managers can create/edit news, but any user can create reports
     if (formPostType === "news" && !canManage) return;
     setUploading(true);
+    setUploadError("");
 
     try {
       // Upload new images
@@ -194,31 +230,60 @@ function NewsListingPage() {
         imageUrls.push(url);
       }
 
+      // Upload new audio files
+      const audioUrls: string[] = [];
+      const audioTimestamp = Date.now().toString();
+      for (const file of audioFiles) {
+        const url = await uploadNewsAudio(file, audioTimestamp);
+        audioUrls.push(url);
+      }
+
+      // Validate YouTube URL if provided
+      const youtubeUrl = formYoutubeUrl.trim();
+      if (youtubeUrl && !extractYoutubeId(youtubeUrl)) {
+        setUploadError("Ogiltig YouTube-URL. Ange en giltig YouTube-länk.");
+        setUploading(false);
+        return;
+      }
+
       if (editingPost) {
         const allImages = [...(editingPost.imageUrls || []), ...imageUrls];
-        await updateDoc(doc(db, "news", editingPost.id), {
+        const allAudio = [...(editingPost.audioUrls || []), ...audioUrls];
+        const updateData: Record<string, unknown> = {
           title: form.title,
           body: form.body,
           imageUrls: allImages,
-          linkedDockIds: formDockIds.length > 0 ? formDockIds : [],
-          linkedBerthCodes: formBerthCodes.length > 0 ? formBerthCodes : [],
-        });
+          audioUrls: allAudio,
+          youtubeUrl: youtubeUrl || null,
+        };
+        // Reports only: dock/berth linking
+        if (editingPost.postType === "report") {
+          updateData.linkedDockIds = formDockIds.length > 0 ? formDockIds : [];
+          updateData.linkedBerthCodes = formBerthCodes.length > 0 ? formBerthCodes : [];
+        }
+        await updateDoc(doc(db, "news", editingPost.id), updateData);
         setSuccess(editingPost.postType === "report" ? "Rapport uppdaterad!" : "Nyhet uppdaterad!");
       } else {
-        await addDoc(collection(db, "news"), {
+        const postData: Record<string, unknown> = {
           postType: formPostType,
           title: form.title,
           body: form.body,
           slug: slugify(form.title) + "-" + Date.now().toString(36),
           imageUrls,
+          audioUrls,
+          youtubeUrl: youtubeUrl || null,
           authorId: firebaseUser.uid,
           authorName: profile.name,
           authorPhotoURL: profile.photoURL || null,
           createdAt: Timestamp.now(),
           reactions: {},
-          linkedDockIds: formDockIds.length > 0 ? formDockIds : [],
-          linkedBerthCodes: formBerthCodes.length > 0 ? formBerthCodes : [],
-        });
+        };
+        // Reports only: dock/berth linking
+        if (formPostType === "report") {
+          postData.linkedDockIds = formDockIds.length > 0 ? formDockIds : [];
+          postData.linkedBerthCodes = formBerthCodes.length > 0 ? formBerthCodes : [];
+        }
+        await addDoc(collection(db, "news"), postData);
         setSuccess(formPostType === "report" ? "Rapport publicerad!" : "Nyhet publicerad!");
       }
 
@@ -229,6 +294,7 @@ function NewsListingPage() {
       fetchPosts();
     } catch (err) {
       console.error("Error saving post:", err);
+      if (err instanceof Error) setUploadError(err.message);
     } finally {
       setUploading(false);
     }
@@ -239,8 +305,11 @@ function NewsListingPage() {
     setFormPostType("report");
     setFormDockIds([]);
     setFormBerthCodes([]);
+    setFormYoutubeUrl("");
     setImageFiles([]);
     setImagePreviews([]);
+    setAudioFiles([]);
+    setUploadError("");
   };
 
   const openEditDialog = (post: NewsPost) => {
@@ -249,8 +318,11 @@ function NewsListingPage() {
     setForm({ title: post.title, body: post.body });
     setFormDockIds(post.linkedDockIds || []);
     setFormBerthCodes(post.linkedBerthCodes || []);
+    setFormYoutubeUrl(post.youtubeUrl || "");
     setImageFiles([]);
     setImagePreviews([]);
+    setAudioFiles([]);
+    setUploadError("");
     setDialogOpen(true);
   };
 
@@ -267,6 +339,11 @@ function NewsListingPage() {
       const post = posts.find((p) => p.id === postId);
       if (post?.imageUrls) {
         for (const url of post.imageUrls) {
+          await deleteStorageFile(url);
+        }
+      }
+      if (post?.audioUrls) {
+        for (const url of post.audioUrls) {
           await deleteStorageFile(url);
         }
       }
@@ -430,6 +507,72 @@ function NewsListingPage() {
             </Box>
           )}
 
+          {/* YouTube embed */}
+          {post.youtubeUrl && extractYoutubeId(post.youtubeUrl) && (
+            <Box
+              sx={{
+                position: "relative",
+                width: "100%",
+                paddingTop: "56.25%", // 16:9 aspect ratio
+                mb: 2,
+                borderRadius: 2,
+                overflow: "hidden",
+                bgcolor: "#000",
+              }}
+            >
+              <Box
+                component="iframe"
+                src={`https://www.youtube.com/embed/${extractYoutubeId(post.youtubeUrl)}`}
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowFullScreen
+                sx={{
+                  position: "absolute",
+                  top: 0,
+                  left: 0,
+                  width: "100%",
+                  height: "100%",
+                  border: "none",
+                }}
+              />
+            </Box>
+          )}
+
+          {/* Audio players */}
+          {post.audioUrls && post.audioUrls.length > 0 && (
+            <Box sx={{ mb: 2, display: "flex", flexDirection: "column", gap: 1 }}>
+              {post.audioUrls.map((url, i) => (
+                <Box
+                  key={i}
+                  sx={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 1.5,
+                    p: 1.5,
+                    borderRadius: 2,
+                    bgcolor: "rgba(79,195,247,0.06)",
+                    border: "1px solid rgba(79,195,247,0.1)",
+                  }}
+                >
+                  <HeadphonesIcon sx={{ color: "primary.main", fontSize: 22 }} />
+                  <Box
+                    component="audio"
+                    controls
+                    preload="metadata"
+                    sx={{
+                      flex: 1,
+                      height: 36,
+                      "&::-webkit-media-controls-panel": {
+                        bgcolor: "transparent",
+                      },
+                    }}
+                  >
+                    <source src={url} type="audio/mpeg" />
+                  </Box>
+                </Box>
+              ))}
+            </Box>
+          )}
+
           {/* Emoji reactions */}
           <ReactionsBar
             postId={post.id}
@@ -560,6 +703,11 @@ function NewsListingPage() {
         </DialogTitle>
         <DialogContent>
           {uploading && <LinearProgress sx={{ mb: 2 }} />}
+          {uploadError && (
+            <Alert severity="error" sx={{ mb: 2 }} onClose={() => setUploadError("")}>
+              {uploadError}
+            </Alert>
+          )}
 
           <TextField
             fullWidth
@@ -578,42 +726,64 @@ function NewsListingPage() {
             />
           </Box>
 
-          {/* Dock & Berth linking */}
-          <Typography variant="subtitle2" sx={{ mb: 1, color: "text.secondary" }}>
-            Plats (valfritt)
-          </Typography>
-          <Autocomplete
-            multiple
-            options={docks}
-            getOptionLabel={(d) => d.name}
-            value={docks.filter((d) => formDockIds.includes(d.id))}
-            onChange={(_, vals) => {
-              const ids = vals.map((v) => v.id);
-              setFormDockIds(ids);
-              // Remove berth codes that no longer belong to selected docks
-              if (ids.length > 0) {
-                const validBerths = berths
-                  .filter((b) => b.dockId && ids.includes(b.dockId))
-                  .map((b) => b.markingCode);
-                setFormBerthCodes((prev) => prev.filter((c) => validBerths.includes(c)));
-              }
+          {/* YouTube URL */}
+          <TextField
+            fullWidth
+            label="YouTube-länk (valfritt)"
+            placeholder="https://www.youtube.com/watch?v=..."
+            value={formYoutubeUrl}
+            onChange={(e) => setFormYoutubeUrl(e.target.value)}
+            slotProps={{
+              input: {
+                startAdornment: (
+                  <YouTubeIcon sx={{ color: "#FF0000", mr: 1 }} />
+                ),
+              },
             }}
-            renderInput={(params) => (
-              <TextField {...params} label="Brygga" size="small" />
-            )}
-            sx={{ mb: 1.5 }}
-          />
-          <Autocomplete
-            multiple
-            freeSolo
-            options={availableBerthCodes}
-            value={formBerthCodes}
-            onChange={(_, vals) => setFormBerthCodes(vals as string[])}
-            renderInput={(params) => (
-              <TextField {...params} label="Båtplats (t.ex. D-9)" size="small" />
-            )}
             sx={{ mb: 2 }}
+            size="small"
           />
+
+          {/* Dock & Berth linking — reports only */}
+          {(formPostType === "report" || editingPost?.postType === "report") && (
+            <>
+              <Typography variant="subtitle2" sx={{ mb: 1, color: "text.secondary" }}>
+                Plats (valfritt)
+              </Typography>
+              <Autocomplete
+                multiple
+                options={docks}
+                getOptionLabel={(d) => d.name}
+                value={docks.filter((d) => formDockIds.includes(d.id))}
+                onChange={(_, vals) => {
+                  const ids = vals.map((v) => v.id);
+                  setFormDockIds(ids);
+                  // Remove berth codes that no longer belong to selected docks
+                  if (ids.length > 0) {
+                    const validBerths = berths
+                      .filter((b) => b.dockId && ids.includes(b.dockId))
+                      .map((b) => b.markingCode);
+                    setFormBerthCodes((prev) => prev.filter((c) => validBerths.includes(c)));
+                  }
+                }}
+                renderInput={(params) => (
+                  <TextField {...params} label="Brygga" size="small" />
+                )}
+                sx={{ mb: 1.5 }}
+              />
+              <Autocomplete
+                multiple
+                freeSolo
+                options={availableBerthCodes}
+                value={formBerthCodes}
+                onChange={(_, vals) => setFormBerthCodes(vals as string[])}
+                renderInput={(params) => (
+                  <TextField {...params} label="Båtplats (t.ex. D-9)" size="small" />
+                )}
+                sx={{ mb: 2 }}
+              />
+            </>
+          )}
 
           {/* Multi-image upload */}
           <Box sx={{ mb: 2 }}>
@@ -704,6 +874,101 @@ function NewsListingPage() {
                         height: 20,
                         "&:hover": { bgcolor: "error.dark" },
                       }}
+                    >
+                      <CloseIcon sx={{ fontSize: 14 }} />
+                    </IconButton>
+                  </Box>
+                ))}
+              </Box>
+            )}
+          </Box>
+
+          {/* Audio upload (MP3) */}
+          <Box sx={{ mb: 2 }}>
+            <MediaPickerDialog
+              open={audioPickerOpen}
+              onClose={() => setAudioPickerOpen(false)}
+              onChange={handleAudioSelect}
+              multiple
+              accept="audio/mpeg,audio/mp3,audio/x-m4a"
+              title="Lägg till ljud"
+              buttonLabel="Välj MP3-filer"
+            />
+            <Button
+              variant="outlined"
+              startIcon={<HeadphonesIcon />}
+              onClick={() => setAudioPickerOpen(true)}
+              fullWidth
+              sx={{ textTransform: "none", py: 1.5, borderStyle: "dashed" }}
+            >
+              Lägg till ljud ({audioFiles.length} valda)
+            </Button>
+
+            {/* Existing audio files (edit mode) */}
+            {editingPost && editingPost.audioUrls && editingPost.audioUrls.length > 0 && (
+              <Box sx={{ mt: 1 }}>
+                <Typography variant="caption" color="text.secondary" sx={{ mb: 0.5, display: "block" }}>
+                  Befintliga ljudfiler:
+                </Typography>
+                {editingPost.audioUrls.map((url, i) => (
+                  <Box
+                    key={url}
+                    sx={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 1,
+                      p: 1,
+                      mb: 0.5,
+                      borderRadius: 1,
+                      bgcolor: "rgba(79,195,247,0.06)",
+                      border: "1px solid rgba(79,195,247,0.1)",
+                    }}
+                  >
+                    <HeadphonesIcon sx={{ fontSize: 18, color: "primary.main" }} />
+                    <Typography variant="caption" sx={{ flex: 1 }}>
+                      Ljudfil {i + 1}
+                    </Typography>
+                    <IconButton
+                      size="small"
+                      onClick={async () => {
+                        await deleteStorageFile(url);
+                        setEditingPost((prev) =>
+                          prev ? { ...prev, audioUrls: (prev.audioUrls || []).filter((u) => u !== url) } : null
+                        );
+                      }}
+                      sx={{ color: "error.main", width: 24, height: 24 }}
+                    >
+                      <CloseIcon sx={{ fontSize: 14 }} />
+                    </IconButton>
+                  </Box>
+                ))}
+              </Box>
+            )}
+
+            {/* New audio file names */}
+            {audioFiles.length > 0 && (
+              <Box sx={{ mt: 1 }}>
+                {audioFiles.map((file, i) => (
+                  <Box
+                    key={i}
+                    sx={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 1,
+                      p: 1,
+                      mb: 0.5,
+                      borderRadius: 1,
+                      bgcolor: "rgba(79,195,247,0.04)",
+                    }}
+                  >
+                    <HeadphonesIcon sx={{ fontSize: 18, color: "text.secondary" }} />
+                    <Typography variant="caption" sx={{ flex: 1 }} noWrap>
+                      {file.name}
+                    </Typography>
+                    <IconButton
+                      size="small"
+                      onClick={() => removeAudio(i)}
+                      sx={{ color: "error.main", width: 24, height: 24 }}
                     >
                       <CloseIcon sx={{ fontSize: 14 }} />
                     </IconButton>
