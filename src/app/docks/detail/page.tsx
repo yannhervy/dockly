@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
 import { collection, getDocs, getDoc, doc, query, where } from "firebase/firestore";
@@ -36,7 +36,16 @@ function getBerthColor(berth: Berth): string {
   return "#FFC107"; // yellow — occupied but no registered tenant
 }
 
+// Suspense wrapper required for useSearchParams with static export
 export default function DockDetailPage() {
+  return (
+    <Suspense fallback={<Box sx={{ display: "flex", justifyContent: "center", py: 12 }}><CircularProgress /></Box>}>
+      <DockDetailContent />
+    </Suspense>
+  );
+}
+
+function DockDetailContent() {
   const searchParams = useSearchParams();
   const dockId = searchParams.get("id");
 
