@@ -611,7 +611,7 @@ export default function MapPage() {
           <Chip
             size="small"
             sx={{ bgcolor: "#FFC107", color: "#000", fontWeight: 600 }}
-            label="Ej reg."
+            label="Upptagen, ej reg. användare"
           />
           <Chip
             size="small"

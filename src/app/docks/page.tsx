@@ -17,6 +17,7 @@ import DirectionsBoatIcon from "@mui/icons-material/DirectionsBoat";
 import EmailIcon from "@mui/icons-material/Email";
 import AnchorIcon from "@mui/icons-material/Anchor";
 import LoginIcon from "@mui/icons-material/Login";
+import BalanceIcon from "@mui/icons-material/Balance";
 import Alert from "@mui/material/Alert";
 import Link from "next/link";
 
@@ -250,6 +251,31 @@ export default function DocksPage() {
                         );
                       })
                     )}
+
+                    {/* Dock rules & detail link */}
+                    <Box sx={{ display: "flex", gap: 1, mt: 2, flexWrap: "wrap" }}>
+                      {dock.dockRules && (
+                        <Button
+                          component={Link}
+                          href={`/docks/detail?id=${dock.id}`}
+                          size="small"
+                          startIcon={<BalanceIcon />}
+                          sx={{ textTransform: "none" }}
+                        >
+                          Bryggregler
+                        </Button>
+                      )}
+                      <Button
+                        component={Link}
+                        href={`/docks/detail?id=${dock.id}`}
+                        size="small"
+                        variant="outlined"
+                        startIcon={<AnchorIcon />}
+                        sx={{ textTransform: "none" }}
+                      >
+                        Visa detaljer
+                      </Button>
+                    </Box>
                   </CardContent>
                 </Card>
               </Grid>

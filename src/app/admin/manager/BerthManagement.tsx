@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useState, useMemo } from "react";
+import dynamic from "next/dynamic";
 import { useAuth } from "@/context/AuthContext";
 import { db } from "@/lib/firebase";
 import { Dock, Resource, User, Berth, BerthTenant } from "@/lib/types";
@@ -58,6 +59,15 @@ import PaymentIcon from "@mui/icons-material/Payment";
 import PeopleIcon from "@mui/icons-material/People";
 import EditIcon from "@mui/icons-material/Edit";
 import LockIcon from "@mui/icons-material/Lock";
+import BalanceIcon from "@mui/icons-material/Balance";
+import SaveIcon from "@mui/icons-material/Save";
+import Accordion from "@mui/material/Accordion";
+import AccordionSummary from "@mui/material/AccordionSummary";
+import AccordionDetails from "@mui/material/AccordionDetails";
+import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
+import LinearProgress from "@mui/material/LinearProgress";
+
+const MDEditor = dynamic(() => import("@uiw/react-md-editor"), { ssr: false });
 
 // ─── Types ──────────────────────────────────────────────────
 
@@ -138,6 +148,11 @@ export default function BerthManagement() {
 
   // Detail panel state (handled by BerthEditDialog)
   const [detailBerth, setDetailBerth] = useState<Berth | null>(null);
+
+  // Dock rules editing
+  const [rulesText, setRulesText] = useState("");
+  const [rulesSaving, setRulesSaving] = useState(false);
+  const [rulesLoaded, setRulesLoaded] = useState(false);
 
   // ─── Data Fetching ───────────────────────────────────────
 
@@ -248,6 +263,13 @@ export default function BerthManagement() {
     }
     fetchResources();
   }, [selectedDockId]);
+
+  // Load dock rules when dock changes
+  useEffect(() => {
+    const dock = docks.find((d) => d.id === selectedDockId);
+    setRulesText(dock?.dockRules || "");
+    setRulesLoaded(!!selectedDockId);
+  }, [selectedDockId, docks]);
 
   // ─── Privacy Helpers ─────────────────────────────────────
 
@@ -446,6 +468,28 @@ export default function BerthManagement() {
     setTimeout(() => setSuccessMsg(""), 3000);
   };
 
+  // Save dock rules
+  const handleSaveDockRules = async () => {
+    if (!selectedDockId) return;
+    setRulesSaving(true);
+    try {
+      await updateDoc(doc(db, "docks", selectedDockId), {
+        dockRules: rulesText || "",
+      });
+      setDocks((prev) =>
+        prev.map((d) =>
+          d.id === selectedDockId ? { ...d, dockRules: rulesText } : d
+        )
+      );
+      setSuccessMsg("Bryggregler sparade!");
+      setTimeout(() => setSuccessMsg(""), 3000);
+    } catch (err) {
+      console.error("Error saving dock rules:", err);
+    } finally {
+      setRulesSaving(false);
+    }
+  };
+
   // ─── Render ──────────────────────────────────────────────
 
   return (
@@ -571,6 +615,53 @@ export default function BerthManagement() {
           </>
         )}
       </Box>
+
+      {/* Dock Rules Editor (managers only) */}
+      {isManager && selectedDockId && rulesLoaded && (
+        <Accordion
+          sx={{
+            mb: 3,
+            bgcolor: "rgba(13, 33, 55, 0.4)",
+            backdropFilter: "blur(8px)",
+            border: "1px solid rgba(79,195,247,0.1)",
+            "&:before": { display: "none" },
+          }}
+        >
+          <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+              <BalanceIcon sx={{ color: "primary.main", fontSize: 20 }} />
+              <Typography sx={{ fontWeight: 600 }}>Bryggregler</Typography>
+              {rulesText ? (
+                <Chip label="Har regler" size="small" color="success" variant="outlined" />
+              ) : (
+                <Chip label="Inga regler" size="small" variant="outlined" sx={{ opacity: 0.5 }} />
+              )}
+            </Box>
+          </AccordionSummary>
+          <AccordionDetails>
+            {rulesSaving && <LinearProgress sx={{ mb: 1 }} />}
+            <Box data-color-mode="dark">
+              <MDEditor
+                value={rulesText}
+                onChange={(val) => setRulesText(val || "")}
+                height={300}
+                preview="edit"
+              />
+            </Box>
+            <Box sx={{ display: "flex", justifyContent: "flex-end", mt: 2 }}>
+              <Button
+                variant="contained"
+                startIcon={<SaveIcon />}
+                onClick={handleSaveDockRules}
+                disabled={rulesSaving}
+                sx={{ textTransform: "none" }}
+              >
+                {rulesSaving ? "Sparar..." : "Spara bryggregler"}
+              </Button>
+            </Box>
+          </AccordionDetails>
+        </Accordion>
+      )}
 
       {/* Loading state */}
       {loadingDocks ? (

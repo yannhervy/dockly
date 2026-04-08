@@ -58,6 +58,7 @@ export interface Dock {
   heading?: number; // Orientation 0-360°
   maxWidth?: number; // Width in meters (for map rectangle)
   maxLength?: number; // Length in meters (for map rectangle)
+  dockRules?: string; // Markdown content for dock-specific rules
 }
 
 // ─── Internal Comment ─────────────────────────────────────

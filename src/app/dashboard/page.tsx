@@ -78,6 +78,8 @@ import WarningAmberIcon from "@mui/icons-material/WarningAmber";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import DeleteIcon from "@mui/icons-material/Delete";
 import StorefrontIcon from "@mui/icons-material/Storefront";
+import BalanceIcon from "@mui/icons-material/Balance";
+import Link from "next/link";
 
 
 const ENGAGEMENT_LABELS: Record<EngagementType, string> = {
@@ -1808,7 +1810,21 @@ function DashboardContent() {
                             </Box>
                           </TableCell>
                           <TableCell sx={{ fontWeight: 600 }}>
-                            {r.markingCode}
+                            <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                              {r.markingCode}
+                              {r.type === "Berth" && r.dockId && (
+                                <Tooltip title="Visa bryggregler">
+                                  <IconButton
+                                    component={Link}
+                                    href={`/docks/detail?id=${r.dockId}`}
+                                    size="small"
+                                    sx={{ color: "primary.main", p: 0.3 }}
+                                  >
+                                    <BalanceIcon sx={{ fontSize: 16 }} />
+                                  </IconButton>
+                                </Tooltip>
+                              )}
+                            </Box>
                           </TableCell>
                           <TableCell>
                             <Chip
