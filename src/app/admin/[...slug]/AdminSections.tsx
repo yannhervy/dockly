@@ -1919,11 +1919,9 @@ function ResourcesTab({ initialEditId }: { initialEditId?: string }) {
       ]);
       setResources(
         rSnap.docs.map((d) => ({ id: d.id, ...d.data() }) as Resource)
-          .sort((a, b) => {
-            const sa = (a as Berth).sortOrder ?? 9999;
-            const sb = (b as Berth).sortOrder ?? 9999;
-            return sa - sb || a.markingCode.localeCompare(b.markingCode, undefined, { numeric: true });
-          })
+          .sort((a, b) =>
+            a.markingCode.localeCompare(b.markingCode, "sv-SE", { numeric: true })
+          )
       );
       setDocks(dSnap.docs.map((d) => ({ id: d.id, ...d.data() }) as Dock));
       setUsers(uSnap.docs.map((d) => ({ id: d.id, ...d.data() }) as User));
@@ -2069,11 +2067,9 @@ function ResourcesTab({ initialEditId }: { initialEditId?: string }) {
           if (moved) return { ...r, lat: moved.lat, lng: moved.lng } as Resource;
           return r;
         })
-          .sort((a, b) => {
-            const sa = (a as Berth).sortOrder ?? 9999;
-            const sb = (b as Berth).sortOrder ?? 9999;
-            return sa - sb || a.markingCode.localeCompare(b.markingCode, undefined, { numeric: true });
-          })
+          .sort((a, b) =>
+            a.markingCode.localeCompare(b.markingCode, "sv-SE", { numeric: true })
+          )
       );
       setEditResource(null);
       setMovedBerths({});

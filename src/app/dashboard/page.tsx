@@ -2006,7 +2006,7 @@ function DashboardContent() {
                 </Typography>
 
                 <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                  När du förvarar något på föreningens mark ska du markera detta med en GPS-position, två bilder (en på båten och en på uppställningskoden) och märka båten/kärran med uppläggningskod.
+                  När du förvarar något på föreningens mark ska du markera detta med en GPS-position, två bilder (en på båten eller trailern och en på uppställningskoden) och märka båten/kärran med uppläggningskod.
                   När du tar bort din båt eller trailer ska du ta bort din GPS-position samt dina bilder.
                   Kom ihåg att det är upp till dig att löpande betala in uppställningsavgiften.
                   Kontroller sker löpande och efterdebitering sker.
