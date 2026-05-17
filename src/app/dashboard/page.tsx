@@ -2029,7 +2029,7 @@ function DashboardContent() {
                     severity="warning"
                     sx={{ mb: 2 }}
                   >
-                    Du har en aktiv markuppställning som saknar bild på båten och uppställningskoden. Båda bilderna krävs.
+                    Du har en aktiv markuppställning som saknar bild på båten/trailern och uppställningskoden. Båda bilderna krävs.
                   </Alert>
                 )}
 
