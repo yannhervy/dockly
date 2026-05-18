@@ -14,6 +14,7 @@ import RoofingIcon from "@mui/icons-material/Roofing";
 import FormatPaintIcon from "@mui/icons-material/FormatPaint";
 import LocalFireDepartmentIcon from "@mui/icons-material/LocalFireDepartment";
 import BuildIcon from "@mui/icons-material/Build";
+import ConstructionIcon from "@mui/icons-material/Construction";
 import Link from "next/link";
 
 // ─── Reusable components ────────────────────────────────────
@@ -280,6 +281,16 @@ export default function SjobodarPage() {
             </>,
           ]}
         />
+      </InfoCard>
+
+      {/* ─── Renovering ────────────────────────────────────── */}
+      <InfoCard
+        icon={<ConstructionIcon sx={{ fontSize: 28, color: "#8D6E63" }} />}
+        title="Renovering"
+      >
+        <Paragraph>
+          Om du renoverar sjöbod och altan får du återställa detta till sin ursprungliga storlek. Om du har sedan tidigare bestämmelser en större altan eller sjöbod är det upp till dig att dokumentera detta innan du river och bygger nytt. Kontakta alltid styrelsen vid omfattande renoveringar för att säkerställa detta.
+        </Paragraph>
       </InfoCard>
 
       {/* ─── Brandrisk ─────────────────────────────────────── */}
